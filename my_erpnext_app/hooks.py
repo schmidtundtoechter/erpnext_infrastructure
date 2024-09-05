@@ -242,3 +242,11 @@ app_license = "gpl-3.0"
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
 
+
+# my_custom_app/hooks.py
+
+scheduler_events = {
+    "all": [
+        "my_erpnext_app.my_erpnext_app.hello_world.modify_data"
+    ]
+}
