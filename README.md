@@ -30,13 +30,15 @@ Login to https://localhost:8080 :
 
 ### Startup with devcontainer
 
-    cd .../frappe_docker
-    ../my_erpnext_app/frappe_docker-prepare-devcontainer.sh
+    cd <foo>/frappe_docker
+    ../my_erpnext_app/tools/frappe_docker-cleanrepository.sh
+    ../my_erpnext_app/tools/frappe_docker-prepare-devcontainer.sh
+    cp ../my_erpnext_app/tools/frappe_docker-reinstall.sh .
 
 Now open ```frappe_docker``` folder in VS Code and reopen in devcontainer.
 To reinstall and start the bench, call and follow instructions. DB Password is ```123```
 
-    ../my_erpnext_app/frappe_docker-reinstall.sh
+    ./frappe_docker-reinstall.sh
 
 Go to http://d-code.localhost:8000
 
