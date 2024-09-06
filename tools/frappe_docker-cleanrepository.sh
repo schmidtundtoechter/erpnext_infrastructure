@@ -1,15 +1,15 @@
 #!/bin/bash
 
-# Remove development
+echo -- Remove directory ./development
 rm -rf development
 
-# Clean repository
+echo -- Clean repository
 git reset --hard
 
-# Remove untracked files and directories
+echo -- Remove untracked files and directories
 git clean -fd
 
-# Pull and go to main
+echo -- Pull and go to main
 git pull
 git checkout main
 

@@ -33,7 +33,7 @@ Login to https://localhost:8080 :
     cd <foo>/frappe_docker
     ../my_erpnext_app/tools/frappe_docker-cleanrepository.sh
     ../my_erpnext_app/tools/frappe_docker-prepare-devcontainer.sh
-    cp ../my_erpnext_app/tools/frappe_docker-reinstall.sh .
+    cp ../my_erpnext_app/tools/frappe_docker-reinstall.sh ./development/
 
 Now open ```frappe_docker``` folder in VS Code and reopen in devcontainer.
 To reinstall and start the bench, call and follow instructions. DB Password is ```123```
@@ -90,8 +90,9 @@ To uninstall:
 
 ### Docker ps aliases for convenience
 
-    alias dpsi='docker ps --format "table {{.ID}}\t{{.Image}}\t{{.Status}}\t{{.Names}}" | (read -r; printf "%s\n" "$REPLY"; sort -k 2 )'
-    alias dpsn='docker ps --format "table {{.ID}}\t{{.Image}}\t{{.Status}}\t{{.Names}}" | (read -r; printf "%s\n" "$REPLY"; sort -k 4 )'
-    alias dils='docker image ls --format "table {{.ID}}\t{{.Repository}}\t{{.Tag}}\t{{.CreatedSince}}\t{{.Size}}"'
-    alias dall='dpsn ; dils ; docker volume ls'
+    alias dpsi='docker ps --format "table ☞   {{.ID}}\t{{.Image}}\t{{.Status}}\t{{.Names}}" | (read -r; printf "%s\n" "$REPLY"; sort -k 2 )'
+    alias dpsn='docker ps --format "table ☞   {{.ID}}\t{{.Image}}\t{{.Status}}\t{{.Names}}" | (read -r; printf "%s\n" "$REPLY"; sort -k 4 )'
+    alias dils='docker image ls --format "table ☞   {{.ID}}\t{{.Repository}}\t{{.Tag}}\t{{.CreatedSince}}\t{{.Size}}"'
+    alias dvls='docker volume ls --format "table ☞   {{.Name}}"'
+    alias dall='echo "Containers:" ; dpsn ; echo "Images:" ; dils ; echo "Volumes:" ; dvls'
 

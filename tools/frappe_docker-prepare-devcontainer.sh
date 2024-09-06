@@ -17,4 +17,5 @@ fi
 
 echo "### STEP 4 Open vscode and install 'Dev Containers' extension"
 echo "###  STEP 5 Open frappe_docker folder in VS Code."
-echo "Launch the command, from Command Palette (Ctrl + Shift + P) Remote-Containers: Reopen in Container. You can also click in the bottom left corner to access the remote container menu."
+echo
+echo "--> NOW: Launch the command, from Command Palette (Ctrl + Shift + P) Remote-Containers: Reopen in Container. You can also click in the bottom left corner to access the remote container menu."
