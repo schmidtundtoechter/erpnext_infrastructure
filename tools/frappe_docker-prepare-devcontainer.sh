@@ -37,9 +37,11 @@ if [[ "$(docker version --format '{{.Server.Arch}}')" == "arm64" ]]; then
 fi
 
 modify_file .devcontainer/docker-compose.yml "- ..:/workspace" "- frappe_docker_volume:/workspace"
+modify_file .devcontainer/docker-compose.yml "#mailpit-data:" "frappe_docker_volume:\n    external: true"
 
 echo "STEP 3.3 Copy reinstall script into development"
 cp ../my_erpnext_app/tools/frappe_docker-reinstall.sh ./development/
+dos2unix ./development/frappe_docker-reinstall.sh
 
 echo "STEP 3.5 Volume vorbereiten (frappe_docker_volume)"
 # Name des Volumes
@@ -70,6 +72,9 @@ else
 fi
 
 echo "Check volume content"
+docker run --rm \
+  -v $VOLUME_NAME:/mnt/frappe_docker_volume \
+  ubuntu bash -c "touch /mnt/frappe_docker_volume/development/ICHBINVOLUME"
 docker run --rm \
   -v $VOLUME_NAME:/mnt/frappe_docker_volume \
   ubuntu bash -c "ls -la /mnt/frappe_docker_volume/ /mnt/frappe_docker_volume/development"
