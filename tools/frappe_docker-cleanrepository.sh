@@ -1,5 +1,14 @@
 #!/bin/bash
 
+# Aktuelles Verzeichnis abrufen
+current_dir=$(pwd)
+
+# Überprüfen, ob das aktuelle Verzeichnis mit "frappe_docker" endet
+if [[ $current_dir != *"frappe_docker" ]]; then
+    echo "Fehler: Das aktuelle Verzeichnis endet nicht mit 'frappe_docker'."
+    exit 1  # Skript beenden mit Fehlercode 1
+fi
+
 echo -- Remove directory ./development
 rm -rf development .devcontainer
 
