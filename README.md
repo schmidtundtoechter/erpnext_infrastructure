@@ -15,10 +15,12 @@ Get it:
     git clone https://github.com/frappe/frappe_docker.git
     cd frappe_docker
 
-Only on arm64 because frappe/erpnext:v15.33.5 for the arm64 platform is not in the docker repository and must be build.
+Only on arm64 because frappe/erpnext:$ERPNEXT_VERSION for the arm64 platform is not in the docker repository and must be build.
+Attention: The version number of erpnext is adapted through example.env.
 
     cp images/production/Containerfile Dockerfile
-    docker build -t frappe/erpnext:v15.33.5 .
+    export `grep ERPNEXT_VERSION example.env`
+    docker build -t frappe/erpnext:$ERPNEXT_VERSION .
 
 Startup ERPNext:
 
@@ -29,6 +31,8 @@ Login to https://localhost:8080 :
     # user: Administrator ; password: admin
 
 ### Startup with devcontainer
+
+The repository directory ```<foo>/frappe_docker```and ```<foo>/my_erpnext_app``` need to be in the same directory!
 
     cd <foo>/frappe_docker
     ../my_erpnext_app/tools/frappe_docker-cleanrepository.sh
