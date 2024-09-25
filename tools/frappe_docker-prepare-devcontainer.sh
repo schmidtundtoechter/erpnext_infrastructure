@@ -50,7 +50,11 @@ modify_file .devcontainer/docker-compose.yml "#mailpit-data:" "frappe_docker_vol
 
 echo "STEP 3.3 Copy reinstall script into development"
 cp ../my_erpnext_app/tools/frappe_docker-reinstall.sh ./development/
-dos2unix ./development/frappe_docker-reinstall.sh
+
+# Convert script to unix format if windows
+if [[ "$OSTYPE" == "msys" ]]; then
+  dos2unix ./development/frappe_docker-reinstall.sh
+fi
 
 echo "STEP 3.5 Volume vorbereiten (frappe_docker_volume)"
 # Name des Volumes
@@ -65,7 +69,12 @@ if ! docker volume inspect $VOLUME_NAME > /dev/null 2>&1; then
 
   echo "STEP 3.5.1 Volume mit Frappe Docker befüllen"
 
-  TEMP_DIR_UNIX=$(cygpath -w -a "../frappe_docker")
+  # Convert TEMP_DIR_UNIX if windows
+  if [[ "$OSTYPE" == "msys" ]]; then
+    TEMP_DIR_UNIX=$(cygpath -u -a "../frappe_docker")
+  else
+    TEMP_DIR_UNIX=$(realpath ../frappe_docker)
+  fi
   echo "TEMP_DIR_UNIX=$TEMP_DIR_UNIX"
 
   # Erstelle einen temporären Container, der das Volume mountet

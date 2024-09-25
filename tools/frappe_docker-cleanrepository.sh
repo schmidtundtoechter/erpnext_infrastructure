@@ -9,6 +9,9 @@ if [[ $current_dir != *"frappe_docker" ]]; then
     exit 1  # Skript beenden mit Fehlercode 1
 fi
 
+echo -- Shutdown devcontainers
+docker compose -p frappe_docker_devcontainer -f .devcontainer/docker-compose.yml down -v
+
 echo -- Remove directory ./development
 rm -rf development .devcontainer
 
