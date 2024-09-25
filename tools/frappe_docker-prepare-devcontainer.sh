@@ -35,6 +35,15 @@ if [[ $current_dir != *"frappe_docker" ]]; then
     exit 1  # Skript beenden mit Fehlercode 1
 fi
 
+echo "### STEP 2: Only on arm64 because frappe/erpnext:$ERPNEXT_VERSION for the"
+echo "    arm64 platform is not in the docker repository and must be build."
+echo "    Attention: The version number of erpnext is adapted through example.env."
+if [[ "$(docker version --format '{{.Server.Arch}}')" == "arm64" ]]; then
+    cp images/production/Containerfile Dockerfile
+    export `grep ERPNEXT_VERSION example.env`
+    docker build -t frappe/erpnext:$ERPNEXT_VERSION .
+fi
+
 echo "### STEP 3: Create devcontainer and VS Code setup"
 cp -r devcontainer-example .devcontainer
 cp -r development/vscode-example development/.vscode
