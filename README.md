@@ -37,7 +37,6 @@ The repository directory ```<foo>/frappe_docker```and ```<foo>/my_erpnext_app```
     cd <foo>/frappe_docker
     ../my_erpnext_app/tools/frappe_docker-cleanrepository.sh
     ../my_erpnext_app/tools/frappe_docker-prepare-devcontainer.sh
-    cp ../my_erpnext_app/tools/frappe_docker-reinstall.sh ./development/
 
 Now open ```frappe_docker``` folder in VS Code and reopen in devcontainer.
 To reinstall and start the bench, call and follow instructions. DB Password is ```123```

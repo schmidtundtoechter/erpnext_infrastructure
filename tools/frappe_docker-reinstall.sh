@@ -3,6 +3,8 @@
 # Guide-to-Install-Frappe-ERPNext-in-Windows-11-Using-Docker
 # A complete Guide to Install Frappe Bench in Windows 11 Using Docker and install Frappe/ERPNext Application
 
+sudo chown -R frappe:frappe /workspace
+
 echo "### STEP 6 Initialize frappe bench with frappe version 14 and Switch directory"
 cd /workspace/development
 bench init --skip-redis-config-generation --frappe-branch version-14 frappe-bench
