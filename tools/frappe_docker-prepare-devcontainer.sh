@@ -54,6 +54,13 @@ if [[ "$(docker version --format '{{.Server.Arch}}')" == "arm64" ]]; then
     modify_file .devcontainer/docker-compose.yml "linux/amd64" "linux/arm64"
 fi
 
+# On windows check source in devcontainer.json
+if [[ "$OSTYPE" == "msys" ]]; then
+    echo "### Update devcontainer.json for Windows"
+    modify_file .devcontainer/devcontainer.json "\${localEnv:USERPROFILE}" ""
+fi
+
+echo "### Update devcontainer.json and docker-compose.yml for volume"
 modify_file .devcontainer/docker-compose.yml "- ..:/workspace" "- frappe_docker_volume:/workspace"
 modify_file .devcontainer/docker-compose.yml "#mailpit-data:" "frappe_docker_volume:\n    external: true"
 
@@ -80,7 +87,7 @@ if ! docker volume inspect $VOLUME_NAME > /dev/null 2>&1; then
 
   # Convert TEMP_DIR_UNIX if windows
   if [[ "$OSTYPE" == "msys" ]]; then
-    TEMP_DIR_UNIX=$(cygpath -u -a "../frappe_docker")
+    TEMP_DIR_UNIX=$(cygpath -w -a "../frappe_docker")
   else
     TEMP_DIR_UNIX=$(realpath ../frappe_docker)
   fi
@@ -89,7 +96,7 @@ if ! docker volume inspect $VOLUME_NAME > /dev/null 2>&1; then
   # Erstelle einen temporären Container, der das Volume mountet
   docker run --rm \
     -v $VOLUME_NAME:/mnt/frappe_docker_volume \
-    -v $TEMP_DIR_UNIX:/mnt/tmp_clone \
+    -v "$TEMP_DIR_UNIX":/mnt/tmp_clone \
     ubuntu bash -c "cp -r /mnt/tmp_clone/. /mnt/frappe_docker_volume/"
 
   echo "Repository content has been successfully copied into the Docker volume."
@@ -110,3 +117,5 @@ echo "### STEP 4 Open vscode and install 'Dev Containers' extension"
 echo "###  STEP 5 Open frappe_docker folder in VS Code."
 echo
 echo "--> NOW: Launch the command, from Command Palette (Ctrl + Shift + P) Remote-Containers: Reopen in Container. You can also click in the bottom left corner to access the remote container menu."
+
+code .
