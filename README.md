@@ -15,13 +15,6 @@ Get it:
     git clone https://github.com/frappe/frappe_docker.git
     cd frappe_docker
 
-Only on arm64 because frappe/erpnext:$ERPNEXT_VERSION for the arm64 platform is not in the docker repository and must be build.
-Attention: The version number of erpnext is adapted through example.env.
-
-    cp images/production/Containerfile Dockerfile
-    export `grep ERPNEXT_VERSION example.env`
-    docker build -t frappe/erpnext:$ERPNEXT_VERSION .
-
 Startup ERPNext:
 
     docker compose -f pwd.yml up -d

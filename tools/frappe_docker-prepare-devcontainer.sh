@@ -35,6 +35,15 @@ if [[ $current_dir != *"frappe_docker" ]]; then
     exit 1  # Skript beenden mit Fehlercode 1
 fi
 
+echo "### STEP 2: Only on arm64 because frappe/erpnext:$ERPNEXT_VERSION for the"
+echo "    arm64 platform is not in the docker repository and must be build."
+echo "    Attention: The version number of erpnext is adapted through example.env."
+if [[ "$(docker version --format '{{.Server.Arch}}')" == "arm64" ]]; then
+    cp images/production/Containerfile Dockerfile
+    export `grep ERPNEXT_VERSION example.env`
+    docker build -t frappe/erpnext:$ERPNEXT_VERSION .
+fi
+
 echo "### STEP 3: Create devcontainer and VS Code setup"
 cp -r devcontainer-example .devcontainer
 cp -r development/vscode-example development/.vscode
@@ -50,7 +59,11 @@ modify_file .devcontainer/docker-compose.yml "#mailpit-data:" "frappe_docker_vol
 
 echo "STEP 3.3 Copy reinstall script into development"
 cp ../my_erpnext_app/tools/frappe_docker-reinstall.sh ./development/
-dos2unix ./development/frappe_docker-reinstall.sh
+
+# Convert script to unix format if windows
+if [[ "$OSTYPE" == "msys" ]]; then
+  dos2unix ./development/frappe_docker-reinstall.sh
+fi
 
 echo "STEP 3.5 Volume vorbereiten (frappe_docker_volume)"
 # Name des Volumes
@@ -65,7 +78,12 @@ if ! docker volume inspect $VOLUME_NAME > /dev/null 2>&1; then
 
   echo "STEP 3.5.1 Volume mit Frappe Docker befüllen"
 
-  TEMP_DIR_UNIX=$(cygpath -w -a "../frappe_docker")
+  # Convert TEMP_DIR_UNIX if windows
+  if [[ "$OSTYPE" == "msys" ]]; then
+    TEMP_DIR_UNIX=$(cygpath -u -a "../frappe_docker")
+  else
+    TEMP_DIR_UNIX=$(realpath ../frappe_docker)
+  fi
   echo "TEMP_DIR_UNIX=$TEMP_DIR_UNIX"
 
   # Erstelle einen temporären Container, der das Volume mountet
