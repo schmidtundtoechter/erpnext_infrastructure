@@ -2,7 +2,6 @@ version: "3.7"
 services:
   mariadb:
     image: docker.io/mariadb:10.6
-    platform: linux/amd64
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
@@ -13,19 +12,19 @@ services:
     volumes:
       - mariadb-data:/var/lib/mysql
 
-
   redis-cache:
     image: docker.io/redis:alpine
-    platform: linux/amd64
 
   redis-queue:
     image: docker.io/redis:alpine
-    platform: linux/amd64
 
   frappe:
-    image: frappe/erpnext:v15.38.0
-    platform: linux/amd64
-    command: sleep infinity
+    image: frappe/erpnext:v15.42.0
+    deploy:
+      restart_policy:
+        condition: on-failure
+    command:
+      - nginx-entrypoint.sh
     environment:
       - SHELL=/bin/bash
     volumes:
@@ -34,12 +33,12 @@ services:
       # - ${HOME}/.ssh:/home/frappe/.ssh
     working_dir: /workspace/installation
     ports:
+      - 8080:8080
       - 8010-8015:8000-8005
       - 9010-9015:9000-9005
 
-
   configurator-create-site:
-    image: frappe/erpnext:v15.38.0
+    image: frappe/erpnext:v15.42.0
     deploy:
       restart_policy:
         condition: none
@@ -91,7 +90,6 @@ services:
       # Enable if you require git cloning
       # - ${HOME}/.ssh:/home/frappe/.ssh
     working_dir: /workspace/installation
-
 
 volumes:
   mariadb-data:
