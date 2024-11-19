@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  ssh-docker-container:
+    build: .
+    container_name: ssh-docker-container
+    ports:
+      - "2222:22"  # Exponiere den SSH-Port
+    privileged: true  # Ermöglicht dem Container Zugriff auf die Docker-Engine
+    environment:
+      - DOCKER_HOST=unix:///var/run/docker.sock  # Docker Engine-Host
+    volumes:
+      - testconfigvolume:/workspace  # Nutze das externe Volume
+      - /var/run/docker.sock:/var/run/docker.sock  # Bindet die Docker-Socket-Datei ein
+    restart: unless-stopped
+
+# Definiert das externe Volume testconfigvolume
+volumes:
+  testconfigvolume:
+    external: true
