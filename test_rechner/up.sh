@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Name des Volumes
 VOLUME_NAME="testconfigvolume"
 
