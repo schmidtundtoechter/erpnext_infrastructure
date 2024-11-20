@@ -206,9 +206,16 @@ services:
 
 volumes:
   env:
+    external: true
   apps:
-  db-data:
-  redis-queue-data:
-  redis-cache-data:
+    external: true
   sites:
+    external: true
   logs:
+    external: true
+  redis-queue-data:
+    external: true
+  redis-cache-data:
+    external: true
+  db-data:
+    external: true
