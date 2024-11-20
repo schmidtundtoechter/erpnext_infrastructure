@@ -38,6 +38,20 @@ To reinstall and start the bench, call and follow instructions. DB Password is `
 
 Go to http://d-code.localhost:8000
 
+### Startup test server
+
+On test server go to ```test_server``` directory.
+
+    ./up.sh
+
+Go to https://localhost:8080 (resp. on your test server) and go through the setup wizard
+
+Then run
+
+    ./install_update.sh
+
+Now the plugin is available.
+
 ### Docker ps aliases for convenience
 
 source tools/aliases.sh
