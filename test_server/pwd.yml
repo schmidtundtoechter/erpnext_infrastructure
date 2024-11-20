@@ -2,17 +2,18 @@ version: "3"
 
 services:
   backend:
-    image: frappe/erpnext:v15.42.0
+    build: .
     deploy:
       restart_policy:
         condition: on-failure
     volumes:
+      - env:/home/frappe/frappe-bench/env
       - apps:/home/frappe/frappe-bench/apps
       - sites:/home/frappe/frappe-bench/sites
       - logs:/home/frappe/frappe-bench/logs
 
   configurator:
-    image: frappe/erpnext:v15.42.0
+    build: .
     deploy:
       restart_policy:
         condition: none
@@ -36,16 +37,18 @@ services:
       REDIS_QUEUE: redis-queue:6379
       SOCKETIO_PORT: "9000"
     volumes:
+      - env:/home/frappe/frappe-bench/env
       - apps:/home/frappe/frappe-bench/apps
       - sites:/home/frappe/frappe-bench/sites
       - logs:/home/frappe/frappe-bench/logs
 
   create-site:
-    image: frappe/erpnext:v15.42.0
+    build: .
     deploy:
       restart_policy:
         condition: none
     volumes:
+      - env:/home/frappe/frappe-bench/env
       - apps:/home/frappe/frappe-bench/apps
       - sites:/home/frappe/frappe-bench/sites
       - logs:/home/frappe/frappe-bench/logs
@@ -70,7 +73,15 @@ services:
           fi
         done;
         echo "sites/common_site_config.json found";
-        bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=admin --install-app erpnext --set-default frontend;
+        mkdir -p ~/.ssh;
+        echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa;
+        chmod 600 ~/.ssh/id_rsa;
+        if [ ! -d /home/frappe/frappe-bench/apps/test12 ]; then
+          GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no" bench get-app git@github.com:larsmaeurer/test12.git;
+        fi;
+        bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=admin --install-app erpnext --install-app test12 --set-default frontend;
+    environment:
+      SSH_PRIVATE_KEY: ${SSH_PRIVATE_KEY}
 
   db:
     image: mariadb:10.6
@@ -92,7 +103,7 @@ services:
       - db-data:/var/lib/mysql
 
   frontend:
-    image: frappe/erpnext:v15.42.0
+    build: .
     depends_on:
       - websocket
     deploy:
@@ -110,6 +121,7 @@ services:
       PROXY_READ_TIMEOUT: 120
       CLIENT_MAX_BODY_SIZE: 50m
     volumes:
+      - env:/home/frappe/frappe-bench/env
       - apps:/home/frappe/frappe-bench/apps
       - sites:/home/frappe/frappe-bench/sites
       - logs:/home/frappe/frappe-bench/logs
@@ -117,7 +129,7 @@ services:
       - "8080:8080"
 
   queue-long:
-    image: frappe/erpnext:v15.42.0
+    build: .
     deploy:
       restart_policy:
         condition: on-failure
@@ -127,12 +139,13 @@ services:
       - --queue
       - long,default,short
     volumes:
+      - env:/home/frappe/frappe-bench/env
       - apps:/home/frappe/frappe-bench/apps
       - sites:/home/frappe/frappe-bench/sites
       - logs:/home/frappe/frappe-bench/logs
 
   queue-short:
-    image: frappe/erpnext:v15.42.0
+    build: .
     deploy:
       restart_policy:
         condition: on-failure
@@ -142,6 +155,7 @@ services:
       - --queue
       - short,default
     volumes:
+      - env:/home/frappe/frappe-bench/env
       - apps:/home/frappe/frappe-bench/apps
       - sites:/home/frappe/frappe-bench/sites
       - logs:/home/frappe/frappe-bench/logs
@@ -163,7 +177,7 @@ services:
       - redis-cache-data:/data
 
   scheduler:
-    image: frappe/erpnext:v15.42.0
+    build: .
     deploy:
       restart_policy:
         condition: on-failure
@@ -171,12 +185,13 @@ services:
       - bench
       - schedule
     volumes:
+      - env:/home/frappe/frappe-bench/env
       - apps:/home/frappe/frappe-bench/apps
       - sites:/home/frappe/frappe-bench/sites
       - logs:/home/frappe/frappe-bench/logs
 
   websocket:
-    image: frappe/erpnext:v15.42.0
+    build: .
     deploy:
       restart_policy:
         condition: on-failure
@@ -184,11 +199,13 @@ services:
       - node
       - /home/frappe/frappe-bench/apps/frappe/socketio.js
     volumes:
+      - env:/home/frappe/frappe-bench/env
       - apps:/home/frappe/frappe-bench/apps
       - sites:/home/frappe/frappe-bench/sites
       - logs:/home/frappe/frappe-bench/logs
 
 volumes:
+  env:
   apps:
   db-data:
   redis-queue-data:
