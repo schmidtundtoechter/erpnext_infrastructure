@@ -1,1 +1,1 @@
-docker compose -f pwd.yml restart
+docker compose -f $YAML_FILE -p $PROJECT_NAME restart

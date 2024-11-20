@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Name des Volumes
-VOLUMES="env apps sites logs redis-queue-data redis-cache-data db-data"
+. .env
+
 echo "Volumes vorbereiten ($VOLUMES)"
 
 for VOLUME_NAME in $VOLUMES; do
@@ -17,5 +17,4 @@ for VOLUME_NAME in $VOLUMES; do
   fi
 done
 
-export SSH_PRIVATE_KEY="$(cat ~/.ssh/id_rsa)"
-docker compose -f pwd.yml up
+docker compose -f $YAML_FILE -p $PROJECT_NAME up

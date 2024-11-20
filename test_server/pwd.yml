@@ -73,15 +73,7 @@ services:
           fi
         done;
         echo "sites/common_site_config.json found";
-        mkdir -p ~/.ssh;
-        echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa;
-        chmod 600 ~/.ssh/id_rsa;
-        if [ ! -d /home/frappe/frappe-bench/apps/test12 ]; then
-          GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no" bench get-app git@github.com:larsmaeurer/test12.git;
-        fi;
-        bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=admin --install-app erpnext --install-app test12 --set-default frontend;
-    environment:
-      SSH_PRIVATE_KEY: ${SSH_PRIVATE_KEY}
+        bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=admin --install-app erpnext --set-default $SITE;
 
   db:
     image: mariadb:10.6
@@ -113,7 +105,7 @@ services:
       - nginx-entrypoint.sh
     environment:
       BACKEND: backend:8000
-      FRAPPE_SITE_NAME_HEADER: frontend
+      FRAPPE_SITE_NAME_HEADER: $SITE
       SOCKETIO: websocket:9000
       UPSTREAM_REAL_IP_ADDRESS: 127.0.0.1
       UPSTREAM_REAL_IP_HEADER: X-Forwarded-For
