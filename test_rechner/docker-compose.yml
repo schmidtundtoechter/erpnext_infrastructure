@@ -5,7 +5,7 @@ services:
     build: .
     container_name: ssh-docker-container
     ports:
-      - "2222:22"  # Exponiere den SSH-Port
+      - "22:22"  # Exponiere den SSH-Port
     privileged: true  # Ermöglicht dem Container Zugriff auf die Docker-Engine
     environment:
       - DOCKER_HOST=unix:///var/run/docker.sock  # Docker Engine-Host

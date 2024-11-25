@@ -42,3 +42,10 @@ echo "### STEP 11 Start Frappe bench"
 bench start
 
 echo "### You can now login with user Administrator and the password you choose when creating the site. Your website will now be accessible at location http://d-code.localhost:8000"
+
+# bench get-app test12 git@github.com:larsmaeurer/test12.git
+# bench --site d-code.localhost install-app test12
+# stop the bench
+# bench build
+# bench start
+# bench migrate

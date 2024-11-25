@@ -1,0 +1,5 @@
+alias dpsi='docker ps --format "table ☞   {{.ID}}\t{{.Image}}\t{{.Status}}\t{{.Names}}" | (read -r; printf "%s\n" "$REPLY"; sort -k 2 )'
+alias dpsn='docker ps --format "table ☞   {{.ID}}\t{{.Image}}\t{{.Status}}\t{{.Names}}" | (read -r; printf "%s\n" "$REPLY"; sort -k 4 )'
+alias dils='docker image ls --format "table ☞   {{.ID}}\t{{.Repository}}\t{{.Tag}}\t{{.CreatedSince}}\t{{.Size}}"'
+alias dvls='docker volume ls --format "table ☞   {{.Name}}"'
+alias dall='echo "Containers:" ; dpsn ; echo "Images:" ; dils ; echo "Volumes:" ; dvls'
