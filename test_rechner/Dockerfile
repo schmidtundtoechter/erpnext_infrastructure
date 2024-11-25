@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     gnupg \
     lsb-release \
+    rsync \
     && curl -fsSL https://get.docker.com | sh \
     && apt-get clean
 

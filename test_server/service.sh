@@ -47,7 +47,7 @@ function local.install_update() {
       cd /home/frappe/frappe-bench/apps/test12;
       GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no" git pull;
   fi;
-  rm -rf ~/.ssh
+  rm -rf ~/.ssh/id_rsa
 
   echo "Install test12 app and migrate";
   bench --site $SITE install-app test12;
@@ -61,23 +61,20 @@ function callRemote() {
   echo "Calling remote command $1"
 
   # Assure remote path
-  ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "mkdir -p $REMOTE_PATH"
+  ssh -o StrictHostKeyChecking=no -p $REMOTE_PORT $REMOTE_USER@$REMOTE_HOST "mkdir -p $REMOTE_PATH"
 
   # Test remote directory
-  ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "test -d $REMOTE_PATH" || { echo "Remote directory $REMOTE_PATH not found. Exiting..."; exit 1; }
+  ssh -o StrictHostKeyChecking=no -p $REMOTE_PORT $REMOTE_USER@$REMOTE_HOST "test -d $REMOTE_PATH" || { echo "Remote directory $REMOTE_PATH not found. Exiting..."; exit 1; }
 
   # Sync files
-  rsync -avz -e "ssh -o StrictHostKeyChecking=no -i $SSH_PRIVATE_KEY" ./ $REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH/
+  rsync -avz -e "ssh -o StrictHostKeyChecking=no -p $REMOTE_PORT" ./ $REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH/
   
-  # Test remote .env file
-  ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "test -f $REMOTE_PATH/.env" || { echo "Remote .env file not found. Exiting..."; exit 1; }
-
   # Call remote command
-  ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "bash -s" <<EOL
+  ssh -o StrictHostKeyChecking=no -p $REMOTE_PORT $REMOTE_USER@$REMOTE_HOST "bash -s" <<EOL
     cd $REMOTE_PATH
-    . .env
-    export SSH_PRIVATE_KEY="$SSH_PRIVATE_KEY"
+    echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa;
     ./service.sh $@
+    rm -rf ~/.ssh/id_rsa
 EOL
 }
 
