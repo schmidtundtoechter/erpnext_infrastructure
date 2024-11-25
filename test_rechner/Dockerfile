@@ -19,11 +19,16 @@ RUN apt-get update && apt-get install -y \
 # Erstelle Verzeichnisse für den SSH-Server
 RUN mkdir /var/run/sshd
 
-# Setze das Passwort für den Benutzer root (dies ist unzureichend sicher und sollte in einer realen Umgebung angepasst werden)
-RUN echo 'root:123' | chpasswd
+# Kopiere die .key-Dateien ins Image (stellen Sie sicher, dass Sie diese Dateien im Build-Kontext haben)
+COPY *.key /tmp/keys/
 
-# SSH-Server-Konfiguration anpassen (optional)
-RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+# Berechtigungen für die .key-Dateien setzen
+RUN chmod 600 /tmp/keys/* && \
+    mkdir -p /root/.ssh && \
+    cat /tmp/keys/*.key >> /root/.ssh/authorized_keys && \
+    chmod 700 /root/.ssh && \
+    chmod 600 /root/.ssh/authorized_keys && \
+    rm -rf /tmp/keys  # Entfernen der temporären Dateien
 
 # Docker-CLI zur Verfügung stellen
 RUN usermod -aG docker root
