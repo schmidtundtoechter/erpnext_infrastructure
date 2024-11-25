@@ -67,8 +67,9 @@ function callRemote() {
   ssh -o StrictHostKeyChecking=no -p $REMOTE_PORT $REMOTE_USER@$REMOTE_HOST "test -d $REMOTE_PATH" || { echo "Remote directory $REMOTE_PATH not found. Exiting..."; exit 1; }
 
   # Sync files
-  rsync -avz -e "ssh -o StrictHostKeyChecking=no -p $REMOTE_PORT" ./ $REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH/
-  
+  #rsync -avz -e "ssh -o StrictHostKeyChecking=no -p $REMOTE_PORT" ./ $REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH/
+  scp -o StrictHostKeyChecking=no -P $REMOTE_PORT -r ./ $REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH/
+
   # Call remote command
   ssh -o StrictHostKeyChecking=no -p $REMOTE_PORT $REMOTE_USER@$REMOTE_HOST "bash -s" <<EOL
     cd $REMOTE_PATH
