@@ -74,6 +74,7 @@ function callRemote() {
   ssh -o StrictHostKeyChecking=no -p $REMOTE_PORT $REMOTE_USER@$REMOTE_HOST "bash -s" <<EOL
     cd $REMOTE_PATH
     echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa;
+    dos2unix .env *
     ./service.sh $@
     rm -rf ~/.ssh/id_rsa
 EOL

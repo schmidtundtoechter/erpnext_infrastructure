@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     lsb-release \
     rsync \
+    dos2unix \
     && curl -fsSL https://get.docker.com | sh \
     && apt-get clean
 
