@@ -45,6 +45,7 @@ if [[ "$(docker version --format '{{.Server.Arch}}')" == "arm64" ]]; then
 fi
 
 echo "### STEP 3: Create devcontainer and VS Code setup"
+rm -rf .devcontainer development/.vscode
 cp -r devcontainer-example .devcontainer
 cp -r development/vscode-example development/.vscode
 # Only on MaccOS with M1 or M2; ad check arm or amd platform
@@ -56,8 +57,8 @@ fi
 
 # On windows check source in devcontainer.json
 if [[ "$OSTYPE" == "msys" ]]; then
-    echo "### Update devcontainer.json for Windows"
-    modify_file .devcontainer/devcontainer.json "\${localEnv:USERPROFILE}" ""
+    echo "### Update devcontainer.json for ssh mount on windows"
+    modify_file .devcontainer/devcontainer.json "/home/frappe/.ssh," "/home/frappe/.ssh2,"
 fi
 
 echo "### Update devcontainer.json and docker-compose.yml for volume"
@@ -118,4 +119,5 @@ echo "###  STEP 5 Open frappe_docker folder in VS Code."
 echo
 echo "--> NOW: Launch the command, from Command Palette (Ctrl + Shift + P) Remote-Containers: Reopen in Container. You can also click in the bottom left corner to access the remote container menu."
 
+unset HOME
 code .

@@ -5,6 +5,12 @@
 
 sudo chown -R frappe:frappe /workspace
 
+if [ -d /home/frappe/.ssh2 ]; then
+    echo "### STEP 5.5 Copy ssh keys"
+    cp -f /home/frappe/.ssh2/* /home/frappe/.ssh/
+    chmod 600 /home/frappe/.ssh/*
+fi
+
 echo "### STEP 6 Initialize frappe bench with frappe version 14 and Switch directory"
 cd /workspace/development
 bench init --skip-redis-config-generation --frappe-branch version-14 frappe-bench
