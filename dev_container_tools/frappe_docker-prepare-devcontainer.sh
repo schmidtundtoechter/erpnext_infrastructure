@@ -66,7 +66,7 @@ modify_file .devcontainer/docker-compose.yml "- ..:/workspace" "- frappe_docker_
 modify_file .devcontainer/docker-compose.yml "#mailpit-data:" "frappe_docker_volume:\n    external: true"
 
 echo "STEP 3.3 Copy reinstall script into development"
-cp ../my_erpnext_app/tools/frappe_docker-reinstall.sh ./development/
+cp ../erpnext_infrastructure/dev_container_tools/frappe_docker-reinstall.sh ./development/
 
 # Convert script to unix format if windows
 if [[ "$OSTYPE" == "msys" ]]; then
@@ -120,4 +120,6 @@ echo
 echo "--> NOW: Launch the command, from Command Palette (Ctrl + Shift + P) Remote-Containers: Reopen in Container. You can also click in the bottom left corner to access the remote container menu."
 
 unset HOME
+echo "HOME=$HOME"
+echo "USERPROFILE=$USERPROFILE"
 code .
