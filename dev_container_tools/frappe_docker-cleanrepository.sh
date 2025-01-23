@@ -29,6 +29,9 @@ else
   echo "Docker-Volume '$VOLUME_NAME' existiert nicht."
 fi
 
+echo -- Remove vscode volume
+docker volume rm vscode
+
 echo -- Clean repository
 git reset --hard
 
