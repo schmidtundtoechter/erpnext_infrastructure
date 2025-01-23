@@ -11,9 +11,11 @@ if [ -d /home/frappe/.ssh2 ]; then
     chmod 600 /home/frappe/.ssh/*
 fi
 
-echo "### STEP 6 Initialize frappe bench with frappe version 14 and Switch directory"
+ERPNEXT_VERSION=15
+
+echo "### STEP 6 Initialize frappe bench with frappe version ${ERPNEXT_VERSION} and Switch directory"
 cd /workspace/development
-bench init --skip-redis-config-generation --frappe-branch version-14 frappe-bench
+bench init --skip-redis-config-generation --frappe-branch version-${ERPNEXT_VERSION} frappe-bench
 cd frappe-bench
 
 echo "### STEP 7 Setup hosts"
@@ -41,7 +43,7 @@ bench --site d-code.localhost set-config developer_mode 1
 bench --site d-code.localhost clear-cache   
 
 echo "### STEP 10 Install ERPNext"
-bench get-app --branch version-14 --resolve-deps erpnext
+bench get-app --branch version-${ERPNEXT_VERSION} --resolve-deps erpnext
 bench --site d-code.localhost install-app erpnext
 
 echo "### STEP 11 Start Frappe bench"
