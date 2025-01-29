@@ -31,8 +31,7 @@ cd frappe-bench/
 
 bench get-app $appName $1
 bench --site d-code.localhost install-app $appName
-#stop the bench
+bench --site d-code.localhost migrate
 bench build
-bench migrate
 
 echo "bench jetzt neu starten: bench start"
