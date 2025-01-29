@@ -67,6 +67,7 @@ modify_file .devcontainer/docker-compose.yml "#mailpit-data:" "frappe_docker_vol
 
 echo "STEP 3.3 Copy reinstall script into development"
 cp ../erpnext_infrastructure/dev_container_tools/frappe_docker-reinstall.sh ./development/
+cp ../erpnext_infrastructure/dev_container_tools/frappe_docker-installApp.sh ./development/
 
 # Convert script to unix format if windows
 if [[ "$OSTYPE" == "msys" ]]; then
