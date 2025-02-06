@@ -99,7 +99,7 @@ if ! docker volume inspect $VOLUME_NAME > /dev/null 2>&1; then
   docker run --rm \
     -v $VOLUME_NAME:/mnt/frappe_docker_volume \
     -v "$TEMP_DIR_UNIX":/mnt/tmp_clone \
-    ubuntu bash -c "cp -r /mnt/tmp_clone/. /mnt/frappe_docker_volume/"
+    ubuntu bash -c "mkdir -p /mnt/frappe_docker_volume/development ; cp -r /mnt/tmp_clone/development/. /mnt/frappe_docker_volume/development/"
 
   echo "Repository content has been successfully copied into the Docker volume."
 else
