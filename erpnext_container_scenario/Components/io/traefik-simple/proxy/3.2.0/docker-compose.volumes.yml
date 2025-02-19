@@ -1,0 +1,4 @@
+volumes:
+  traefik-volume:
+    external: ${SCENARIO_DATA_VOLUME_1_EXTERNAL}
+    name: ${SCENARIO_DATA_VOLUME_1_PATH}

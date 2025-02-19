@@ -1,0 +1,17 @@
+scenario:
+  ## Unique resources
+  resource:
+    # What is the http port of the docker container?
+    httpport: 80
+    # What is the https port of the docker container?
+    httpsport: 443
+  ## Letsencrypt settings
+  letsencrypt:
+    # What is the email address for letsencrypt?
+    email: none
+  ## Basic auth settings
+  basicauth:
+    # What is the username for basic auth?
+    username: admin
+    # What is the password for basic auth? (Every $ must be '\\\$'!)
+    password: none

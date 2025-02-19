@@ -1,0 +1,28 @@
+volumes:
+  env:
+    external: ${SCENARIO_DATA_VOLUME_1_EXTERNAL}
+    name: ${SCENARIO_DATA_VOLUME_1_PATH}
+
+  apps:
+    external: ${SCENARIO_DATA_VOLUME_2_EXTERNAL}
+    name: ${SCENARIO_DATA_VOLUME_2_PATH}
+
+  sites:
+    external: ${SCENARIO_DATA_VOLUME_3_EXTERNAL}
+    name: ${SCENARIO_DATA_VOLUME_3_PATH}
+
+  logs:
+    external: ${SCENARIO_DATA_VOLUME_4_EXTERNAL}
+    name: ${SCENARIO_DATA_VOLUME_4_PATH}
+
+  redis-queue-data:
+    external: ${SCENARIO_DATA_VOLUME_5_EXTERNAL}
+    name: ${SCENARIO_DATA_VOLUME_5_PATH}
+
+  redis-cache-data:
+    external: ${SCENARIO_DATA_VOLUME_6_EXTERNAL}
+    name: ${SCENARIO_DATA_VOLUME_6_PATH}
+
+  db-data:
+    external: ${SCENARIO_DATA_VOLUME_7_EXTERNAL}
+    name: ${SCENARIO_DATA_VOLUME_7_PATH}

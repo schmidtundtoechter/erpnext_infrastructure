@@ -1,0 +1,47 @@
+services:
+  traefik:
+    container_name: ${SCENARIO_NAME}_traefik_container
+    image: traefik:3.2.0
+    restart: always
+    ports:
+      - "${SCENARIO_RESOURCE_HTTPPORT}:80"
+      - "${SCENARIO_RESOURCE_HTTPSPORT}:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.yml:/etc/traefik/traefik.yml
+      - ${SCENARIO_DATA_MOUNTPOINT_1}:/letsencrypt
+
+    #command:
+    #  - "--certificatesresolvers.letsencrypt.acme.email=${SCENARIO_LETSENCRYPT_EMAIL}"
+    #  - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    #  - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+
+    labels:
+      - "traefik.enable=true"
+
+      # Dashboard Router
+      - "traefik.http.routers.traefik.rule=Host(`${SCENARIO_SERVER_NAME}`) && PathPrefix(`/dashboard`)"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.traefik.service=api@internal"
+
+      # API Router für /api/overview
+      - "traefik.http.routers.api.rule=Host(`${SCENARIO_SERVER_NAME}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.api.entrypoints=websecure"
+      - "traefik.http.routers.api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.api.service=api@internal"
+
+      - "traefik.http.middlewares.dashboard-redirect.redirectregex.regex=^https://(.*)/dashboard$$"
+      - "traefik.http.middlewares.dashboard-redirect.redirectregex.replacement=https://$1/dashboard/"
+      - "traefik.http.routers.traefik.middlewares=dashboard-redirect,basic-auth-global"
+      - "traefik.http.middlewares.basic-auth-global.basicauth.users=${SCENARIO_BASICAUTH_USERNAME}:${SCENARIO_BASICAUTH_PASSWORD}"
+      
+      # Middleware: API Redirect, falls nötig
+      #- "traefik.http.middlewares.api-stripprefix.stripprefix.prefixes=/api"
+      #- "traefik.http.routers.api.middlewares=api-stripprefix"
+    networks:
+      - traefik
+
+networks:
+  traefik:
+    external: true

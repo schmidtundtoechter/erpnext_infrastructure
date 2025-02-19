@@ -1,0 +1,138 @@
+services:
+  gitea-service:
+    labels:
+      # This means the container will be stopped during backup to ensure
+      # backup integrity. You can omit this label if stopping during backup
+      # not required.
+      - docker-volume-backup.stop-during-backup=${SCENARIO_BACKUP_1_STOPDURINGBACKUP}
+
+  gitea-backup:
+    # In production, it is advised to lock your image tag to a proper
+    # release version instead of using `latest`.
+    # Check https://github.com/offen/docker-volume-backup/releases
+    # for a list of available releases.
+    image: offen/docker-volume-backup:v2.43.0
+    container_name: ${SCENARIO_NAME}_gitea_backup
+    restart: always
+    environment:
+      - BACKUP_CRON_EXPRESSION=${SCENARIO_BACKUP_1_CRON_EXPRESSION:-@daily}
+      - BACKUP_COMPRESSION=${SCENARIO_BACKUP_1_COMPRESSION:-gz}
+      - BACKUP_FILENAME_EXPAND=${SCENARIO_BACKUP_1_FILENAME_EXPAND:-true}
+      - BACKUP_FILENAME=${SCENARIO_BACKUP_1_FILENAME:-backup-${SCENARIO_NAME}-data-%Y-%m-%d-%H_%M.{{ .Extension }}}
+      - BACKUP_LATEST_SYMLINK=${SCENARIO_BACKUP_1_LATEST_SYMLINK:-backup-${SCENARIO_NAME}-data-latest.tar.gz}
+      - BACKUP_EXCLUDE_REGEXP=${SCENARIO_BACKUP_1_EXCLUDE_REGEXP:-\.log$}
+      - BACKUP_RETENTION_DAYS=${SCENARIO_BACKUP_1_RETENTION_DAYS:-60}
+      # Attention! Don't forget this prefix if you have different services
+      # backup files in the same directory!
+      - BACKUP_PRUNING_PREFIX=${SCENARIO_BACKUP_1_PRUNING_PREFIX:-backup-${SCENARIO_NAME}-data-}
+      # SSH settings for remote backup
+      - SSH_HOST_NAME=${SCENARIO_BACKUP_1_SSH_HOST_NAME:-}
+      - SSH_PORT=${SCENARIO_BACKUP_1_SSH_PORT:-}
+      - SSH_USER=${SCENARIO_BACKUP_1_SSH_USER:-}
+      - SSH_REMOTE_PATH=${SCENARIO_BACKUP_1_SSH_REMOTE_PATH:-}
+
+    volumes:
+      - ${SCENARIO_BACKUP_1_SSH_IDENTITY_FILE:-/dev/null}:/root/.ssh/id_rsa:ro
+      - ${SCENARIO_DATA_MOUNTPOINT_1}:/backup:ro
+      # Mounting the Docker socket allows the script to stop and restart
+      # the container during backup. You can omit this if you don't want
+      # to stop the container. In case you need to proxy the socket, you can
+      # also provide a location by setting `DOCKER_HOST` in the container
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # If you mount a local directory or volume to `/archive` a local
+      # copy of the backup will be stored there. You can override the
+      # location inside of the container by setting `BACKUP_ARCHIVE`.
+      # You can omit this if you do not want to keep local backups.
+      - ${SCENARIO_BACKUP_1_LOCALPATH:-/dev/null}:/archive
+
+  gitea-db:
+    labels:
+      # This means the container will be stopped during backup to ensure
+      # backup integrity. You can omit this label if stopping during backup
+      # not required.
+      - docker-volume-backup.stop-during-backup=${SCENARIO_BACKUP_2_STOPDURINGBACKUP}
+
+  gitea-db-backup:
+    # In production, it is advised to lock your image tag to a proper
+    # release version instead of using `latest`.
+    # Check https://github.com/offen/docker-volume-backup/releases
+    # for a list of available releases.
+    image: offen/docker-volume-backup:v2.43.0
+    container_name: ${SCENARIO_NAME}_gitea_db_backup
+    restart: always
+    environment:
+      - BACKUP_CRON_EXPRESSION=${SCENARIO_BACKUP_2_CRON_EXPRESSION:-@daily}
+      - BACKUP_COMPRESSION=${SCENARIO_BACKUP_2_COMPRESSION:-gz}
+      - BACKUP_FILENAME_EXPAND=${SCENARIO_BACKUP_2_FILENAME_EXPAND:-true}
+      - BACKUP_FILENAME=${SCENARIO_BACKUP_2_FILENAME:-backup-${SCENARIO_NAME}-db-%Y-%m-%d-%H_%M.{{ .Extension }}}
+      - BACKUP_LATEST_SYMLINK=${SCENARIO_BACKUP_2_LATEST_SYMLINK:-backup-${SCENARIO_NAME}-db-latest.tar.gz}
+      - BACKUP_EXCLUDE_REGEXP=${SCENARIO_BACKUP_2_EXCLUDE_REGEXP:-\.log$}
+      - BACKUP_RETENTION_DAYS=${SCENARIO_BACKUP_2_RETENTION_DAYS:-60}
+      # Attention! Don't forget this prefix if you have different services
+      # backup files in the same directory!
+      - BACKUP_PRUNING_PREFIX=${SCENARIO_BACKUP_2_PRUNING_PREFIX:-backup-${SCENARIO_NAME}-db-}
+      # SSH settings for remote backup
+      - SSH_HOST_NAME=${SCENARIO_BACKUP_2_SSH_HOST_NAME:-}
+      - SSH_PORT=${SCENARIO_BACKUP_2_SSH_PORT:-}
+      - SSH_USER=${SCENARIO_BACKUP_2_SSH_USER:-}
+      - SSH_REMOTE_PATH=${SCENARIO_BACKUP_2_SSH_REMOTE_PATH:-}
+
+    volumes:
+      - ${SCENARIO_BACKUP_2_SSH_IDENTITY_FILE:-/dev/null}:/root/.ssh/id_rsa:ro
+      - ${SCENARIO_DATA_MOUNTPOINT_2}:/backup:ro
+      # Mounting the Docker socket allows the script to stop and restart
+      # the container during backup. You can omit this if you don't want
+      # to stop the container. In case you need to proxy the socket, you can
+      # also provide a location by setting `DOCKER_HOST` in the container
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # If you mount a local directory or volume to `/archive` a local
+      # copy of the backup will be stored there. You can override the
+      # location inside of the container by setting `BACKUP_ARCHIVE`.
+      # You can omit this if you do not want to keep local backups.
+      - ${SCENARIO_BACKUP_2_LOCALPATH:-/dev/null}:/archive
+
+  gitea-action-runner:
+    labels:
+      # This means the container will be stopped during backup to ensure
+      # backup integrity. You can omit this label if stopping during backup
+      # not required.
+      - docker-volume-backup.stop-during-backup=${SCENARIO_BACKUP_3_STOPDURINGBACKUP}
+
+  gitea-action-runner-backup:
+    # In production, it is advised to lock your image tag to a proper
+    # release version instead of using `latest`.
+    # Check https://github.com/offen/docker-volume-backup/releases
+    # for a list of available releases.
+    image: offen/docker-volume-backup:v2.43.0
+    container_name: ${SCENARIO_NAME}_gitea_action_runner_backup
+    restart: always
+    environment:
+      - BACKUP_CRON_EXPRESSION=${SCENARIO_BACKUP_3_CRON_EXPRESSION:-@daily}
+      - BACKUP_COMPRESSION=${SCENARIO_BACKUP_3_COMPRESSION:-gz}
+      - BACKUP_FILENAME_EXPAND=${SCENARIO_BACKUP_3_FILENAME_EXPAND:-true}
+      - BACKUP_FILENAME=${SCENARIO_BACKUP_3_FILENAME:-backup-${SCENARIO_NAME}-runner-%Y-%m-%d-%H_%M.{{ .Extension }}}
+      - BACKUP_LATEST_SYMLINK=${SCENARIO_BACKUP_3_LATEST_SYMLINK:-backup-${SCENARIO_NAME}-runner-latest.tar.gz}
+      - BACKUP_EXCLUDE_REGEXP=${SCENARIO_BACKUP_3_EXCLUDE_REGEXP:-\.log$}
+      - BACKUP_RETENTION_DAYS=${SCENARIO_BACKUP_3_RETENTION_DAYS:-60}
+      # Attention! Don't forget this prefix if you have different services
+      # backup files in the same directory!
+      - BACKUP_PRUNING_PREFIX=${SCENARIO_BACKUP_3_PRUNING_PREFIX:-backup-${SCENARIO_NAME}-runner-}
+      # SSH settings for remote backup
+      - SSH_HOST_NAME=${SCENARIO_BACKUP_3_SSH_HOST_NAME:-}
+      - SSH_PORT=${SCENARIO_BACKUP_3_SSH_PORT:-}
+      - SSH_USER=${SCENARIO_BACKUP_3_SSH_USER:-}
+      - SSH_REMOTE_PATH=${SCENARIO_BACKUP_3_SSH_REMOTE_PATH:-}
+
+    volumes:
+      - ${SCENARIO_BACKUP_3_SSH_IDENTITY_FILE:-/dev/null}:/root/.ssh/id_rsa:ro
+      - ${SCENARIO_DATA_MOUNTPOINT_3}:/backup:ro
+      # Mounting the Docker socket allows the script to stop and restart
+      # the container during backup. You can omit this if you don't want
+      # to stop the container. In case you need to proxy the socket, you can
+      # also provide a location by setting `DOCKER_HOST` in the container
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # If you mount a local directory or volume to `/archive` a local
+      # copy of the backup will be stored there. You can override the
+      # location inside of the container by setting `BACKUP_ARCHIVE`.
+      # You can omit this if you do not want to keep local backups.
+      - ${SCENARIO_BACKUP_3_LOCALPATH:-/dev/null}:/archive

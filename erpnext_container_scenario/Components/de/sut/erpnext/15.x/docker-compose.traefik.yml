@@ -1,0 +1,64 @@
+services:
+  frontend:
+    networks:
+      - traefik
+    environment:
+      - FRAPPE_HOST_NAME=https://${SCENARIO_TRAEFIK_URL}
+      - FRAPPE_WEBSERVER_ROOT=${SCENARIO_TRAEFIK_ROUTE}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+      # Router for route
+      - "traefik.http.routers.erpnext.rule=Host(`${SCENARIO_TRAEFIK_URL}`) && PathPrefix(`${SCENARIO_TRAEFIK_ROUTE}`)"
+      - "traefik.http.routers.erpnext.entrypoints=websecure"
+      - "traefik.http.routers.erpnext.tls.certresolver=letsencrypt"
+      # Strip route from the path for erpnext
+      - "traefik.http.middlewares.erpnext-headers.headers.customrequestheaders.Host=${SCENARIO_TRAEFIK_URL}"
+      - "traefik.http.middlewares.erpnext-headers.headers.customrequestheaders.X-Forwarded-Prefix=${SCENARIO_TRAEFIK_ROUTE}"
+      - "traefik.http.middlewares.erpnext-stripprefix.stripprefix.prefixes=${SCENARIO_TRAEFIK_ROUTE}"
+      - "traefik.http.middlewares.erpnext-stripprefix.stripprefix.forceSlash=false"
+      - "traefik.http.routers.erpnext.middlewares=erpnext-stripprefix,erpnext-headers"
+      - "traefik.http.services.erpnext.loadbalancer.server.port=${SCENARIO_RESOURCE_HTTPPORT}"
+  backend:
+    networks:
+      - traefik
+
+  configurator:
+    networks:
+      - traefik
+
+  create-site:
+    networks:
+      - traefik
+
+  db:
+    networks:
+      - traefik
+
+  queue-long:
+    networks:
+      - traefik
+
+  queue-short:
+    networks:
+      - traefik
+
+  redis-queue:
+    networks:
+      - traefik
+
+  redis-cache:
+    networks:
+      - traefik
+
+  scheduler:
+    networks:
+      - traefik
+
+  websocket:
+    networks:
+      - traefik
+
+networks:
+  traefik:
+    external: true
