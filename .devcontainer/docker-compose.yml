@@ -7,8 +7,7 @@ services:
       - erpnext_infrastructure_volume:/workspace:cached
       - ~/.ssh:/workspace-local/.ssh
       - /var/run/docker.sock:/var/run/docker.sock
-    command: sleep infinity
-    #network_mode: service:docker-in-docker
+    command: sh -c "/home/vscode/init.sh && sleep infinity"
     privileged: true
 
 volumes:

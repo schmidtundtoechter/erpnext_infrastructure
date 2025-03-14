@@ -1,6 +1,8 @@
 #!/bin/bash
 
 sudo chmod 777 /workspace
+sudo chmod 666 /var/run/docker.sock
+
 cd /workspace
 
 # Copy SSH keys
