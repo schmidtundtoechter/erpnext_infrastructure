@@ -1,0 +1,11 @@
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ../..:/workspace:cached
+      - ~/.ssh:/workspace-local/.ssh
+    command: sleep infinity
+    #network_mode: service:docker-in-docker
+    privileged: true
