@@ -2,7 +2,7 @@
   "name": "Ubuntu DevContainer",
   "dockerComposeFile": "docker-compose.yml",
   "service": "dev",
-  "workspaceFolder": "/workspace-local",
+  "workspaceFolder": "/workspace",
   "features": {},
   "postCreateCommand": "echo 'Development container is ready'",
   "remoteUser": "vscode",

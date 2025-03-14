@@ -1,6 +1,7 @@
 #!/bin/bash
 
-cd /workspace-local
+sudo chmod 777 /workspace
+cd /workspace
 
 # Copy SSH keys
 if [ ! -d ~/.ssh/id_rsa ]; then
