@@ -1,0 +1,46 @@
+scenario:
+  ## Unique resources
+  resource:
+    # What is the http port of the docker container?
+    httpport: 8080
+
+  ## Config data setup
+  data:
+    volume:
+      # What is the path used to store the db (e.g. './db' or 'db_storage'; if it contains a '/', it is considered as a path, otherwise as a docker volume name)?
+      #- path: env
+        # Is the volume external (true or false; if not external, it will be deleted on down)?
+        #external: true
+      # What is the path used to store redis (e.g. './redis' or 'redis_storage'; if it contains a '/', it is considered as a path, otherwise as a docker volume name)?
+      - path: apps
+        # Is the volume external (true or false; if not external, it will be deleted on down)?
+        external: true
+      # What is the path used to store the db (e.g. './db' or 'db_storage'; if it contains a '/', it is considered as a path, otherwise as a docker volume name)?
+      - path: sites
+        # Is the volume external (true or false; if not external, it will be deleted on down)?
+        external: true
+      # What is the path used to store redis (e.g. './redis' or 'redis_storage'; if it contains a '/', it is considered as a path, otherwise as a docker volume name)?
+      - path: logs
+        # Is the volume external (true or false; if not external, it will be deleted on down)?
+        external: true
+      # What is the path used to store the db (e.g. './db' or 'db_storage'; if it contains a '/', it is considered as a path, otherwise as a docker volume name)?
+      - path: redis-queue-data
+        # Is the volume external (true or false; if not external, it will be deleted on down)?
+        external: true
+      # What is the path used to store redis (e.g. './redis' or 'redis_storage'; if it contains a '/', it is considered as a path, otherwise as a docker volume name)?
+      - path: redis-cache-data
+        # Is the volume external (true or false; if not external, it will be deleted on down)?
+        external: true
+      # What is the path used to store the db (e.g. './db' or 'db_storage'; if it contains a '/', it is considered as a path, otherwise as a docker volume name)?
+      - path: db-data
+        # Is the volume external (true or false; if not external, it will be deleted on down)?
+        external: true
+
+  ## Traefik proxy setup
+  traefik:
+    # What is the url?
+    url: erpnext.test.schmidtundtoechter.de
+    # Route to erpnext (does not yet work with erpnext)
+    route: /
+    # Do you want to route this service via traefik?
+    enable: true

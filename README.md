@@ -1,12 +1,19 @@
-## SUT DevOps Tools
+## How to startup ERPNext
 
-SUT DevOps Tools
+### Startup with devcontainer
 
-### License
+The repository directory ```<foo>/frappe_docker```and ```<foo>/erpnext_infrastructure``` need to be in the same directory!
 
-gpl-3.0
+    cd <foo>/frappe_docker
+    ../erpnext_infrastructure/dev_container_tools/frappe_docker-cleanrepository.sh
+    ../erpnext_infrastructure/dev_container_tools/frappe_docker-prepare-devcontainer.sh
 
-## Some notes how to admin ERPNext
+Now open ```frappe_docker``` folder in VS Code and reopen in devcontainer.
+To reinstall and start the bench, call and follow instructions. DB Password is ```123```
+
+    ./frappe_docker-reinstall.sh
+
+Go to http://d-code.localhost:8000
 
 ### Startup with simple multi container setup
 
@@ -23,34 +30,38 @@ Login to https://localhost:8080 :
 
     # user: Administrator ; password: admin
 
-### Startup with devcontainer
+### Startup test server with MIMS
 
-The repository directory ```<foo>/frappe_docker```and ```<foo>/my_erpnext_app``` need to be in the same directory!
+Precondition:
 
-    cd <foo>/frappe_docker
-    ../my_erpnext_app/tools/frappe_docker-cleanrepository.sh
-    ../my_erpnext_app/tools/frappe_docker-prepare-devcontainer.sh
+- `~/.ssh/config` must contain:
 
-Now open ```frappe_docker``` folder in VS Code and reopen in devcontainer.
-To reinstall and start the bench, call and follow instructions. DB Password is ```123```
+```
+    Host sut.netcup
+        User root
+        Port 22
+        HostName test.schmidtundtoechter.com
+        IdentityFile ~/.ssh/id_rsa
+```
 
-    ./frappe_docker-reinstall.sh
+- Test the connection: `ssh sut.netcup pwd` must run without error and give `/root`
 
-Go to http://d-code.localhost:8000
+```
+    $ ssh sut.netcup pwd
+    /root
+```
 
-### Startup test server
+Get the following repositories:
 
-On test server go to ```test_server``` directory.
+    git clone git@github.com:schmidtundtoechter/erpnext_infrastructure.git
+    git clone git@github.com:Cerulean-Circle-GmbH/MIMS.git
 
-    ./up.sh
+Start it (on Linux/Mac or inside the devcontainer on Windows):
 
-Go to https://localhost:8080 (resp. on your test server) and go through the setup wizard
+    cd erpnext_infrastructure/erpnext_container_scenario
+    ../../MIMS/scenario.deploy com/schmidtundtoechter/test/erpnext init,up
 
-Then run
-
-    ./install_update.sh
-
-Now the plugin is available.
+Go to https://erpnext.test.schmidtundtoechter.com and go through the setup wizard
 
 ### Docker ps aliases for convenience
 

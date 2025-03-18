@@ -1,0 +1,19 @@
+{
+  "name": "Ubuntu DevContainer",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "dev",
+  "workspaceFolder": "/workspace",
+  "features": {},
+  "postCreateCommand": "echo 'Development container is ready'",
+  "remoteUser": "vscode",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      },
+      "extensions": [
+        "ms-vscode.vscode-node-azure-pack",
+      ]
+    }
+  }
+}
