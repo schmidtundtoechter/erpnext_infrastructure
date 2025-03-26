@@ -26,3 +26,7 @@ volumes:
   db-data:
     external: ${SCENARIO_DATA_VOLUME_7_EXTERNAL}
     name: ${SCENARIO_DATA_VOLUME_7_PATH}
+  
+  assets:
+    external: ${SCENARIO_DATA_VOLUME_8_EXTERNAL}
+    name: ${SCENARIO_DATA_VOLUME_8_PATH}

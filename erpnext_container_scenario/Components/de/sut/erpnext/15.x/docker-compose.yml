@@ -2,6 +2,7 @@ services:
   backend:
     container_name: ${SCENARIO_NAME}_erpnext_backend_container
     build: .
+    image: ${SCENARIO_NAME}_erpnext_image
     deploy:
       restart_policy:
         condition: on-failure
@@ -10,10 +11,11 @@ services:
       - ${SCENARIO_DATA_MOUNTPOINT_2}:/home/frappe/frappe-bench/apps
       - ${SCENARIO_DATA_MOUNTPOINT_3}:/home/frappe/frappe-bench/sites
       - ${SCENARIO_DATA_MOUNTPOINT_4}:/home/frappe/frappe-bench/logs
+      - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
 
   configurator:
     container_name: ${SCENARIO_NAME}_erpnext_configurator_container
-    build: .
+    image: ${SCENARIO_NAME}_erpnext_image
     deploy:
       restart_policy:
         condition: none
@@ -41,10 +43,11 @@ services:
       - ${SCENARIO_DATA_MOUNTPOINT_2}:/home/frappe/frappe-bench/apps
       - ${SCENARIO_DATA_MOUNTPOINT_3}:/home/frappe/frappe-bench/sites
       - ${SCENARIO_DATA_MOUNTPOINT_4}:/home/frappe/frappe-bench/logs
+      - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
 
   create-site:
     container_name: ${SCENARIO_NAME}_erpnext_create-site_container
-    build: .
+    image: ${SCENARIO_NAME}_erpnext_image
     deploy:
       restart_policy:
         condition: none
@@ -53,6 +56,8 @@ services:
       - ${SCENARIO_DATA_MOUNTPOINT_2}:/home/frappe/frappe-bench/apps
       - ${SCENARIO_DATA_MOUNTPOINT_3}:/home/frappe/frappe-bench/sites
       - ${SCENARIO_DATA_MOUNTPOINT_4}:/home/frappe/frappe-bench/logs
+      - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
+      - ./install_upgrade_apps.sh:/tmp/install_upgrade_apps.sh
     entrypoint:
       - bash
       - -c
@@ -75,33 +80,9 @@ services:
         done;
         echo "sites/common_site_config.json found";
         bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=admin --install-app erpnext --set-default ${SCENARIO_SERVER_NAME};
-        if [ ! -d apps/ersteingabe_lead ]; then
-          echo "Installing ersteingabe_lead app";
-          bench get-app https://github.com/schmidtundtoechter/ersteingabe_lead.git;
-        else
-          echo "Updating ersteingabe_lead app";
-          #bench update --pull;
-        fi;
-        bench --site ${SCENARIO_SERVER_NAME} install-app ersteingabe_lead;
-        if [ ! -d apps/sut_datev_app ]; then
-          echo "Installing sut_datev_app app";
-          bench get-app https://github.com/schmidtundtoechter/sut_datev_app.git;
-        else
-          echo "Updating sut_datev_app app";
-          #bench update --pull;
-        fi;
-        bench --site ${SCENARIO_SERVER_NAME} install-app sut_datev_app;
-        if [ ! -d apps/hrms ]; then
-          echo "Installing hrms app";
-          bench get-app https://github.com/frappe/hrms.git;
-        else
-          echo "Updating hrms app";
-          #bench update --pull;
-        fi;
-        bench --site ${SCENARIO_SERVER_NAME} install-app hrms;
-        bench --site ${SCENARIO_SERVER_NAME} migrate;
-        # TODO: All containers need to restart after installation
-
+        cp -f /tmp/install_upgrade_apps.sh /home/frappe/frappe-bench/install_upgrade_apps.sh;
+        chmod +x /home/frappe/frappe-bench/install_upgrade_apps.sh;
+        /home/frappe/frappe-bench/install_upgrade_apps.sh ${SCENARIO_SERVER_NAME}
   db:
     container_name: ${SCENARIO_NAME}_erpnext_db_container
     image: mariadb:10.6
@@ -124,7 +105,7 @@ services:
 
   frontend:
     container_name: ${SCENARIO_NAME}_erpnext_frontend_container
-    build: .
+    image: ${SCENARIO_NAME}_erpnext_image
     depends_on:
       - websocket
     deploy:
@@ -146,12 +127,13 @@ services:
       - ${SCENARIO_DATA_MOUNTPOINT_2}:/home/frappe/frappe-bench/apps
       - ${SCENARIO_DATA_MOUNTPOINT_3}:/home/frappe/frappe-bench/sites
       - ${SCENARIO_DATA_MOUNTPOINT_4}:/home/frappe/frappe-bench/logs
+      - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
     ports:
       - ${SCENARIO_RESOURCE_HTTPPORT}:8080
 
   queue-long:
     container_name: ${SCENARIO_NAME}_erpnext_queue-long_container
-    build: .
+    image: ${SCENARIO_NAME}_erpnext_image
     deploy:
       restart_policy:
         condition: on-failure
@@ -165,10 +147,11 @@ services:
       - ${SCENARIO_DATA_MOUNTPOINT_2}:/home/frappe/frappe-bench/apps
       - ${SCENARIO_DATA_MOUNTPOINT_3}:/home/frappe/frappe-bench/sites
       - ${SCENARIO_DATA_MOUNTPOINT_4}:/home/frappe/frappe-bench/logs
+      - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
 
   queue-short:
     container_name: ${SCENARIO_NAME}_erpnext_queue-short_container
-    build: .
+    image: ${SCENARIO_NAME}_erpnext_image
     deploy:
       restart_policy:
         condition: on-failure
@@ -182,6 +165,7 @@ services:
       - ${SCENARIO_DATA_MOUNTPOINT_2}:/home/frappe/frappe-bench/apps
       - ${SCENARIO_DATA_MOUNTPOINT_3}:/home/frappe/frappe-bench/sites
       - ${SCENARIO_DATA_MOUNTPOINT_4}:/home/frappe/frappe-bench/logs
+      - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
 
   redis-queue:
     container_name: ${SCENARIO_NAME}_erpnext_redis-queue_container
@@ -203,7 +187,7 @@ services:
 
   scheduler:
     container_name: ${SCENARIO_NAME}_erpnext_scheduler_container
-    build: .
+    image: ${SCENARIO_NAME}_erpnext_image
     deploy:
       restart_policy:
         condition: on-failure
@@ -215,10 +199,11 @@ services:
       - ${SCENARIO_DATA_MOUNTPOINT_2}:/home/frappe/frappe-bench/apps
       - ${SCENARIO_DATA_MOUNTPOINT_3}:/home/frappe/frappe-bench/sites
       - ${SCENARIO_DATA_MOUNTPOINT_4}:/home/frappe/frappe-bench/logs
+      - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
 
   websocket:
     container_name: ${SCENARIO_NAME}_erpnext_websocket_container
-    build: .
+    image: ${SCENARIO_NAME}_erpnext_image
     deploy:
       restart_policy:
         condition: on-failure
@@ -230,3 +215,4 @@ services:
       - ${SCENARIO_DATA_MOUNTPOINT_2}:/home/frappe/frappe-bench/apps
       - ${SCENARIO_DATA_MOUNTPOINT_3}:/home/frappe/frappe-bench/sites
       - ${SCENARIO_DATA_MOUNTPOINT_4}:/home/frappe/frappe-bench/logs
+      - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets

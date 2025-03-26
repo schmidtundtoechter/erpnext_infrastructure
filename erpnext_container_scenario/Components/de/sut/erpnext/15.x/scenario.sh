@@ -21,6 +21,7 @@ function checkAndCreateDataVolume() {
   deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_5 "redis-queue-data"
   deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_6 "redis-cache-data"
   deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_7 "db-data"
+  deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_8 "assets"
 }
 
 function up() {
