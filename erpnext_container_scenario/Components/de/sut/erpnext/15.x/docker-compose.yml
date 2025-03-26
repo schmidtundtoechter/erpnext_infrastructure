@@ -80,9 +80,25 @@ services:
           bench get-app https://github.com/schmidtundtoechter/ersteingabe_lead.git;
         else
           echo "Updating ersteingabe_lead app";
-          bench update --pull;
+          #bench update --pull;
         fi;
         bench --site ${SCENARIO_SERVER_NAME} install-app ersteingabe_lead;
+        if [ ! -d apps/sut_datev_app ]; then
+          echo "Installing sut_datev_app app";
+          bench get-app https://github.com/schmidtundtoechter/sut_datev_app.git;
+        else
+          echo "Updating sut_datev_app app";
+          #bench update --pull;
+        fi;
+        bench --site ${SCENARIO_SERVER_NAME} install-app sut_datev_app;
+        if [ ! -d apps/hrms ]; then
+          echo "Installing hrms app";
+          bench get-app https://github.com/frappe/hrms.git;
+        else
+          echo "Updating hrms app";
+          #bench update --pull;
+        fi;
+        bench --site ${SCENARIO_SERVER_NAME} install-app hrms;
         bench --site ${SCENARIO_SERVER_NAME} migrate;
         # TODO: All containers need to restart after installation
 
