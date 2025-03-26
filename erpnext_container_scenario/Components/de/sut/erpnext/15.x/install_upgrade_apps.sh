@@ -16,9 +16,10 @@ function install_upgrade_app() {
     echo "Installing or upgrading $app app from $repo"
 
     # Get or update app
+    # Get base of repot without the ending ".git"
     if [ ! -d apps/$app ]; then
         echo "Installing $app app"
-        bench get-app $repo
+        bench get-app $app $repo
     else
         echo "Updating $app app"
         pushd apps/$app > /dev/null
@@ -34,7 +35,7 @@ function install_upgrade_app() {
 install_upgrade_app https://github.com/schmidtundtoechter/ersteingabe_lead.git ersteingabe_lead
 install_upgrade_app https://github.com/schmidtundtoechter/sut_datev_app.git sut_datev_app
 install_upgrade_app https://github.com/frappe/hrms.git hrms
-install_upgrade_app git@github.com:schmidtundtoechter/DATEV-Export-SUT.git datev_export_sut
+install_upgrade_app https://github.com/schmidtundtoechter/DATEV-Export-SUT.git datev_export_sut
 
 bench --site ${SCENARIO_SERVER_NAME} migrate;
 
