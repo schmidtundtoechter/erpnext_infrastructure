@@ -7,32 +7,36 @@ scenario:
   ## Config data setup
   data:
     volume:
-      # What is the path used to store the db (e.g. './db' or 'db_storage'; if it contains a '/', it is considered as a path, otherwise as a docker volume name)?
+      # What is the path used to store the env (e.g. './env' or 'env_storage'; if it contains a '/', it is considered as a path, otherwise as a docker volume name)?
       #- path: env
         # Is the volume external (true or false; if not external, it will be deleted on down)?
         #external: true
-      # What is the path used to store redis (e.g. './redis' or 'redis_storage'; if it contains a '/', it is considered as a path, otherwise as a docker volume name)?
+      # What is the path used to store apps (e.g. './apps' or 'apps_storage'; if it contains a '/', it is considered as a path, otherwise as a docker volume name)?
       - path: apps
         # Is the volume external (true or false; if not external, it will be deleted on down)?
         external: true
-      # What is the path used to store the db (e.g. './db' or 'db_storage'; if it contains a '/', it is considered as a path, otherwise as a docker volume name)?
+      # What is the path used to store the sites (e.g. './sites' or 'sites_storage'; if it contains a '/', it is considered as a path, otherwise as a docker volume name)?
       - path: sites
         # Is the volume external (true or false; if not external, it will be deleted on down)?
         external: true
-      # What is the path used to store redis (e.g. './redis' or 'redis_storage'; if it contains a '/', it is considered as a path, otherwise as a docker volume name)?
+      # What is the path used to store logs (e.g. './logs' or 'logs_storage'; if it contains a '/', it is considered as a path, otherwise as a docker volume name)?
       - path: logs
         # Is the volume external (true or false; if not external, it will be deleted on down)?
         external: true
-      # What is the path used to store the db (e.g. './db' or 'db_storage'; if it contains a '/', it is considered as a path, otherwise as a docker volume name)?
+      # What is the path used to store the redis-queue-data (e.g. './redis-queue-data' or 'redis-queue-data_storage'; if it contains a '/', it is considered as a path, otherwise as a docker volume name)?
       - path: redis-queue-data
         # Is the volume external (true or false; if not external, it will be deleted on down)?
         external: true
-      # What is the path used to store redis (e.g. './redis' or 'redis_storage'; if it contains a '/', it is considered as a path, otherwise as a docker volume name)?
+      # What is the path used to store redis-cache-data (e.g. './redis-cache-data' or 'redis-cache-data_storage'; if it contains a '/', it is considered as a path, otherwise as a docker volume name)?
       - path: redis-cache-data
         # Is the volume external (true or false; if not external, it will be deleted on down)?
         external: true
-      # What is the path used to store the db (e.g. './db' or 'db_storage'; if it contains a '/', it is considered as a path, otherwise as a docker volume name)?
+      # What is the path used to store the db-data (e.g. './db-data' or 'db-data_storage'; if it contains a '/', it is considered as a path, otherwise as a docker volume name)?
       - path: db-data
+        # Is the volume external (true or false; if not external, it will be deleted on down)?
+        external: true
+      # What is the path used to store the assets (e.g. './assets' or 'assets_storage'; if it contains a '/', it is considered as a path, otherwise as a docker volume name)?
+      - path: assets
         # Is the volume external (true or false; if not external, it will be deleted on down)?
         external: true
 
