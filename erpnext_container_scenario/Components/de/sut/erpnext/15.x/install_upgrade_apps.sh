@@ -33,9 +33,9 @@ function install_upgrade_app() {
 
 # This script is called from the main script
 install_upgrade_app https://github.com/schmidtundtoechter/ersteingabe_lead.git ersteingabe_lead
-install_upgrade_app https://github.com/schmidtundtoechter/sut_datev_app.git sut_datev_app
+install_upgrade_app https://github.com/schmidtundtoechter/sut_app_ueag.git sut_app_ueag
 install_upgrade_app https://github.com/frappe/hrms.git hrms
-install_upgrade_app https://github.com/schmidtundtoechter/DATEV-Export-SUT.git datev_export_sut
+install_upgrade_app https://github.com/schmidtundtoechter/sut_app_datev_export.git sut_app_datev_export
 
 bench --site ${SCENARIO_SERVER_NAME} migrate;
 
