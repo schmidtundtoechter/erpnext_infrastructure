@@ -9,16 +9,16 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik"
       # Router for route
-      - "traefik.http.routers.erpnext.rule=Host(`${SCENARIO_TRAEFIK_URL}`) && PathPrefix(`${SCENARIO_TRAEFIK_ROUTE}`)"
-      - "traefik.http.routers.erpnext.entrypoints=websecure"
-      - "traefik.http.routers.erpnext.tls.certresolver=letsencrypt"
-      # Strip route from the path for erpnext
-      - "traefik.http.middlewares.erpnext-headers.headers.customrequestheaders.Host=${SCENARIO_TRAEFIK_URL}"
-      - "traefik.http.middlewares.erpnext-headers.headers.customrequestheaders.X-Forwarded-Prefix=${SCENARIO_TRAEFIK_ROUTE}"
-      - "traefik.http.middlewares.erpnext-stripprefix.stripprefix.prefixes=${SCENARIO_TRAEFIK_ROUTE}"
-      - "traefik.http.middlewares.erpnext-stripprefix.stripprefix.forceSlash=false"
-      - "traefik.http.routers.erpnext.middlewares=erpnext-stripprefix,erpnext-headers"
-      - "traefik.http.services.erpnext.loadbalancer.server.port=8080"
+      - "traefik.http.routers.${SCENARIO_NAME}.rule=Host(`${SCENARIO_TRAEFIK_URL}`) && PathPrefix(`${SCENARIO_TRAEFIK_ROUTE}`)"
+      - "traefik.http.routers.${SCENARIO_NAME}.entrypoints=websecure"
+      - "traefik.http.routers.${SCENARIO_NAME}.tls.certresolver=letsencrypt"
+      # Strip route from the path for ${SCENARIO_NAME}
+      - "traefik.http.middlewares.${SCENARIO_NAME}-headers.headers.customrequestheaders.Host=${SCENARIO_TRAEFIK_URL}"
+      - "traefik.http.middlewares.${SCENARIO_NAME}-headers.headers.customrequestheaders.X-Forwarded-Prefix=${SCENARIO_TRAEFIK_ROUTE}"
+      - "traefik.http.middlewares.${SCENARIO_NAME}-stripprefix.stripprefix.prefixes=${SCENARIO_TRAEFIK_ROUTE}"
+      - "traefik.http.middlewares.${SCENARIO_NAME}-stripprefix.stripprefix.forceSlash=false"
+      - "traefik.http.routers.${SCENARIO_NAME}.middlewares=${SCENARIO_NAME}-stripprefix,${SCENARIO_NAME}-headers"
+      - "traefik.http.services.${SCENARIO_NAME}.loadbalancer.server.port=8080"
   backend:
     networks:
       - traefik
