@@ -32,11 +32,16 @@ function install_upgrade_app() {
 }
 
 # This script is called from the main script
-install_upgrade_app https://github.com/schmidtundtoechter/ersteingabe_lead.git ersteingabe_lead
-install_upgrade_app https://github.com/schmidtundtoechter/sut_app_ueag.git sut_app_ueag
 install_upgrade_app https://github.com/frappe/hrms.git hrms
 install_upgrade_app https://github.com/schmidtundtoechter/sut_app_datev_export.git sut_app_datev_export
+#install_upgrade_app https://github.com/schmidtundtoechter/sut_app_ueag.git sut_app_ueag
 
 bench --site ${SCENARIO_SERVER_NAME} migrate;
+
+# Set developer mode
+bench set-config -g developer_mode 1
+bench set-config -g server_script_enabled 1
+bench --site ${SCENARIO_SERVER_NAME} clear-cache
+bench setup requirements --dev
 
 # TODO: All containers need to restart after installation
