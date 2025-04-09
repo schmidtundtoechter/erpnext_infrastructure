@@ -5,4 +5,4 @@
 tags
 node_modules
 __pycache__
-erpnext_container_scenario/_*
+erpnext_container_scenario/**/_*
