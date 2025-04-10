@@ -43,15 +43,16 @@ done
 
 echo "Removing volumes: $VOLUMES_TO_REMOVE"
 read -p "Are you sure you want to remove the volumes on $SCENARIO_SERVER_SSHCONFIG? (y/N) " REPLY
-if [ "$REPLY" != "y" ]; then
-  echo "Aborting"
-  exit 1
+if [ "$REPLY" == "y" ]; then
+    # Remove volumes
+    ssh $SCENARIO_SERVER_SSHCONFIG docker volume rm $VOLUMES_TO_REMOVE
+    ssh $SCENARIO_SERVER_SSHCONFIG docker volume prune -f
+    ssh $SCENARIO_SERVER_SSHCONFIG docker image prune -f -a
+
+    echo
+    ssh $SCENARIO_SERVER_SSHCONFIG docker volume ls
+    echo
+    echo "Volumes removed"
+else
+    echo "Volumes not removed"
 fi
-
-# Remove volumes
-ssh $SCENARIO_SERVER_SSHCONFIG docker volume rm $VOLUMES_TO_REMOVE
-
-echo
-ssh $SCENARIO_SERVER_SSHCONFIG docker volume ls
-echo
-echo "Volumes removed"
