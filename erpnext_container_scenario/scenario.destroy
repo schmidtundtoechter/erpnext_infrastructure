@@ -1,0 +1,57 @@
+#!/bin/bash
+
+pushd $(dirname "$0") > /dev/null
+cwd=$(pwd)
+popd > /dev/null
+
+# Check arg #1
+if [ -z "$1" ]; then
+  echo "Usage: $0 <scenario_name>"
+  echo
+  echo "Available scenarios:"
+  find $cwd/Scenarios -name "*.scenario.env" | sed -e 's/.*Scenarios\///' -e 's/\.scenario\.env$//' | grep -v '^\.'
+  exit 1
+fi
+SCENARIO_NAME=$1
+SCENARIO_FILE=$cwd/Scenarios/${SCENARIO_NAME}.scenario.env
+if [ ! -f "$SCENARIO_FILE" ]; then
+  echo "Scenario file not found: $SCENARIO_FILE"
+  exit 1
+fi
+
+# Deinit scenario
+scenario.deploy $SCENARIO_NAME deinit
+
+
+. ${SCENARIO_FILE}
+echo
+ssh $SCENARIO_SERVER_SSHCONFIG docker volume ls
+echo
+
+VOLUMES_TO_REMOVE=""
+
+# find all volumes in the scenario file stored in the line with SCENARIO_DATA_VOLUME_*_PATH
+# and remove them
+for i in $(seq 1 10); do
+    eval "VOLUME=\$SCENARIO_DATA_VOLUME_${i}_PATH"
+    if [ -z "$VOLUME" ]; then
+        break
+    fi
+    VOLUME=$(echo $VOLUME | sed -e 's/.*\///')
+    VOLUMES_TO_REMOVE="$VOLUMES_TO_REMOVE $VOLUME"
+done
+
+echo "Removing volumes: $VOLUMES_TO_REMOVE"
+read -p "Are you sure you want to remove the volumes on $SCENARIO_SERVER_SSHCONFIG? (y/N) " REPLY
+if [ "$REPLY" != "y" ]; then
+  echo "Aborting"
+  exit 1
+fi
+
+# Remove volumes
+ssh $SCENARIO_SERVER_SSHCONFIG docker volume rm $VOLUMES_TO_REMOVE
+
+echo
+ssh $SCENARIO_SERVER_SSHCONFIG docker volume ls
+echo
+echo "Volumes removed"
