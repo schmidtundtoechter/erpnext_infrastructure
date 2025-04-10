@@ -13,6 +13,8 @@ services:
       - ${SCENARIO_DATA_MOUNTPOINT_4}:/home/frappe/frappe-bench/logs
       - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
       - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - erpnext_network
 
   configurator:
     container_name: ${SCENARIO_NAME}_erpnext_configurator_container
@@ -45,6 +47,8 @@ services:
       - ${SCENARIO_DATA_MOUNTPOINT_3}:/home/frappe/frappe-bench/sites
       - ${SCENARIO_DATA_MOUNTPOINT_4}:/home/frappe/frappe-bench/logs
       - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
+    networks:
+      - erpnext_network
 
   create-site:
     container_name: ${SCENARIO_NAME}_erpnext_create-site_container
@@ -86,6 +90,9 @@ services:
         chmod +x /home/frappe/frappe-bench/install_upgrade_apps.sh;
         /home/frappe/frappe-bench/install_upgrade_apps.sh ${SCENARIO_SERVER_NAME};
         docker restart ${SCENARIO_NAME}_erpnext_backend_container ${SCENARIO_NAME}_erpnext_frontend_container
+    networks:
+      - erpnext_network
+
   db:
     container_name: ${SCENARIO_NAME}_erpnext_db_container
     image: mariadb:10.6
@@ -105,6 +112,8 @@ services:
       MYSQL_ROOT_PASSWORD: admin
     volumes:
       - ${SCENARIO_DATA_MOUNTPOINT_7}:/var/lib/mysql
+    networks:
+      - erpnext_network
 
   frontend:
     container_name: ${SCENARIO_NAME}_erpnext_frontend_container
@@ -134,6 +143,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - ${SCENARIO_RESOURCE_HTTPPORT}:8080
+    networks:
+      - erpnext_network
 
   queue-long:
     container_name: ${SCENARIO_NAME}_erpnext_queue-long_container
@@ -152,6 +163,8 @@ services:
       - ${SCENARIO_DATA_MOUNTPOINT_3}:/home/frappe/frappe-bench/sites
       - ${SCENARIO_DATA_MOUNTPOINT_4}:/home/frappe/frappe-bench/logs
       - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
+    networks:
+      - erpnext_network
 
   queue-short:
     container_name: ${SCENARIO_NAME}_erpnext_queue-short_container
@@ -170,6 +183,8 @@ services:
       - ${SCENARIO_DATA_MOUNTPOINT_3}:/home/frappe/frappe-bench/sites
       - ${SCENARIO_DATA_MOUNTPOINT_4}:/home/frappe/frappe-bench/logs
       - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
+    networks:
+      - erpnext_network
 
   redis-queue:
     container_name: ${SCENARIO_NAME}_erpnext_redis-queue_container
@@ -179,6 +194,8 @@ services:
         condition: on-failure
     volumes:
       - ${SCENARIO_DATA_MOUNTPOINT_5}:/data
+    networks:
+      - erpnext_network
 
   redis-cache:
     container_name: ${SCENARIO_NAME}_erpnext_redis-cache_container
@@ -188,6 +205,8 @@ services:
         condition: on-failure
     volumes:
       - ${SCENARIO_DATA_MOUNTPOINT_6}:/data
+    networks:
+      - erpnext_network
 
   scheduler:
     container_name: ${SCENARIO_NAME}_erpnext_scheduler_container
@@ -204,6 +223,8 @@ services:
       - ${SCENARIO_DATA_MOUNTPOINT_3}:/home/frappe/frappe-bench/sites
       - ${SCENARIO_DATA_MOUNTPOINT_4}:/home/frappe/frappe-bench/logs
       - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
+    networks:
+      - erpnext_network
 
   websocket:
     container_name: ${SCENARIO_NAME}_erpnext_websocket_container
@@ -220,3 +241,10 @@ services:
       - ${SCENARIO_DATA_MOUNTPOINT_3}:/home/frappe/frappe-bench/sites
       - ${SCENARIO_DATA_MOUNTPOINT_4}:/home/frappe/frappe-bench/logs
       - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
+    networks:
+      - erpnext_network
+
+networks:
+  erpnext_network:
+    driver: bridge
+    name: ${SCENARIO_NAME}_erpnext_network
