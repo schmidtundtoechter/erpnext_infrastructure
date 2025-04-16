@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# Set the script to exit immediately if any command fails
+set -e
+
+pushd $(dirname "$0") > /dev/null
+cwd=$(pwd)
+popd > /dev/null
+
+# Check arg #1
+if [ -z "$1" ]; then
+  echo "Usage: $0 <scenario_name>"
+  echo
+  echo "Available scenarios:"
+  find $cwd/Scenarios -name "*.scenario.env" | sed -e 's/.*Scenarios\///' -e 's/\.scenario\.env$//' | grep -v '^\.'
+  exit 1
+fi
+SCENARIO_NAME=$1
+
+$cwd/scenario.destroy $SCENARIO_NAME
+
+sleep 5
+
+# Wait for user input
+read -p "Press enter to continue"
+
+# Restart erp scenario
+scenario.deploy $SCENARIO_NAME init,up
