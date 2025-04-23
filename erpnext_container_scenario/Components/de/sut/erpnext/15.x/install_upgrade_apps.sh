@@ -1,10 +1,14 @@
 #!/bin/bash
 
 SCENARIO_SERVER_NAME=$1
-if [ -z "$SCENARIO_SERVER_NAME" ]; then
-    echo "Usage: $0 <site-name>"
+SCENARIO_INSTALL_APPS=$2
+if [ -z "$SCENARIO_INSTALL_APPS" -o -z "$SCENARIO_SERVER_NAME" ]; then
+    echo "Error: Missing required arguments."
+    echo "Usage: $0 <site-name> <install-apps>"
     exit 1
 fi
+
+apps_installed=()
 
 echo "Calling $0 in site $SCENARIO_SERVER_NAME"
 
@@ -12,6 +16,7 @@ echo "Calling $0 in site $SCENARIO_SERVER_NAME"
 function install_upgrade_app() {
     repo=$1
     app=$2
+    version=$3
 
     echo "Installing or upgrading $app app from $repo"
 
@@ -20,21 +25,74 @@ function install_upgrade_app() {
     if [ ! -d apps/$app ]; then
         echo "Installing $app app"
         bench get-app $app $repo
-    else
-        echo "Updating $app app"
-        pushd apps/$app > /dev/null
-        git pull
-        popd > /dev/null
     fi
+    echo "Updating $app app to version $version"
+    pushd apps/$app > /dev/null
+    git checkout $version
+    echo "Pulling latest changes for $app app"
+    git pull
+    popd > /dev/null
 
     # Install app only if it is not installed
     bench --site ${SCENARIO_SERVER_NAME} install-app $app
+    if [ $? -eq 0 ]; then
+        echo "$app app installed successfully"
+    else
+        echo "Error installing $app app"
+    fi
+    apps_installed+=($app)
 }
 
-# This script is called from the main script
-install_upgrade_app https://github.com/frappe/hrms.git hrms
-install_upgrade_app https://github.com/schmidtundtoechter/sut_app_datev_export.git sut_app_datev_export
-#install_upgrade_app https://github.com/schmidtundtoechter/sut_app_ueag.git sut_app_ueag
+echo "Installing or upgrading apps (SCENARIO_INSTALL_APPS=${SCENARIO_INSTALL_APPS})"
+
+# Add default apps
+apps_installed+=(frappe)
+apps_installed+=(erpnext)
+
+# Install apps from SCENARIO_INSTALL_APPS
+IFS=',' read -r -a apps <<< "$SCENARIO_INSTALL_APPS"
+for app in "${apps[@]}"; do
+    # Get the app name and version
+    app_name=$(echo $app | cut -d'@' -f1)
+    app_url=$(echo $app | cut -d'@' -f2)
+    app_version=$(echo $app | cut -d'@' -f3)
+
+    # if app_name doesn't start with "-" then it is a valid app
+    if [[ $app_name == -* ]]; then
+        echo "Skipping app $app_name"
+        continue
+    fi
+    install_upgrade_app $app_url $app_name $app_version
+done
+
+echo "Installed or upgraded apps: ${apps_installed[@]}"
+
+# Remove other apps
+pushd apps > /dev/null
+for app in */; do
+    app_name=${app%/}
+    if [[ ! " ${apps_installed[@]} " =~ " ${app_name} " ]]; then
+        # Remove app from site
+        echo "Uninstalling $app_name app from site ${SCENARIO_SERVER_NAME}"
+        bench --site ${SCENARIO_SERVER_NAME} uninstall-app -y $app_name
+        if [ $? -ne 0 ]; then
+            echo "Error uninstalling $app_name app"
+            continue
+        fi
+        # Remove app from apps directory
+        echo "Removing $app_name app from apps directory"
+        bench remove-app $app_name
+        if [ $? -ne 0 ]; then
+            echo "Error removing $app_name app"
+            continue
+        fi
+    else
+        echo "Keeping $app_name app"
+    fi
+done
+pwd
+ls
+popd > /dev/null
 
 bench --site ${SCENARIO_SERVER_NAME} migrate;
 
