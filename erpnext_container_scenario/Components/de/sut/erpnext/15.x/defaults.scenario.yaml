@@ -4,6 +4,10 @@ scenario:
     # What is the http port of the docker container?
     httpport: 8080
 
+  ## Installation setup
+  install:
+    # Which apps do you want to install? (comma separated list of apps with versions, e.g., app@url@version - version is the git tag/branch; erpnext and frappe not set; beginning with "-" means not installed)
+    apps: hrms@https://github.com/frappe/hrms.git@develop,sut_app_datev_export@https://github.com/schmidtundtoechter/sut_app_datev_export.git@main
   ## Config data setup
   data:
     volume:

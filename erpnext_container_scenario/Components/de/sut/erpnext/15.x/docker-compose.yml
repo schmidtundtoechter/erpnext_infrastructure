@@ -88,7 +88,7 @@ services:
         bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=admin --install-app erpnext --set-default ${SCENARIO_SERVER_NAME};
         cp -f /tmp/install_upgrade_apps.sh /home/frappe/frappe-bench/install_upgrade_apps.sh;
         chmod +x /home/frappe/frappe-bench/install_upgrade_apps.sh;
-        /home/frappe/frappe-bench/install_upgrade_apps.sh ${SCENARIO_SERVER_NAME};
+        /home/frappe/frappe-bench/install_upgrade_apps.sh ${SCENARIO_SERVER_NAME} ${SCENARIO_INSTALL_APPS};
         docker restart ${SCENARIO_NAME}_erpnext_backend_container ${SCENARIO_NAME}_erpnext_frontend_container
     networks:
       - erpnext_network
