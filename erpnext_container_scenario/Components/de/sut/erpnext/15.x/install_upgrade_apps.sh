@@ -43,6 +43,18 @@ function install_upgrade_app() {
     apps_installed+=($app)
 }
 
+function remove_app() {
+    app_name=$1
+
+    # Remove app from site
+    echo "Uninstalling $app_name app from site ${SCENARIO_SERVER_NAME}"
+    bench --site ${SCENARIO_SERVER_NAME} uninstall-app -y $app_name
+
+    # Remove app from apps directory
+    echo "Removing $app_name app from apps directory"
+    bench remove-app $app_name
+}
+
 echo "Installing or upgrading apps (SCENARIO_INSTALL_APPS=${SCENARIO_INSTALL_APPS})"
 
 # Add default apps
@@ -72,20 +84,7 @@ pushd apps > /dev/null
 for app in */; do
     app_name=${app%/}
     if [[ ! " ${apps_installed[@]} " =~ " ${app_name} " ]]; then
-        # Remove app from site
-        echo "Uninstalling $app_name app from site ${SCENARIO_SERVER_NAME}"
-        bench --site ${SCENARIO_SERVER_NAME} uninstall-app -y $app_name
-        if [ $? -ne 0 ]; then
-            echo "Error uninstalling $app_name app"
-            continue
-        fi
-        # Remove app from apps directory
-        echo "Removing $app_name app from apps directory"
-        bench remove-app $app_name
-        if [ $? -ne 0 ]; then
-            echo "Error removing $app_name app"
-            continue
-        fi
+        remove_app $app_name
     else
         echo "Keeping $app_name app"
     fi
