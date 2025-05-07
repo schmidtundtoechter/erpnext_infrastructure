@@ -1,0 +1,39 @@
+#!/bin/bash
+
+# Set the script to exit immediately if any command fails
+set -e
+
+pushd $(dirname "$0") > /dev/null
+cwd=$(pwd)
+popd > /dev/null
+
+# Check arg #1
+if [ -z "$1" ]; then
+  echo "Usage: $0 <scenario_name>"
+  echo
+  echo "Available scenarios:"
+  find $cwd/Scenarios -name "*.scenario.env" | sed -e 's/.*Scenarios\///' -e 's/\.scenario\.env$//' | grep -v '^\.'
+  exit 1
+fi
+SCENARIO_NAME=$1
+
+scenario.deploy $SCENARIO_NAME stop,init,up
+
+# Wait for user input
+read -p "Press enter to continue"
+
+# Load the scenario environment variables
+. $cwd/Scenarios/$SCENARIO_NAME.scenario.env
+SCENARIO_SHORT_NAME=$(basename $SCENARIO_NAME)
+echo "SCENARIO_NAME: $SCENARIO_NAME"
+echo "SCENARIO_SHORT_NAME: $SCENARIO_SHORT_NAME"
+echo "SCENARIO_SERVER_SSHCONFIG: $SCENARIO_SERVER_SSHCONFIG"
+echo "SCENARIO_SERVER_CONFIGSDIR: $SCENARIO_SERVER_CONFIGSDIR"
+
+# Show docker compose logs
+ssh -tt $SCENARIO_SERVER_SSHCONFIG <<EOF
+cd $SCENARIO_SERVER_CONFIGSDIR/$SCENARIO_NAME
+pwd
+echo "docker compose -p $SCENARIO_NAME logs -f"
+docker compose -p $SCENARIO_SHORT_NAME logs -f
+EOF
