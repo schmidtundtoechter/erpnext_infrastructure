@@ -43,6 +43,7 @@ jobs:
 
       - name: Start ssh_container_service
         run: |
+          docker volume create --name=testconfigvolume
           docker-compose -f ssh_container_service/docker-compose.yml up -d
 
       - name: Wait for containers to be healthy
@@ -51,12 +52,15 @@ jobs:
       - name: Test devcontainer
         run: |
           docker ps
+          docker exec devcontainer-dev-1 ls -la /home/vscode
 
       - name: Test ssh_container_service
         run: |
-          docker exec ${SCENARIO_NAME}_erpnext_configurator_container ls -la /home/frappe
+          docker exec ssh-docker-container ls -la /workspace
 
       - name: Tear down containers
         if: always()
         run: |
-          docker-compose -f erpnext_container_scenario/Components/de/sut/erpnext/15.x/docker-compose.yml down
+          docker-compose -f .devcontainer/docker-compose.yml down
+          docker-compose -f ssh_container_service/docker-compose.yml down
+          docker volume rm testconfigvolume
