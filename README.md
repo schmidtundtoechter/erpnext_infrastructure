@@ -122,7 +122,7 @@ Dieses Verzeichnis enthält Skripte und Konfigurationen zur Verwaltung von SSH-D
 
 2. Starte ein Szenario:
    ```bash
-   scenario.deploy <scenario> up
+   scenario.deploy <scenario> init,up -v
    ```
 
 ---
