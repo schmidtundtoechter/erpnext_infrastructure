@@ -44,7 +44,7 @@ jobs:
       - name: Start ssh_container_service
         run: |
           docker volume create --name=testconfigvolume
-          docker-compose -f ssh_container_service/docker-compose.yml -f ssh_container_service/docker-compose.nomap.yml up -d
+          TESTPORT=8022 docker-compose -f ssh_container_service/docker-compose.yml up -d
 
       - name: Wait for containers to be healthy
         run: sleep 30
