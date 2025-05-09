@@ -6,9 +6,16 @@ on:
       - main
   pull_request:
 
+concurrency:
+  group: develop-erpnext_infrastructure-${{ github.event.number }}
+  cancel-in-progress: true
+
 jobs:
-  test-containers:
+  tests:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    name: Container Tests
 
     steps:
       - name: Checkout code
