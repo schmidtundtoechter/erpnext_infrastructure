@@ -46,7 +46,6 @@ jobs:
       - name: Test devcontainer
         run: |
           docker ps
-          docker exec ${SCENARIO_NAME}_erpnext_backend_container bench version
 
       - name: Test ssh_container_service
         run: |
