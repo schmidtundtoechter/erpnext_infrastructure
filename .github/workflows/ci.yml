@@ -52,7 +52,7 @@ jobs:
       - name: Test devcontainer
         run: |
           docker ps
-          docker exec devcontainer-dev-1 ls -la /home/vscode
+          docker exec devcontainer_dev_1 ls -la /home/vscode
 
       - name: Test ssh_container_service
         run: |
