@@ -39,7 +39,7 @@ jobs:
 
       - name: Start devcontainer
         run: |
-          docker-compose -f .devcontainer/docker-compose.yml up -d
+          docker-compose -f .devcontainer/docker-compose.yml -f .devcontainer/docker-compose.nomap.yml up -d
 
       - name: Start ssh_container_service
         run: |
