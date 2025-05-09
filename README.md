@@ -1,61 +1,48 @@
 
 # ERPNext Infrastructure Repository
 
-Dieses Repository enthält Skripte und Konfigurationen zur Verwaltung und Bereitstellung von ERPNext-Instanzen in verschiedenen Szenarien. Es ist in mehrere Verzeichnisse unterteilt, die jeweils spezifische Funktionen und Anwendungsfälle abdecken.
+This repository contains scripts and configurations for managing and deploying ERPNext instances in various scenarios. It is divided into multiple directories, each covering specific functions and use cases.
 
 ---
 
 ## 📁 Directory Overview
 
-### 1. `dev_container_scenario`
+### 1. `erpnext_container_scenario`
 
-Dieses Verzeichnis enthält Skripte und Konfigurationen für die Entwicklung und das Testen von ERPNext in einer Devcontainer-Umgebung. Es dient dem Aufbau einer lokalen Entwicklungsumgebung mit Docker und Visual Studio Code.
+This directory contains scripts and configurations for deploying ERPNext in a containerized environment. Management is done using the `scenario.deploy` tool.
 
-#### Enthaltene Dateien:
-
-- `frappe_docker-cleanrepository.sh` – Bereinigt die Devcontainer-Umgebung.
-- `frappe_docker-prepare-devcontainer.sh` – Bereitet die Devcontainer-Umgebung vor (Volumes, Konfigurationen).
-- `frappe_docker-reinstall.sh` – Installiert ERPNext im Devcontainer neu.
-- `frappe_docker-installApp.sh` – Installiert zusätzliche Apps im Devcontainer.
-
----
-
-### 2. `erpnext_container_scenario`
-
-Dieses Verzeichnis enthält Skripte und Konfigurationen zur Bereitstellung von ERPNext in einer containerisierten Umgebung. Die Verwaltung erfolgt über das Tool `scenario.deploy`.
-
-#### Voraussetzungen
+#### Prerequisites
 
 ```bash
 git clone git@github.com:Cerulean-Circle-GmbH/MIMS.git
 export PATH=$PATH:/path/to/MIMS
 ```
 
-#### Verwendung von `scenario.deploy`
+#### Using `scenario.deploy`
 
 ```bash
 Usage: scenario.deploy <scenario> [init,up,stop,start,down,deinit,test,logs,updateconfig] [-v|-s|-h]
 
 Lifecycle Actions:
-  init        - Initialisiert das Szenarioverzeichnis
-  up          - Erstellt und startet das Szenario
-  stop        - Stoppt das Szenario
-  start       - Startet das Szenario erneut
-  down        - Stoppt und entfernt das Szenario
-  deinit      - Entfernt das Verzeichnis (Konfiguration bleibt erhalten)
+    init        - Initializes the scenario directory
+    up          - Creates and starts the scenario
+    stop        - Stops the scenario
+    start       - Restarts the scenario
+    down        - Stops and removes the scenario
+    deinit      - Removes the directory (configuration remains intact)
 
 Service Actions:
-  test        - Testet das laufende Szenario
-  logs        - Sammelt Logs des Szenarios
-  updateconfig - Aktualisiert die lokale Konfiguration
+    test        - Tests the running scenario
+    logs        - Collects logs of the scenario
+    updateconfig - Updates the local configuration
 
-Optionen:
-  -v, --verbose  - Detaillierte Ausgabe
-  -s, --silent   - Stille Ausführung
-  -h, --help     - Hilfe anzeigen
+Options:
+    -v, --verbose  - Detailed output
+    -s, --silent   - Silent execution
+    -h, --help     - Show help
 ```
 
-#### Beispiel-Befehle
+#### Example Commands
 
 ```bash
 scenario.deploy dev init
@@ -65,7 +52,7 @@ scenario.deploy dev start
 scenario.deploy dev deinit
 ```
 
-#### Verfügbare Szenarien
+#### Available Scenarios
 
 - `com/schmidtundtoechter/test/erpnext-demo`
 - `com/schmidtundtoechter/test/erpnext`
@@ -76,15 +63,15 @@ scenario.deploy dev deinit
 
 ---
 
-### 3. `ssh_container_service`
+### 2. `ssh_container_service`
 
-Dieses Verzeichnis enthält Skripte und Konfigurationen zur Verwaltung von SSH-Diensten in einer containerisierten Umgebung. Es dient der Aktivierung und Verwaltung von SSH-Zugängen zu Containern.
+This directory contains scripts and configurations for managing SSH services in a containerized environment. It is used to enable and manage SSH access to containers.
 
-#### Enthaltene Dateien:
+#### Included Files:
 
-- `Dockerfile` – Basis-Image für SSH-Dienste.
-- `setup.sh` – Setup-Skript für SSH-Dienste.
-- `config` – Beispielkonfigurationen für SSH.
+- `Dockerfile` – Base image for SSH services.
+- `setup.sh` – Setup script for SSH services.
+- `config` – Example configurations for SSH.
 
 ---
 
@@ -98,40 +85,26 @@ Dieses Verzeichnis enthält Skripte und Konfigurationen zur Verwaltung von SSH-D
 
 ## 🚀 Quick Start
 
-### Devcontainer Setup
-
-1. Cleanup:
-   ```bash
-   ./dev_container_scenario/frappe_docker-cleanrepository.sh
-   ```
-2. Prepare:
-   ```bash
-   ./dev_container_scenario/frappe_docker-prepare-devcontainer.sh
-   ```
-3. Reinstall:
-   ```bash
-   ./dev_container_scenario/frappe_docker-reinstall.sh
-   ```
-
 ### Scenario Setup
 
-1. Wechsle ins Verzeichnis:
-   ```bash
-   cd erpnext_container_scenario
-   ```
+1. Navigate to the directory:
+     ```bash
+     cd erpnext_container_scenario
+     ```
 
-2. Starte ein Szenario:
-   ```bash
-   scenario.deploy <scenario> init,up -v
-   ```
+2. Start a scenario:
+     ```bash
+     scenario.deploy <scenario> init,up -v
+     ```
 
 ---
 
 ## 📝 Notes
 
-- Stelle sicher, dass das `MIMS`-Repository korrekt geklont ist und sich im `PATH` befindet.
-- Verwende `scenario.deploy` ausschließlich im Verzeichnis `erpnext_container_scenario`.
+- Ensure that the `MIMS` repository is correctly cloned and included in the `PATH`.
+- Use `scenario.deploy` exclusively in the `erpnext_container_scenario` directory.
 
 ---
 
-> Dieses Repository richtet sich an Entwickler und Administratoren, die ERPNext flexibel und strukturiert betreiben wollen.
+> This repository is aimed at developers and administrators who want to operate ERPNext flexibly and in a structured manner.
+
