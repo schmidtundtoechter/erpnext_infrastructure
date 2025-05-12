@@ -1,68 +1,110 @@
-## How to startup ERPNext
 
-### Startup with devcontainer
+# ERPNext Infrastructure Repository
 
-The repository directory ```<foo>/frappe_docker```and ```<foo>/erpnext_infrastructure``` need to be in the same directory!
+This repository contains scripts and configurations for managing and deploying ERPNext instances in various scenarios. It is divided into multiple directories, each covering specific functions and use cases.
 
-    cd <foo>/frappe_docker
-    ../erpnext_infrastructure/dev_container_tools/frappe_docker-cleanrepository.sh
-    ../erpnext_infrastructure/dev_container_tools/frappe_docker-prepare-devcontainer.sh
+---
 
-Now open ```frappe_docker``` folder in VS Code and reopen in devcontainer.
-To reinstall and start the bench, call and follow instructions. DB Password is ```123```
+## 📁 Directory Overview
 
-    ./frappe_docker-reinstall.sh
+### 1. `erpnext_container_scenario`
 
-Go to http://d-code.localhost:8000
+This directory contains scripts and configurations for deploying ERPNext in a containerized environment. Management is done using the `scenario.deploy` tool.
 
-### Startup with simple multi container setup
+#### Prerequisites
 
-Get it:
-
-    git clone https://github.com/frappe/frappe_docker.git
-    cd frappe_docker
-
-Startup ERPNext:
-
-    docker compose -f pwd.yml up -d
-
-Login to https://localhost:8080 :
-
-    # user: Administrator ; password: admin
-
-### Startup test server with MIMS
-
-Precondition:
-
-- `~/.ssh/config` must contain:
-
-```
-    Host sut.netcup
-        User root
-        Port 22
-        HostName test.schmidtundtoechter.com
-        IdentityFile ~/.ssh/id_rsa
+```bash
+git clone git@github.com:Cerulean-Circle-GmbH/MIMS.git
+export PATH=$PATH:/path/to/MIMS
 ```
 
-- Test the connection: `ssh sut.netcup pwd` must run without error and give `/root`
+#### Using `scenario.deploy`
 
+```bash
+Usage: scenario.deploy <scenario> [init,up,stop,start,down,deinit,test,logs,updateconfig] [-v|-s|-h]
+
+Lifecycle Actions:
+    init        - Initializes the scenario directory
+    up          - Creates and starts the scenario
+    stop        - Stops the scenario
+    start       - Restarts the scenario
+    down        - Stops and removes the scenario
+    deinit      - Removes the directory (configuration remains intact)
+
+Service Actions:
+    test        - Tests the running scenario
+    logs        - Collects logs of the scenario
+    updateconfig - Updates the local configuration
+
+Options:
+    -v, --verbose  - Detailed output
+    -s, --silent   - Silent execution
+    -h, --help     - Show help
 ```
-    $ ssh sut.netcup pwd
-    /root
+
+#### Example Commands
+
+```bash
+scenario.deploy dev init
+scenario.deploy dev up
+scenario.deploy dev stop
+scenario.deploy dev start
+scenario.deploy dev deinit
 ```
 
-Get the following repositories:
+#### Available Scenarios
 
-    git clone git@github.com:schmidtundtoechter/erpnext_infrastructure.git
-    git clone git@github.com:Cerulean-Circle-GmbH/MIMS.git
+- `com/schmidtundtoechter/test/erpnext-demo`
+- `com/schmidtundtoechter/test/erpnext`
+- `com/schmidtundtoechter/test/traefik`
+- `de/matthiaskittner/automate/erpnext-demo`
+- `de/matthiaskittner/automate/erpnext-swissnorm`
+- `de/matthiaskittner/automate/erpnext`
 
-Start it (on Linux/Mac or inside the devcontainer on Windows):
+---
 
-    cd erpnext_infrastructure/erpnext_container_scenario
-    ../../MIMS/scenario.deploy com/schmidtundtoechter/test/erpnext init,up
+### 2. `ssh_container_service`
 
-Go to https://erpnext.test.schmidtundtoechter.com and go through the setup wizard
+This directory contains scripts and configurations for managing SSH services in a containerized environment. It is used to enable and manage SSH access to containers.
 
-### Docker ps aliases for convenience
+#### Included Files:
 
-source tools/aliases.sh
+- `Dockerfile` – Base image for SSH services.
+- `setup.sh` – Setup script for SSH services.
+- `config` – Example configurations for SSH.
+
+---
+
+## 🛠️ Prerequisites
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop)
+- [Git](https://git-scm.com/downloads)
+- [Visual Studio Code](https://code.visualstudio.com/download)
+
+---
+
+## 🚀 Quick Start
+
+### Scenario Setup
+
+1. Navigate to the directory:
+     ```bash
+     cd erpnext_container_scenario
+     ```
+
+2. Start a scenario:
+     ```bash
+     scenario.deploy <scenario> init,up -v
+     ```
+
+---
+
+## 📝 Notes
+
+- Ensure that the `MIMS` repository is correctly cloned and included in the `PATH`.
+- Use `scenario.deploy` exclusively in the `erpnext_container_scenario` directory.
+
+---
+
+> This repository is aimed at developers and administrators who want to operate ERPNext flexibly and in a structured manner.
+
