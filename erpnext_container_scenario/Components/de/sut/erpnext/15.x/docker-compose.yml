@@ -13,6 +13,7 @@ services:
       - ${SCENARIO_DATA_MOUNTPOINT_4}:/home/frappe/frappe-bench/logs
       - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
       - /var/run/docker.sock:/var/run/docker.sock
+      - ${SCENARIO_SERVER_CONFIGSDIR}:${SCENARIO_SERVER_CONFIGSDIR}
     networks:
       - erpnext_network
 
@@ -47,6 +48,7 @@ services:
       - ${SCENARIO_DATA_MOUNTPOINT_3}:/home/frappe/frappe-bench/sites
       - ${SCENARIO_DATA_MOUNTPOINT_4}:/home/frappe/frappe-bench/logs
       - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
+      - ${SCENARIO_SERVER_CONFIGSDIR}:${SCENARIO_SERVER_CONFIGSDIR}
     networks:
       - erpnext_network
 
@@ -64,6 +66,7 @@ services:
       - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
       - ./install_upgrade_apps.sh:/tmp/install_upgrade_apps.sh
       - /var/run/docker.sock:/var/run/docker.sock
+      - ${SCENARIO_SERVER_CONFIGSDIR}:${SCENARIO_SERVER_CONFIGSDIR}
     entrypoint:
       - bash
       - -c
@@ -141,6 +144,7 @@ services:
       - ${SCENARIO_DATA_MOUNTPOINT_4}:/home/frappe/frappe-bench/logs
       - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
       - /var/run/docker.sock:/var/run/docker.sock
+      - ${SCENARIO_SERVER_CONFIGSDIR}:${SCENARIO_SERVER_CONFIGSDIR}
     ports:
       - ${SCENARIO_RESOURCE_HTTPPORT}:8080
     networks:
