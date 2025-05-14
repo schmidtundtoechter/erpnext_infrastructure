@@ -1,4 +1,4 @@
-name: CI for Devcontainer and SSH Service
+name: CI - erpnext_infrastructure
 
 on:
   push:
@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-    name: Container Tests
+    name: DevContainer Tests
 
     steps:
       - name: Checkout code
