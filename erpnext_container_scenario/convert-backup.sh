@@ -85,4 +85,9 @@ convert_tar() {
 convert_tar "$FILES_TAR" "$SRC_SITE" "$DEST_SITE" "${NEWBASE}-files.tar"
 convert_tar "$PRIVATE_FILES_TAR" "$SRC_SITE" "$DEST_SITE" "${NEWBASE}-private-files.tar"
 
-
+# docker logs erpnext-test_erpnext_create-site_container -f
+# docker exec -it erpnext-test_erpnext_frontend_container /bin/bash
+# ln -s /var/dev/MIMS-Scenarios/backups b
+# bench --site test.schmidtundtoechter.com restore /var/dev/MIMS-Scenarios/backups/20250401_200011-test-ueag-jena_test_schmidtundtoechter_com-database.sql
+# rsync -avzP /var/dev/MIMS-Scenarios/backups/test-ueag-jena.frappe.cloud/ ./sites/test.schmidtundtoechter.com/
+# server restart
