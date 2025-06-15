@@ -4,8 +4,7 @@
 . .env
 . deploy-tools.sh
 
-# TODO: Deploy-tools und basedefaults mit Version versehen
-# TODO data volume als env ???
+# TODO: Port to deploy-tools 2.0.0
 
 # Set some variables
 function setEnvironment() {
