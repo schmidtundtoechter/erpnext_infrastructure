@@ -145,8 +145,6 @@ services:
       - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
       - /var/run/docker.sock:/var/run/docker.sock
       - ${SCENARIO_SERVER_CONFIGSDIR}:${SCENARIO_SERVER_CONFIGSDIR}
-    ports:
-      - ${SCENARIO_RESOURCE_HTTPPORT}:8080
     networks:
       - erpnext_network
 
