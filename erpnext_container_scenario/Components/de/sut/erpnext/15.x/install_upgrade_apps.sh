@@ -101,4 +101,4 @@ bench set-config -g server_script_enabled 1
 bench --site ${SITE_NAME} clear-cache
 bench setup requirements --dev
 
-# TODO: All containers need to restart after installation
+# All containers need to restart after installation: This is done in create-site container startup script

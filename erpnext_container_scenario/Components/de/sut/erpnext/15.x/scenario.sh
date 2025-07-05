@@ -4,8 +4,6 @@
 . .env
 . deploy-tools.sh
 
-# TODO: Port to deploy-tools 2.0.0
-
 # Set some variables
 function setEnvironment() {
   deploy-tools.setEnvironment
@@ -13,6 +11,7 @@ function setEnvironment() {
 
 function checkAndCreateDataVolume() {
   banner "Check data volume"
+  # Second argument is for creating the mount point for docker compose
   deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_1 "env"
   deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_2 "apps"
   deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_3 "sites"
@@ -21,7 +20,7 @@ function checkAndCreateDataVolume() {
   deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_6 "redis-cache-data"
   deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_7 "db-data"
   deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_8 "assets"
-  sleep 5 # Wait for volumes to be created
+  sleep 2 # Wait for volumes to be created
 }
 
 function up() {
@@ -90,6 +89,59 @@ function logs() {
   deploy-tools.logs
 }
 
+function backup() {
+  # Check data volume (also sets the necessary environment variables)
+  checkAndCreateDataVolume
+
+  # Set environment
+  setEnvironment
+
+  banner "Backup volumes"
+  TIMESTAMP=$(date +%Y%m%d%H%M%S)
+  deploy-tools.backupVolume SCENARIO_DATA_VOLUME_1_PATH "env" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
+  deploy-tools.backupVolume SCENARIO_DATA_VOLUME_2_PATH "apps" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
+  deploy-tools.backupVolume SCENARIO_DATA_VOLUME_3_PATH "sites" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
+  deploy-tools.backupVolume SCENARIO_DATA_VOLUME_4_PATH "logs" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
+  deploy-tools.backupVolume SCENARIO_DATA_VOLUME_5_PATH "redis-queue-data" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
+  deploy-tools.backupVolume SCENARIO_DATA_VOLUME_6_PATH "redis-cache-data" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
+  deploy-tools.backupVolume SCENARIO_DATA_VOLUME_7_PATH "db-data" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
+  deploy-tools.backupVolume SCENARIO_DATA_VOLUME_8_PATH "assets" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
+}
+
+function restore() {
+  # Check data volume (also sets the necessary environment variables)
+  checkAndCreateDataVolume
+
+  # Set environment
+  setEnvironment
+
+  banner "Restore volumes"
+
+  # Show available timestamps from example: $SCENARIO_DATA_BACKUPDIR/$SCENARIO_NAME_$TIMESTAMP_env.tar.gz
+  echo "Available backups in $SCENARIO_DATA_BACKUPDIR:"
+  ls -1 $SCENARIO_DATA_BACKUPDIR | grep "$SCENARIO_NAME" | grep db-data | sed "s;${SCENARIO_NAME}_;;" | sed "s;_db-data.*;;" | sort -u
+
+  if [ -t 0 ]; then
+    read -p "Please provide a timestamp to restore from (format: YYYYMMDDHHMMSS) : " TIMESTAMP
+    if [ -z "$TIMESTAMP" ]; then
+      echo "Error: No timestamp provided."
+      exit 1
+    fi
+  else
+    echo "Error: Cannot prompt for input, not running in an interactive shell."
+    exit 1
+  fi
+
+  deploy-tools.restoreVolume SCENARIO_DATA_VOLUME_1_PATH "env" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
+  deploy-tools.restoreVolume SCENARIO_DATA_VOLUME_2_PATH "apps" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
+  deploy-tools.restoreVolume SCENARIO_DATA_VOLUME_3_PATH "sites" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
+  deploy-tools.restoreVolume SCENARIO_DATA_VOLUME_4_PATH "logs" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
+  deploy-tools.restoreVolume SCENARIO_DATA_VOLUME_5_PATH "redis-queue-data" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
+  deploy-tools.restoreVolume SCENARIO_DATA_VOLUME_6_PATH "redis-cache-data" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
+  deploy-tools.restoreVolume SCENARIO_DATA_VOLUME_7_PATH "db-data" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
+  deploy-tools.restoreVolume SCENARIO_DATA_VOLUME_8_PATH "assets" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
+}
+
 # Scenario vars
 if [ -z "$1" ]; then
   deploy-tools.printUsage
@@ -113,6 +165,10 @@ elif [ $STEP = "test" ]; then
   test
 elif [ $STEP = "logs" ]; then
   logs
+elif [ $STEP = "backup" ]; then
+  backup
+elif [ $STEP = "restore" ]; then
+  restore
 else
   deploy-tools.printUsage
   exit 1
