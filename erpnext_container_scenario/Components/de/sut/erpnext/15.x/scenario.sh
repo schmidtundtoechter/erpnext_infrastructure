@@ -146,6 +146,19 @@ function restore() {
   deploy-tools.restoreVolume SCENARIO_DATA_VOLUME_8_PATH "assets" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
 }
 
+function update() {
+  # Check data volume (also sets the necessary environment variables)
+  checkAndCreateDataVolume
+
+  # Set environment
+  setEnvironment
+
+  banner "Update services"
+
+  # Restart create-site container which automatically calls install_upgrade_apps.sh
+  docker-compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS run --rm create-site
+}
+
 # Scenario vars
 if [ -z "$1" ]; then
   deploy-tools.printUsage
@@ -173,6 +186,8 @@ elif [ $STEP = "backup" ]; then
   backup
 elif [ $STEP = "restore" ]; then
   restore
+elif [ $STEP = "update" ]; then
+  update
 else
   deploy-tools.printUsage
   exit 1

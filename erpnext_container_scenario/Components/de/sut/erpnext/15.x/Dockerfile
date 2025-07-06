@@ -115,8 +115,10 @@ RUN bench init \
   /home/frappe/frappe-bench && \
   cd /home/frappe/frappe-bench && \
   bench get-app --branch=${ERPNEXT_BRANCH} --resolve-deps erpnext ${ERPNEXT_REPO} && \
-  echo "{}" > sites/common_site_config.json && \
-  find apps -mindepth 1 -path "*/.git" | xargs rm -fr
+  echo "{}" > sites/common_site_config.json
+  #&& \
+  # Do not remove .git to be able to update the apps later
+  #find apps -mindepth 1 -path "*/.git" | xargs rm -fr
 
 FROM base AS erpnext
 
