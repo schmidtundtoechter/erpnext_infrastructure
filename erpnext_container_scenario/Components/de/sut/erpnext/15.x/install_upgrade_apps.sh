@@ -28,6 +28,9 @@ function install_upgrade_app() {
     fi
     echo "Updating $app app to version $version"
     pushd apps/$app > /dev/null
+
+    # TODO: Hier sollte bench update bevorzugt werden, damit apps.json und requirements.txt auch aktualisiert werden
+
     # Check ref already available in remotes or tags
     if git show-ref --verify --quiet refs/remotes/upstream/$version; then
         echo "Ref $version already exists in remotes/upstream"
