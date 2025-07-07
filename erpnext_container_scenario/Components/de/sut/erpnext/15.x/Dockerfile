@@ -1,4 +1,4 @@
-FROM frappe/erpnext:v15.54.5
+FROM frappe/erpnext:v15.66.1
 
 # Install SSH as root
 USER root
