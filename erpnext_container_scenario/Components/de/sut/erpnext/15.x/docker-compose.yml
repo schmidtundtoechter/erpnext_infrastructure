@@ -67,6 +67,7 @@ services:
       - ./install_upgrade_apps.sh:/tmp/install_upgrade_apps.sh
       - /var/run/docker.sock:/var/run/docker.sock
       - ${SCENARIO_SERVER_CONFIGSDIR}:${SCENARIO_SERVER_CONFIGSDIR}
+      - ${SCENARIO_DATA_BACKUPDIR}:/home/frappe/frappe-bench/backups
     entrypoint:
       - bash
       - -c
