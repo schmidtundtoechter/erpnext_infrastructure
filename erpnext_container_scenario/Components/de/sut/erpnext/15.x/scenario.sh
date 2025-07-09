@@ -100,6 +100,7 @@ function backup() {
   # Set environment
   setEnvironment
 
+  # TODO: Muss das wirklich alles gebackuped werden?
   banner "Backup volumes"
   TIMESTAMP=$(date +%Y%m%d%H%M%S)
   deploy-tools.backupVolume SCENARIO_DATA_VOLUME_1_PATH "env" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
@@ -110,6 +111,14 @@ function backup() {
   deploy-tools.backupVolume SCENARIO_DATA_VOLUME_6_PATH "redis-cache-data" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
   deploy-tools.backupVolume SCENARIO_DATA_VOLUME_7_PATH "db-data" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
   deploy-tools.backupVolume SCENARIO_DATA_VOLUME_8_PATH "assets" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
+
+  # Run bench backup in create-site container
+  banner "Run bench backup in create-site container"
+  docker-compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS run --rm create-site "bash -c \"cd /home/frappe/frappe-bench && \
+     bench --site ${SCENARIO_SERVER_NAME} backup --with-files && \
+     mkdir -p backups/${SCENARIO_NAME} && \
+     mv sites/${SCENARIO_SERVER_NAME}/private/backups/* backups/${SCENARIO_NAME}/ && \
+     ls -l sites/${SCENARIO_SERVER_NAME}/private/backups backups/${SCENARIO_NAME}/\""
 }
 
 function restore() {
