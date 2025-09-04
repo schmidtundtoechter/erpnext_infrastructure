@@ -41,6 +41,8 @@ scenario:
         external: true
     # What is the path used to store the volume backups
     backupdir: /var/dev/MIMS-Scenarios/_backups
+    # What is the timestamp of the backup to restore (format: YYYYMMDDHHMMSS) in non-interactive mode?
+    backuptimestamp: 20250904141950
 
   ## Traefik proxy setup
   traefik:

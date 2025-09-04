@@ -134,16 +134,28 @@ function restore() {
   echo "Available backups in $SCENARIO_DATA_BACKUPDIR:"
   ls -1 $SCENARIO_DATA_BACKUPDIR | grep "$SCENARIO_NAME" | grep db-data | sed "s;${SCENARIO_NAME}_;;" | sed "s;_db-data.*;;" | sort -u
 
+  TIMESTAMP="$SCENARIO_DATA_BACKUPTIMESTAMP"
+  echo "Configured timestamp: $TIMESTAMP"
+
   if [ -t 0 ]; then
-    read -p "Please provide a timestamp to restore from (format: YYYYMMDDHHMMSS) : " TIMESTAMP
+    read -p "Please provide a timestamp to restore from (format: YYYYMMDDHHMMSS) [$TIMESTAMP]: " TS
+	if [ ! -z "$TS" ]; then
+	  TIMESTAMP=$TS
+	fi
     if [ -z "$TIMESTAMP" ]; then
       echo "Error: No timestamp provided."
       exit 1
     fi
+	echo "Using timestamp: $TIMESTAMP"
   else
-    echo "Error: Cannot prompt for input, not running in an interactive shell."
-    exit 1
+    if [ -z "$TIMESTAMP" ]; then
+		echo "Error: Cannot prompt for input, not running in an interactive shell."
+		exit 1
+	fi
+	echo "Non-interactive shell detected. Using provided timestamp: $TIMESTAMP"
   fi
+
+  exit 1
 
   deploy-tools.restoreVolume SCENARIO_DATA_VOLUME_1_PATH "env" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
   deploy-tools.restoreVolume SCENARIO_DATA_VOLUME_2_PATH "apps" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
