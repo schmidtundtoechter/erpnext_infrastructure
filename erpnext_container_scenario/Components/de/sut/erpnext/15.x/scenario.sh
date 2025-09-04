@@ -155,8 +155,6 @@ function restore() {
 	echo "Non-interactive shell detected. Using provided timestamp: $TIMESTAMP"
   fi
 
-  exit 1
-
   deploy-tools.restoreVolume SCENARIO_DATA_VOLUME_1_PATH "env" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
   deploy-tools.restoreVolume SCENARIO_DATA_VOLUME_2_PATH "apps" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
   deploy-tools.restoreVolume SCENARIO_DATA_VOLUME_3_PATH "sites" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
