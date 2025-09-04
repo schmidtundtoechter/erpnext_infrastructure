@@ -16,10 +16,12 @@ function checkAndCreateDataVolume() {
   deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_2 "apps"
   deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_3 "sites"
   deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_4 "logs"
+  echo $__FILE__:$__LINE__
   deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_5 "redis-queue-data"
   deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_6 "redis-cache-data"
   deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_7 "db-data"
   deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_8 "assets"
+  echo $__FILE__:$__LINE__
   sleep 2 # Wait for volumes to be created
 }
 
@@ -122,14 +124,19 @@ function backup() {
 }
 
 function restore() {
+  echo $__FILE__:$__LINE__
+
   # Check data volume (also sets the necessary environment variables)
   checkAndCreateDataVolume
 
+  echo $__FILE__:$__LINE__
   # Set environment
   setEnvironment
 
+  echo $__FILE__:$__LINE__
   banner "Restore volumes"
 
+  echo $__FILE__:$__LINE__
   # Show available timestamps from example: $SCENARIO_DATA_BACKUPDIR/$SCENARIO_NAME_$TIMESTAMP_env.tar.gz
   echo "Available backups in $SCENARIO_DATA_BACKUPDIR:"
   ls -1 $SCENARIO_DATA_BACKUPDIR | grep "$SCENARIO_NAME" | grep db-data | sed "s;${SCENARIO_NAME}_;;" | sed "s;_db-data.*;;" | sort -u
