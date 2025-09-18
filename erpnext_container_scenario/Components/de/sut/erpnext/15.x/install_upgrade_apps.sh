@@ -89,6 +89,10 @@ for app in "${apps[@]}"; do
         echo "Skipping app $app_name"
         continue
     fi
+
+	# Replace __at__ with @ in app_url
+	app_url=${app_url//__at__/@}
+	
     install_upgrade_app $app_url $app_name $app_version
 done
 
