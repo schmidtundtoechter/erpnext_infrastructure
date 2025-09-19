@@ -147,6 +147,7 @@ services:
       - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
       - /var/run/docker.sock:/var/run/docker.sock
       - ${SCENARIO_SERVER_CONFIGSDIR}:${SCENARIO_SERVER_CONFIGSDIR}
+      - ${SCENARIO_SRC_SECRETSDIR}/.ssh:/home/frappe/.ssh:ro
     networks:
       - erpnext_network
 
