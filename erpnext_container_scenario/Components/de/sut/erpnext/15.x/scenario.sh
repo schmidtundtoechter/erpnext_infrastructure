@@ -10,16 +10,17 @@ function setEnvironment() {
 }
 
 function checkAndCreateDataVolume() {
+  local creation_mode=$1
   banner "Check data volume"
   # Second argument is for creating the mount point for docker compose
-  deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_1 "env"
-  deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_2 "apps"
-  deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_3 "sites"
-  deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_4 "logs"
-  deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_5 "redis-queue-data"
-  deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_6 "redis-cache-data"
-  deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_7 "db-data"
-  deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_8 "assets"
+  deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_1 "env" "$creation_mode"
+  deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_2 "apps" "$creation_mode"
+  deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_3 "sites" "$creation_mode"
+  deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_4 "logs" "$creation_mode"
+  deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_5 "redis-queue-data" "$creation_mode"
+  deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_6 "redis-cache-data" "$creation_mode"
+  deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_7 "db-data" "$creation_mode"
+  deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_8 "assets" "$creation_mode"
   sleep 2 # Wait for volumes to be created
 }
 
@@ -47,22 +48,22 @@ function start() {
 }
 
 function stop() {
-  # Check data volume
-  checkAndCreateDataVolume
+  # Check data volume (nocreate)
+  checkAndCreateDataVolume "nocreate"
 
   deploy-tools.stop
 }
 
 function down() {
-  # Check data volume
-  checkAndCreateDataVolume
+  # Check data volume (nocreate)
+  checkAndCreateDataVolume "nocreate"
 
   deploy-tools.down
 }
 
 function test() {
-  # Check data volume
-  checkAndCreateDataVolume
+  # Check data volume (nocreate)
+  checkAndCreateDataVolume "nocreate"
 
   # Set environment
   setEnvironment
@@ -87,8 +88,8 @@ function test() {
 }
 
 function logs() {
-  # Check data volume
-  checkAndCreateDataVolume
+  # Check data volume (nocreate)
+  checkAndCreateDataVolume "nocreate"
 
   deploy-tools.logs
 }
