@@ -30,6 +30,9 @@ function install_upgrade_app() {
     pushd apps/$app > /dev/null
 
     # TODO: Hier sollte bench update bevorzugt werden, damit apps.json und requirements.txt auch aktualisiert werden
+	# TODO: Hier ist auch unklar, warum erpnext und frappe kein .git Verzeichnis haben
+	# TODO: auch bench und pip und das betriebssystem (in alle containern) sollte geupdatet werden
+	# TODO: Check /var/run/docker.sock permissions if docker commands fail
 
     # Check ref already available in remotes or tags
     if git show-ref --verify --quiet refs/remotes/upstream/$version; then
