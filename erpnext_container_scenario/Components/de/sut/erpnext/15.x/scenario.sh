@@ -20,6 +20,7 @@ function checkAndCreateDataVolume() {
   deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_5 "redis-queue-data" "$creation_mode"
   deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_6 "redis-cache-data" "$creation_mode"
   deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_7 "db-data" "$creation_mode"
+  sleep 2 # Wait for volumes to be created
   deploy-tools.checkAndCreateDataVolume SCENARIO_DATA_VOLUME_8 "assets" "$creation_mode"
   sleep 2 # Wait for volumes to be created
 }

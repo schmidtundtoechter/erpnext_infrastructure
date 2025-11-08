@@ -178,5 +178,8 @@ RUN apt-get update && apt-get install -y \
     docker-ce-cli \
     && rm -rf /var/lib/apt/lists/*
 
+# Add frappe user to docker group for socket access
+RUN groupadd -f docker && usermod -aG docker frappe
+
 # Switch back to default user
 USER frappe
