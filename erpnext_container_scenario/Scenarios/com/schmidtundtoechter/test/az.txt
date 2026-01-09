@@ -1,0 +1,67 @@
+frappe-user@az-srv-erp02:~/frappe-bench/apps$ cd ~/frappe-bench/apps && for app in *; do [ -d "$a
+=== banking ===
+https://github.com/alyf-de/banking.git
+
+=== csv_import_hornetsecurity ===
+https://github.com/schmidtundtoechter/csv_import_hornetsecurity
+
+=== csv_import_wortmann ===
+https://github.com/schmidtundtoechter/csv_import_wortmann
+
+=== egis_integration ===
+https://github.com/schmidtundtoechter/EGIS_app.git
+
+=== erpnext ===
+https://github.com/frappe/erpnext.git
+
+=== erpnext_datev ===
+https://github.com/alyf-de/erpnext_datev.git
+
+=== eu_einvoice ===
+https://github.com/alyf-de/eu_einvoice
+
+=== frappe ===
+https://github.com/frappe/frappe.git
+
+=== helpdesk ===
+https://github.com/frappe/helpdesk
+
+=== hrms ===
+https://github.com/frappe/hrms.git
+
+=== payments ===
+https://github.com/frappe/payments.git
+
+=== print_designer ===
+https://github.com/frappe/print_designer
+
+=== telephony ===
+https://github.com/frappe/telephony.git
+
+=== wiki ===
+https://github.com/frappe/wiki.git
+
+
+
+# INSTALL
+hrms@https://github.com/frappe/hrms.git@develop,
+print_designer@https://github.com/frappe/print_designer.git@develop,
+
+# helpdesk legt alles auf die seite
+helpdesk@https://github.com/frappe/helpdesk @v1.17.3,
+# payments wurde nicht installiert
+payments@https://github.com/frappe/payments.git@develop,
+# marcus: lass weg
+telephony@https://github.com/frappe/telephony.git@develop,
+# wiki bringt redis.commands problem
+wiki@https://github.com/frappe/wiki.git @166bc59d3cd6b401847697e240831158db89526c,
+
+erpnext_datev@https://github.com/alyf-de/erpnext_datev.git@version-15,
+banking@https://github.com/alyf-de/banking.git@version-15-hotfix,
+eu_einvoice@https://github.com/alyf-de/eu_einvoice@version-15,
+
+az_it@https://github.com/schmidtundtoechter/AZ-IT.git @main,
+
+csv_import_hornetsecurity@https://github.com/schmidtundtoechter/csv_import_hornetsecurity@main,
+csv_import_wortmann@https://github.com/schmidtundtoechter/csv_import_wortmann@main,
+egis_integration@https://github.com/schmidtundtoechter/EGIS_app.git @main
