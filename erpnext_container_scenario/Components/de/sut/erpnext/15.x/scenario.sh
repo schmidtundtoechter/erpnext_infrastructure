@@ -34,6 +34,9 @@ function up() {
   #deploy-tools.checkAndRestoreDataVolume $SCENARIO_DATA_VOLUME_2_RESTORESOURCE $SCENARIO_DATA_VOLUME_2_PATH 1
   #deploy-tools.checkAndRestoreDataVolume $SCENARIO_DATA_VOLUME_3_RESTORESOURCE $SCENARIO_DATA_VOLUME_3_PATH 1
 
+  # Open permissions to docker sock
+  deploy-tools.setDockerSockPermissions
+
   # build before up
   deploy-tools.setEnvironment
   docker-compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS build

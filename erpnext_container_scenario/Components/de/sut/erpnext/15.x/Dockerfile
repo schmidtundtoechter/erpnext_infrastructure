@@ -181,5 +181,14 @@ RUN apt-get update && apt-get install -y \
 # Add frappe user to docker group for socket access
 RUN groupadd -f docker && usermod -aG docker frappe
 
+# Add gnu compiler and gcc and g++ and libdev for building some python packages
+RUN apt-get update && apt-get install -y \
+  build-essential \
+  gcc \
+  g++ \
+  libc6-dev \
+  zlib1g-dev \
+  && rm -rf /var/lib/apt/lists/*
+
 # Switch back to default user
 USER frappe
