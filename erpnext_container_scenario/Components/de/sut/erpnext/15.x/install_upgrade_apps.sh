@@ -24,7 +24,7 @@ function install_upgrade_app() {
     # Get base of repot without the ending ".git"
     if [ ! -d apps/$app ]; then
         echo "Installing $app app"
-        bench get-app $app $repo
+        bench get-app $app $repo --branch $version
     fi
     echo "Updating $app app to version $version"
     pushd apps/$app > /dev/null
@@ -33,6 +33,7 @@ function install_upgrade_app() {
 	# TODO: Hier ist auch unklar, warum erpnext und frappe kein .git Verzeichnis haben
 	# TODO: auch bench und pip und das betriebssystem (in alle containern) sollte geupdatet werden
 	# TODO: Check /var/run/docker.sock permissions if docker commands fail
+	# TODO: Wenn die python version wechselt, müssen die envs neu gebaut werden!
 
     # Check ref already available in remotes or tags
     if git show-ref --verify --quiet refs/remotes/upstream/$version; then
@@ -61,15 +62,23 @@ function install_upgrade_app() {
 }
 
 function remove_app() {
-    app_name=$1
+	app_name=$1
 
-    # Remove app from site
-    echo "Uninstalling $app_name app from site ${SITE_NAME}"
-    bench --site ${SITE_NAME} uninstall-app -y $app_name
+	# Remove app from site
+	echo "Uninstalling $app_name app from site ${SITE_NAME}"
+	bench --site ${SITE_NAME} uninstall-app -y $app_name
 
-    # Remove app from apps directory
-    echo "Removing $app_name app from apps directory"
-    bench remove-app $app_name
+	# Remove app from apps directory
+	echo "Removing $app_name app from apps directory"
+	bench remove-app $app_name
+
+	# Remove app from sites/apps.txt
+	echo "Removing $app_name from sites/apps.txt"
+	sed -i "/$app_name/d" sites/apps.txt
+
+	# Force remove app directory
+	echo "Force removing $app_name directory"
+	rm -rf apps/$app_name
 }
 
 echo "--iua- Installing or upgrading apps from SCENARIO_INSTALL_APPS: $SCENARIO_INSTALL_APPS"
@@ -103,18 +112,16 @@ echo "--iua- Installed or upgraded apps: ${apps_installed[@]}"
 
 # Remove other apps
 echo "--iua- Removing other apps that are not in SCENARIO_INSTALL_APPS"
-pushd apps > /dev/null
-for app in */; do
-    app_name=${app%/}
-    if [[ ! " ${apps_installed[@]} " =~ " ${app_name} " ]]; then
-        remove_app $app_name
-    else
-        echo "Keeping $app_name app"
-    fi
+for app in apps/*/; do
+	app_name=$(basename "$app")
+	if [[ ! " ${apps_installed[@]} " =~ " ${app_name} " ]]; then
+		remove_app $app_name
+	else
+		echo "Keeping $app_name app"
+	fi
 done
 pwd
 ls
-popd > /dev/null
 
 # Update requirements
 echo "--iua- Updating requirements"
