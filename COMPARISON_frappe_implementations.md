@@ -20,6 +20,49 @@
 
 ---
 
+## Frappe-Funktionalitäten: Betriebsstatus im Vergleich
+
+> Legende: ✅ funktioniert korrekt · ⚠️ funktioniert mit Einschränkungen · ❌ nicht funktionsfähig
+
+| Funktion | kittner.netcup | erpnext_infrastructure | Bewertung |
+|---|---|---|---|
+| **HTTP / Gunicorn** | ⚠️ `bench serve` (Dev-Server via Procfile) | ✅ Gunicorn direkt: `--threads=4 --workers=2 --worker-class=gthread --preload` | erpnext besser – Production-WSGI statt Dev-Server |
+| **WebSocket / Realtime** | ❌ **Nicht gestartet** – Procfile enthält nur `web: bench serve`, kein socketio-Prozess | ✅ Dedizierter `websocket`-Container (`node socketio.js`) | Echtzeit-Notifications, Progress-Bars, Formular-Live-Updates funktionieren in kittner.netcup **nicht** |
+| **Worker (Background Jobs)** | ⚠️ Ein Container, alle Queues gemeinsam (`default,short,long`) | ✅ Zwei getrennte Worker: `queue-long` (`long,default,short`), `queue-short` (`short,default`) | erpnext besser – long-Jobs (z. B. Reports, Exports) blockieren keine short-Jobs (z. B. E-Mail-Versand) |
+| **Scheduler** | ✅ Dedizierter Container, wartet auf `INITED`-File + `common_site_config.json` vor Start | ✅ Dedizierter Container, wartet auf `common_site_config.json` mit db_host/redis_cache/redis_queue-Keys | Beide korrekt |
+| **Redis Cache** | ⚠️ Eine Redis-Instanz für Cache + Queue + SocketIO | ✅ Dedizierter `redis-cache`-Container mit `allkeys-lru` Eviction-Policy | erpnext besser – LRU-Eviction verhindert Speicherfehler bei vollem Cache |
+| **Redis Queue** | ⚠️ Gleiche Redis-Instanz wie Cache | ✅ Dedizierter `redis-queue`-Container mit `noeviction`-Policy | erpnext besser – Jobs gehen nie verloren, Redis gibt Fehler statt silent-drop |
+| **PDF-Generierung** | ❌ Kein `wkhtmltopdf` / `weasyprint` im Image – PDF-Export schlägt fehl | ✅ `wkhtmltopdf` + `weasyprint` im Dockerfile installiert | In kittner.netcup funktioniert PDF-Export (Print, Report) nicht out-of-the-box |
+| **E-Mail-Versand** | ⚠️ Single Worker – E-Mails konkurrieren mit allen anderen Jobs | ✅ `queue-long` verarbeitet E-Mail-Batch-Jobs isoliert | erpnext stabiler bei hohem E-Mail-Aufkommen |
+| **Nginx / Static Assets** | ❌ Kein nginx – Traefik leitet direkt an `bench serve:8000` | ✅ Dedizierter `frontend`-Container mit nginx, serviert Assets aus eigenem Volume direkt | erpnext deutlich schneller bei statischen Assets (JS, CSS, Bilder) |
+| **Konfiguration (`bench set-config`)** | ✅ In `entrypoint.sh` inline bei erstem Start | ✅ Dedizierter `configurator`-One-Shot-Container | Beide funktional; erpnext klarer getrennt |
+| **Site-Erstellung** | ✅ In `entrypoint.sh` inline, erkennt existing site | ✅ Dedizierter `create-site`-Container, erkennt existing site | Beide funktional; erpnext klarer getrennt |
+| **App-Installation** | ✅ `install_apps.sh` – Install + Deinstall nicht genutzter Apps | ✅ `install_upgrade_apps.sh` – Install + Upgrade + Migrate + Cache-Clear + Developer-Mode | erpnext vollständiger Lifecycle |
+| **Developer-Mode** | ❌ Nicht gesetzt | ✅ `bench set-config developer_mode 1` in `install_upgrade_apps.sh` | Relevant für Asset-Reload ohne Build-Step |
+| **SSL / HTTPS** | ✅ `bench set-config webserver_port 443` + `use_ssl 1` + Traefik TLS-Termination | ✅ Traefik TLS-Termination + `FRAPPE_SITE_NAME_HEADER` in nginx | Beide korrekt; Ansatz unterschiedlich |
+| **host_name-Konfiguration** | ✅ `bench set-config host_name https://${SITE_NAME}` – explizit in entrypoint.sh | ✅ Per nginx env var `FRAPPE_SITE_NAME_HEADER` | Beide korrekt |
+| **Startup-Reihenfolge** | ✅ `depends_on` + INITED-File-Polling + `common_site_config.json`-Check | ✅ `wait-for-it` für DB/Redis + `common_site_config.json`-Polling | Beide haben Healthchecks; kittner.netcup nutzt init-Container, erpnext `wait-for-it` |
+| **Restart Policy** | ⚠️ `restart: unless-stopped` für alle Services (auch One-Shot!) | ✅ `restart_policy: on-failure` für Services, `none` für One-Shot | erpnext präziser – verhindert endlose Restarts von init-Containern |
+| **DB Wildcard-Fix** | ✅ `direct_wildcard_fix.sh` – in entrypoint.sh aufgerufen | ✅ Portiert in `create-site`-Container (umgesetzt in Prio-1-Task) | Beide jetzt korrekt |
+
+### Kritische Lücke in kittner.netcup: WebSocket fehlt
+
+Das Procfile in `entrypoint.sh` wird bewusst minimalistisch geschrieben:
+```sh
+echo "web: bench serve --port 8000" > Procfile
+```
+`bench start` startet dann **nur** den Web-Server – kein `socketio.js`, kein Socket-IO-Prozess. Damit fehlen in kittner.netcup:
+- Echtzeit-Benachrichtigungen (Doctype-Änderungen, Notifications)
+- Progress-Indikatoren (Importe, Reports, lange Jobs)
+- Live-Collaboration-Features
+- WebSocket-basierte Background-Job-Status-Updates
+
+### Kritische Lücke in kittner.netcup: Dev-Server statt Gunicorn
+
+`bench serve` ist der Frappe Development Server – single-threaded, ohne Worker-Pool, nicht für Produktion ausgelegt. erpnext_infrastructure nutzt Gunicorn mit 2 Workers × 4 Threads = bis zu 8 parallele Requests.
+
+---
+
 ## Was ist wo besser?
 
 ### Besser in `kittner.netcup`
