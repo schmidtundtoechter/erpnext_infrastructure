@@ -63,4 +63,10 @@
 ### Priorität 3 – Nice-to-have
 
 - [ ] **`cleanup_wildcard_permissions.sh`** als optionales Debug/Test-Tool einfügen.
-- `DB_ROOT_USER` als separate Umgebungsvariable führen (kittner.netcup hat das bereits, erpnext_infrastructure verwendet überall nur `root` implizit).
+- [ ] `DB_ROOT_USER` als separate Umgebungsvariable führen (kittner.netcup hat das bereits, erpnext_infrastructure verwendet überall nur `root` implizit).
+
+### Weitere TODOs
+
+- [ ] Apps to install sollen nicht in einer variable sein, sondern in einem JSON file im gleichnamigen scenario verzeichnis
+- [ ] Die apps (und auch erpnext und frappe) sollen mit einer bestimmten version installiert werden können, nicht nur mit einem branch.
+- [ ] die Versionsnummern sollen per skript auf die aktuellsten geupdatet werden können
