@@ -39,7 +39,7 @@ function up() {
 
   # build before up
   deploy-tools.setEnvironment
-  docker-compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS build
+  docker compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS build
 
   deploy-tools.up
 }
@@ -119,7 +119,7 @@ function backup() {
 
   # Run bench backup in create-site container
   banner "Run bench backup in create-site container"
-  docker-compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS run --rm create-site "bash -c \"cd /home/frappe/frappe-bench && \
+  docker compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS run --rm create-site "bash -c \"cd /home/frappe/frappe-bench && \
      bench --site ${SCENARIO_SERVER_NAME} backup --with-files && \
      mkdir -p backups/${SCENARIO_NAME} && \
      mv sites/${SCENARIO_SERVER_NAME}/private/backups/* backups/${SCENARIO_NAME}/ && \
@@ -180,7 +180,7 @@ function update() {
   banner "Update services"
 
   # Restart create-site container which automatically calls install_upgrade_apps.sh
-  docker-compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS run --rm create-site
+  docker compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS run --rm create-site
 }
 
 # Scenario vars

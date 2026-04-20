@@ -65,10 +65,16 @@ services:
       - ${SCENARIO_DATA_MOUNTPOINT_4}:/home/frappe/frappe-bench/logs
       - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
       - ./install_upgrade_apps.sh:/tmp/install_upgrade_apps.sh
+      - ./direct_wildcard_fix.sh:/tmp/direct_wildcard_fix.sh
+      - ./fix-git-refs.sh:/tmp/fix-git-refs.sh
       - /var/run/docker.sock:/var/run/docker.sock
       - ${SCENARIO_SERVER_CONFIGSDIR}:${SCENARIO_SERVER_CONFIGSDIR}
       - ${SCENARIO_DATA_BACKUPDIR}:/home/frappe/frappe-bench/backups
       - ${SCENARIO_SRC_SECRETSDIR}/.ssh:/home/frappe/.ssh:ro
+    environment:
+      DB_HOST: db
+      DB_ROOT_USER: ${DB_ROOT_USER}
+      DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
     entrypoint:
       - bash
       - -c
@@ -90,10 +96,19 @@ services:
           fi
         done;
         echo "sites/common_site_config.json found";
-        bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=admin --install-app erpnext --set-default ${SCENARIO_SERVER_NAME};
+        SITE_NAME="${SCENARIO_SERVER_NAME}";
+        EXISTING_DEFAULT=$$(grep -oP '"default_site":\s*"\K[^"]+' sites/common_site_config.json 2>/dev/null || echo "");
+        if [ -n "$$EXISTING_DEFAULT" ]; then echo "Using existing default site: $$EXISTING_DEFAULT"; SITE_NAME="$$EXISTING_DEFAULT"; fi;
+        if [ ! -f sites/$$SITE_NAME/site_config.json ]; then
+          bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=$$DB_ROOT_PASSWORD --install-app erpnext --set-default $$SITE_NAME;
+        else echo "Site $$SITE_NAME already exists, skipping new-site"; fi;
         cp -f /tmp/install_upgrade_apps.sh /home/frappe/frappe-bench/install_upgrade_apps.sh;
         chmod +x /home/frappe/frappe-bench/install_upgrade_apps.sh;
-        /home/frappe/frappe-bench/install_upgrade_apps.sh ${SCENARIO_SERVER_NAME} ${SCENARIO_INSTALL_APPS};
+        cp -f /tmp/fix-git-refs.sh /home/frappe/frappe-bench/fix-git-refs.sh;
+        chmod +x /home/frappe/frappe-bench/fix-git-refs.sh;
+        /home/frappe/frappe-bench/install_upgrade_apps.sh $$SITE_NAME ${SCENARIO_INSTALL_APPS};
+        chmod +x /tmp/direct_wildcard_fix.sh;
+        /tmp/direct_wildcard_fix.sh;
         docker restart ${SCENARIO_NAME}_erpnext_backend_container ${SCENARIO_NAME}_erpnext_frontend_container
     networks:
       - erpnext_network
@@ -102,7 +117,7 @@ services:
     container_name: ${SCENARIO_NAME}_erpnext_db_container
     image: mariadb:10.6
     healthcheck:
-      test: mysqladmin ping -h localhost --password=admin
+      test: mysqladmin ping -h localhost --password=$$MYSQL_ROOT_PASSWORD
       interval: 1s
       retries: 20
     deploy:
@@ -114,7 +129,7 @@ services:
       - --skip-character-set-client-handshake
       - --skip-innodb-read-only-compressed # Temporary fix for MariaDB 10.6
     environment:
-      MYSQL_ROOT_PASSWORD: admin
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
     volumes:
       - ${SCENARIO_DATA_MOUNTPOINT_7}:/var/lib/mysql
     networks:

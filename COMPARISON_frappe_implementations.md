@@ -48,25 +48,28 @@
 
 ### Priorität 1 – Sicherheit / Stabilität
 
-- [ ] **`direct_wildcard_fix.sh` übernehmen** (aus kittner.netcup kopieren und in den `create-site`-Container oder ein Init-Script integrieren). Das Problem tritt in jedem containerisierten Setup auf, bei dem sich Container-IPs nach einem Neustart ändern.
+- [x] **`direct_wildcard_fix.sh` übernehmen** (aus kittner.netcup kopieren und in den `create-site`-Container oder ein Init-Script integrieren). Das Problem tritt in jedem containerisierten Setup auf, bei dem sich Container-IPs nach einem Neustart ändern.
 
-- [ ] **Hardcodiertes `MYSQL_ROOT_PASSWORD: admin` durch `${DB_ROOT_PASSWORD}` ersetzen** (aktuell in `docker-compose.yml` des `db`-Services). Das ist ein klares Sicherheitsproblem.
+- [x] **Hardcodiertes `MYSQL_ROOT_PASSWORD: admin` durch `${DB_ROOT_PASSWORD}` ersetzen** (aktuell in `docker-compose.yml` des `db`-Services). Das ist ein klares Sicherheitsproblem.
 
-- [ ] **`docker-compose` → `docker compose`** in `scenario.sh` aktualisieren (deprecated seit Docker 20.10).
+- [x] **`docker-compose` → `docker compose`** in `scenario.sh` aktualisieren (deprecated seit Docker 20.10).
 
 ### Priorität 2 – Robustheit
 
-- [ ] **`fix-git-refs.sh` übernehmen** und in `install_upgrade_apps.sh` integrieren. Verhindert `fatal: couldn't find remote ref`-Fehler bei ungewöhnlichen Branch-/Tag-Konstellationen.
+- [x] **`fix-git-refs.sh` übernehmen** und in `install_upgrade_apps.sh` integrieren. Verhindert `fatal: couldn't find remote ref`-Fehler bei ungewöhnlichen Branch-/Tag-Konstellationen.
 
-- [ ] **Site-Name-Erkennung** aus `entrypoint.sh` (kittner.netcup) in den `create-site`-Container portieren: aktuellen Default-Site-Namen aus `common_site_config.json` lesen, statt immer `SCENARIO_TRAEFIK_URL` zu vertrauen.
+- [x] **Site-Name-Erkennung** aus `entrypoint.sh` (kittner.netcup) in den `create-site`-Container portieren: aktuellen Default-Site-Namen aus `common_site_config.json` lesen, statt immer `SCENARIO_TRAEFIK_URL` zu vertrauen.
 
 ### Priorität 3 – Nice-to-have
 
-- [ ] **`cleanup_wildcard_permissions.sh`** als optionales Debug/Test-Tool einfügen.
-- [ ] `DB_ROOT_USER` als separate Umgebungsvariable führen (kittner.netcup hat das bereits, erpnext_infrastructure verwendet überall nur `root` implizit).
+- [x] **`cleanup_wildcard_permissions.sh`** als optionales Debug/Test-Tool einfügen.
+- [x] `DB_ROOT_USER` als separate Umgebungsvariable führen (kittner.netcup hat das bereits, erpnext_infrastructure verwendet überall nur `root` implizit).
 
 ### Weitere TODOs
 
 - [ ] Apps to install sollen nicht in einer variable sein, sondern in einem JSON file im gleichnamigen scenario verzeichnis
+  - [ ] Das heißt die variable soll weiterhin funktionieren
+  - [ ] Hat die variable den filename des JSON, dann soll aus dem JSON geladen werden.
+  - [ ] wenn die vaiable die daten enthält (ohne JSON), soll der JSON inhalt und eine kurze anleitung geprintet werden.
 - [ ] Die apps (und auch erpnext und frappe) sollen mit einer bestimmten version installiert werden können, nicht nur mit einem branch.
 - [ ] die Versionsnummern sollen per skript auf die aktuellsten geupdatet werden können

@@ -26,6 +26,12 @@ function install_upgrade_app() {
         echo "Installing $app app"
         bench get-app $app $repo --branch $version
     fi
+
+    # Fix git refs to ensure all remote branches/tags are fetchable
+    if [ -f /home/frappe/frappe-bench/fix-git-refs.sh ]; then
+        /home/frappe/frappe-bench/fix-git-refs.sh apps/$app || true
+    fi
+
     echo "Updating $app app to version $version"
     pushd apps/$app > /dev/null
 
