@@ -1,5 +1,5 @@
 [
-  {"name": "raven", "url": "https://github.com/The-Commit-Company/raven.git", "version": "main", "active": false},
+  {"name": "raven", "url": "https://github.com/The-Commit-Company/raven.git", "version": "main", "active": true},
   {"name": "hrms", "url": "https://github.com/frappe/hrms.git", "version": "version-15", "active": true},
-  {"name": "sut_app_datev_export", "url": "git@github.com:schmidtundtoechter/sut_app_datev_export.git", "version": "main", "active": false}
+  {"name": "sut_app_datev_export", "url": "git@github.com:schmidtundtoechter/sut_app_datev_export.git", "version": "main", "active": true}
 ]
