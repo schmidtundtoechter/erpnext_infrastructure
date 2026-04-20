@@ -110,9 +110,9 @@ echo "web: bench serve --port 8000" > Procfile
 
 ### Weitere TODOs
 
-- [ ] Apps to install sollen nicht in einer variable sein, sondern in einem JSON file im gleichnamigen scenario verzeichnis
-  - [ ] Das heißt die variable soll weiterhin funktionieren
-  - [ ] Hat die variable den filename des JSON, dann soll aus dem JSON geladen werden.
-  - [ ] wenn die vaiable die daten enthält (ohne JSON), soll der JSON inhalt und eine kurze anleitung geprintet werden.
-- [ ] Die apps (und auch erpnext und frappe) sollen mit einer bestimmten version installiert werden können, nicht nur mit einem branch.
-- [ ] die Versionsnummern sollen per skript auf die aktuellsten geupdatet werden können
+- [x] T.1 Apps to install sollen nicht in einer variable sein, sondern in einem JSON file im gleichnamigen scenario verzeichnis
+  - [x] Das heißt die variable soll weiterhin funktionieren
+  - [x] Hat die variable den filename des JSON, dann soll aus dem JSON geladen werden.
+  - [x] wenn die vaiable die daten enthält (ohne JSON), soll der JSON inhalt und eine kurze anleitung geprintet werden.
+- [x] T.2 Die apps (und auch erpnext und frappe) sollen mit einer bestimmten version installiert werden können, nicht nur mit einem branch.
+- [ ] T.3 die Versionsnummern sollen per skript auf die aktuellsten geupdatet werden können

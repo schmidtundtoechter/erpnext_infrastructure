@@ -101,12 +101,14 @@ USER frappe
 
 FROM build AS builder
 
-ARG FRAPPE_BRANCH=version-15
+# FRAPPE_VERSION and ERPNEXT_VERSION accept both branch names (e.g. version-15)
+# and specific git tags (e.g. v15.43.0) for reproducible builds.
+ARG FRAPPE_VERSION=version-15
 ARG FRAPPE_PATH=https://github.com/frappe/frappe
 ARG ERPNEXT_REPO=https://github.com/frappe/erpnext
-ARG ERPNEXT_BRANCH=version-15
+ARG ERPNEXT_VERSION=version-15
 RUN bench init \
-  --frappe-branch=${FRAPPE_BRANCH} \
+  --frappe-branch=${FRAPPE_VERSION} \
   --frappe-path=${FRAPPE_PATH} \
   --no-procfile \
   --no-backups \
@@ -114,7 +116,7 @@ RUN bench init \
   --verbose \
   /home/frappe/frappe-bench && \
   cd /home/frappe/frappe-bench && \
-  bench get-app --branch=${ERPNEXT_BRANCH} --resolve-deps erpnext ${ERPNEXT_REPO} && \
+  bench get-app --branch=${ERPNEXT_VERSION} --resolve-deps erpnext ${ERPNEXT_REPO} && \
   echo "{}" > sites/common_site_config.json
   #&& \
   # Do not remove .git to be able to update the apps later

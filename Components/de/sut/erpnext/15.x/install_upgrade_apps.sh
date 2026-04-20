@@ -8,6 +8,41 @@ if [ -z "$SCENARIO_INSTALL_APPS" -o -z "$SITE_NAME" ]; then
     exit 1
 fi
 
+# T.1: JSON file support
+# If SCENARIO_INSTALL_APPS ends in .json, load app list from that file.
+# If it contains inline app data, print the JSON equivalent as a migration hint.
+if [[ "$SCENARIO_INSTALL_APPS" == *.json ]]; then
+    json_file="$SCENARIO_INSTALL_APPS"
+    # Resolve bare filename (no path) to /tmp/<filename> (mounted from scenario dir)
+    if [[ "$json_file" != */* ]]; then
+        json_file="/tmp/$json_file"
+    fi
+    if [ ! -f "$json_file" ]; then
+        echo "Error: Apps JSON file not found: $json_file"
+        exit 1
+    fi
+    echo "--iua- Loading apps from JSON file: $json_file"
+    # active=false -> prepend "-" to trigger remove_app; missing active defaults to install
+    SCENARIO_INSTALL_APPS=$(jq -r '.[] | (if .active == false then "-" else "" end) + .name + "@" + .url + "@" + .version' "$json_file" | tr '\n' ',' | sed 's/,$//')
+    echo "--iua- Loaded apps: $SCENARIO_INSTALL_APPS"
+else
+    # Inline app data – print JSON equivalent as migration hint
+    echo "--iua- TIPP: SCENARIO_INSTALL_APPS kann auf eine JSON-Datei 'apps.json' im Scenario-Verzeichnis zeigen."
+    echo "--iua- Aequivalenter JSON-Inhalt (als apps.json speichern, dann SCENARIO_INSTALL_APPS=apps.json setzen):"
+    IFS=',' read -r -a _hint_apps <<< "$SCENARIO_INSTALL_APPS"
+    echo "["
+    for _i in "${!_hint_apps[@]}"; do
+        _app="${_hint_apps[$_i]}"
+        _n=$(echo "$_app" | cut -d'@' -f1)
+        _u=$(echo "$_app" | cut -d'@' -f2)
+        _v=$(echo "$_app" | cut -d'@' -f3)
+        _comma=","
+        [ $_i -eq $((${#_hint_apps[@]}-1)) ] && _comma=""
+        echo "  {\"name\": \"$_n\", \"url\": \"$_u\", \"version\": \"$_v\"}$_comma"
+    done
+    echo "]"
+fi
+
 apps_installed=()
 
 echo "Calling $0 in site $SITE_NAME"
@@ -53,8 +88,13 @@ function install_upgrade_app() {
     fi
     git fetch upstream $version
     git checkout $version
-    echo "Pulling latest changes for $app app"
-    git pull
+    # T.2: Only pull if on a branch – skip for detached HEAD (tag checkout)
+    if git symbolic-ref -q HEAD > /dev/null 2>&1; then
+        echo "Pulling latest changes for $app app (branch)"
+        git pull
+    else
+        echo "Detached HEAD (tag $version) – skipping git pull for $app"
+    fi
     popd > /dev/null
 
     # Install app only if it is not installed
@@ -102,9 +142,11 @@ for app in "${apps[@]}"; do
     app_url=$(echo $app | cut -d'@' -f2)
     app_version=$(echo $app | cut -d'@' -f3)
 
-    # if app_name doesn't start with "-" then it is a valid app
+    # if app_name starts with "-" then uninstall it
     if [[ $app_name == -* ]]; then
-        echo "Skipping app $app_name"
+        real_name="${app_name:1}"
+        echo "--iua- Deinstalling app $real_name (active=false)"
+        remove_app "$real_name"
         continue
     fi
 

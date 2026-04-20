@@ -1,7 +1,11 @@
 services:
   backend:
     container_name: ${SCENARIO_NAME}_erpnext_backend_container
-    build: .
+    build:
+      context: .
+      args:
+        FRAPPE_VERSION: ${FRAPPE_VERSION}
+        ERPNEXT_VERSION: ${ERPNEXT_VERSION}
     image: ${SCENARIO_NAME}_erpnext_image
     deploy:
       restart_policy:
@@ -65,6 +69,7 @@ services:
       - ${SCENARIO_DATA_MOUNTPOINT_4}:/home/frappe/frappe-bench/logs
       - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
       - ./install_upgrade_apps.sh:/tmp/install_upgrade_apps.sh
+      - ./apps.json:/tmp/apps.json:ro
       - ./direct_wildcard_fix.sh:/tmp/direct_wildcard_fix.sh
       - ./fix-git-refs.sh:/tmp/fix-git-refs.sh
       - /var/run/docker.sock:/var/run/docker.sock
