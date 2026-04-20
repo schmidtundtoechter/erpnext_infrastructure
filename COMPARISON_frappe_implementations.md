@@ -115,4 +115,6 @@ echo "web: bench serve --port 8000" > Procfile
   - [x] Hat die variable den filename des JSON, dann soll aus dem JSON geladen werden.
   - [x] wenn die vaiable die daten enthält (ohne JSON), soll der JSON inhalt und eine kurze anleitung geprintet werden.
 - [x] T.2 Die apps (und auch erpnext und frappe) sollen mit einer bestimmten version installiert werden können, nicht nur mit einem branch.
-- [ ] T.3 die Versionsnummern sollen per skript auf die aktuellsten geupdatet werden können
+- [x] T.3 update/upgrade
+  - [x] die Versionsnummern sollen per skript auf die aktuellsten geupdatet werden können. Das passiert jetzt im `update`-Befehl des Scenario und legt nur eine Kopie `apps.updated.json` mit aktualisierten Versionsnummern an.
+  - [x] `install_upgrade_apps.sh` macht keine unkontrollierten Updates mehr. Gepinnte Refs werden nur ausgecheckt; `git pull` wurde in den `scenario update`-Pfad verlagert.

@@ -95,13 +95,7 @@ function install_upgrade_app() {
     fi
     git fetch upstream $version
     git checkout $version
-    # T.2: Only pull if on a branch – skip for detached HEAD (tag checkout)
-    if git symbolic-ref -q HEAD > /dev/null 2>&1; then
-        echo "Pulling latest changes for $app app (branch)"
-        git pull
-    else
-        echo "Detached HEAD (tag $version) – skipping git pull for $app"
-    fi
+    echo "Using pinned ref $version for $app without git pull"
     popd > /dev/null
 
     # Install app only if it is not already installed on the site
