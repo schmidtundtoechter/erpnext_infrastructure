@@ -1,4 +1,4 @@
 [
-  {"name": "hrms", "url": "https://github.com/frappe/hrms.git", "version": "develop", "active": true},
+  {"name": "hrms", "url": "https://github.com/frappe/hrms.git", "version": "version-15", "active": true},
   {"name": "sut_app_datev_export", "url": "https://github.com/schmidtundtoechter/sut_app_datev_export.git", "version": "main", "active": true}
 ]

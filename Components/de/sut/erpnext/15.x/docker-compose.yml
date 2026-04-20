@@ -112,8 +112,9 @@ services:
         cp -f /tmp/fix-git-refs.sh /home/frappe/frappe-bench/fix-git-refs.sh;
         chmod +x /home/frappe/frappe-bench/fix-git-refs.sh;
         /home/frappe/frappe-bench/install_upgrade_apps.sh $$SITE_NAME ${SCENARIO_INSTALL_APPS};
-        chmod +x /tmp/direct_wildcard_fix.sh;
-        /tmp/direct_wildcard_fix.sh;
+        cp -f /tmp/direct_wildcard_fix.sh /home/frappe/frappe-bench/direct_wildcard_fix.sh;
+        chmod +x /home/frappe/frappe-bench/direct_wildcard_fix.sh;
+        /home/frappe/frappe-bench/direct_wildcard_fix.sh;
         docker restart ${SCENARIO_NAME}_erpnext_backend_container ${SCENARIO_NAME}_erpnext_frontend_container
     networks:
       - erpnext_network

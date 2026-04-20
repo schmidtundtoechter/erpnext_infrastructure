@@ -8,39 +8,46 @@ if [ -z "$SCENARIO_INSTALL_APPS" -o -z "$SITE_NAME" ]; then
     exit 1
 fi
 
-# T.1: JSON file support
-# If SCENARIO_INSTALL_APPS ends in .json, load app list from that file.
-# If it contains inline app data, print the JSON equivalent as a migration hint.
+# Normalize input to a single APPS_JSON file.
+# Modern path: SCENARIO_INSTALL_APPS is a .json filename (mounted at /tmp/<file>).
+# Legacy path: inline comma-separated app@url@version strings (deprecated).
+#   Legacy hacks supported during conversion:
+#     -appname    -> active: false  (uninstall)
+#     url__at__x  -> url@x         (literal @ in SSH URLs)
 if [[ "$SCENARIO_INSTALL_APPS" == *.json ]]; then
-    json_file="$SCENARIO_INSTALL_APPS"
-    # Resolve bare filename (no path) to /tmp/<filename> (mounted from scenario dir)
-    if [[ "$json_file" != */* ]]; then
-        json_file="/tmp/$json_file"
+    APPS_JSON="$SCENARIO_INSTALL_APPS"
+    if [[ "$APPS_JSON" != */* ]]; then
+        APPS_JSON="/tmp/$APPS_JSON"
     fi
-    if [ ! -f "$json_file" ]; then
-        echo "Error: Apps JSON file not found: $json_file"
+    if [ ! -f "$APPS_JSON" ]; then
+        echo "Error: Apps JSON file not found: $APPS_JSON"
         exit 1
     fi
-    echo "--iua- Loading apps from JSON file: $json_file"
-    # active=false -> prepend "-" to trigger remove_app; missing active defaults to install
-    SCENARIO_INSTALL_APPS=$(jq -r '.[] | (if .active == false then "-" else "" end) + .name + "@" + .url + "@" + .version' "$json_file" | tr '\n' ',' | sed 's/,$//')
-    echo "--iua- Loaded apps: $SCENARIO_INSTALL_APPS"
+    echo "--iua- Using apps JSON file: $APPS_JSON"
 else
-    # Inline app data – print JSON equivalent as migration hint
-    echo "--iua- TIPP: SCENARIO_INSTALL_APPS kann auf eine JSON-Datei 'apps.json' im Scenario-Verzeichnis zeigen."
-    echo "--iua- Aequivalenter JSON-Inhalt (als apps.json speichern, dann SCENARIO_INSTALL_APPS=apps.json setzen):"
-    IFS=',' read -r -a _hint_apps <<< "$SCENARIO_INSTALL_APPS"
-    echo "["
-    for _i in "${!_hint_apps[@]}"; do
-        _app="${_hint_apps[$_i]}"
+    echo "--iua- DEPRECATED: SCENARIO_INSTALL_APPS inline format detected."
+    echo "--iua- Migrate to an apps.json file and set SCENARIO_INSTALL_APPS=apps.json."
+    APPS_JSON=$(mktemp /tmp/apps_XXXXXX.json)
+    IFS=',' read -r -a _legacy_apps <<< "$SCENARIO_INSTALL_APPS"
+    _json="["
+    for _i in "${!_legacy_apps[@]}"; do
+        _app="${_legacy_apps[$_i]}"
         _n=$(echo "$_app" | cut -d'@' -f1)
-        _u=$(echo "$_app" | cut -d'@' -f2)
+        _u=$(echo "$_app" | cut -d'@' -f2 | sed 's/__at__/@/g')
         _v=$(echo "$_app" | cut -d'@' -f3)
+        _active="true"
+        if [[ "$_n" == -* ]]; then
+            _active="false"
+            _n="${_n:1}"
+        fi
         _comma=","
-        [ $_i -eq $((${#_hint_apps[@]}-1)) ] && _comma=""
-        echo "  {\"name\": \"$_n\", \"url\": \"$_u\", \"version\": \"$_v\"}$_comma"
+        [ $_i -eq $((${#_legacy_apps[@]}-1)) ] && _comma=""
+        _json+=$'\n'"  {\"name\": \"$_n\", \"url\": \"$_u\", \"version\": \"$_v\", \"active\": $_active}$_comma"
     done
-    echo "]"
+    _json+=$'\n'"]"
+    echo "$_json" > "$APPS_JSON"
+    echo "--iua- Converted to JSON (save as apps.json to remove this warning):"
+    cat "$APPS_JSON"
 fi
 
 apps_installed=()
@@ -97,69 +104,82 @@ function install_upgrade_app() {
     fi
     popd > /dev/null
 
-    # Install app only if it is not installed
-    bench --site ${SITE_NAME} install-app $app
-    if [ $? -eq 0 ]; then
-        echo "$app app installed successfully"
+    # Install app only if it is not already installed on the site
+    if bench --site ${SITE_NAME} list-apps 2>/dev/null | grep -qx "$app"; then
+        echo "$app is already installed on site, skipping install-app"
     else
-        echo "Error installing $app app"
+        bench --site ${SITE_NAME} install-app "$app"
+        if [ $? -eq 0 ]; then
+            echo "$app app installed successfully"
+        else
+            echo "Error installing $app app, retrying with --force"
+            bench --site ${SITE_NAME} install-app --force "$app" || echo "Error installing $app app (force retry failed)"
+        fi
     fi
+
+    # Keep active apps in desired state to prevent accidental cleanup on inconsistent checks.
     apps_installed+=($app)
 }
 
 function remove_app() {
 	app_name=$1
+    is_installed_on_site=0
+    if bench --site ${SITE_NAME} list-apps 2>/dev/null | grep -qx "$app_name"; then
+        is_installed_on_site=1
+    fi
 
-	# Remove app from site
-	echo "Uninstalling $app_name app from site ${SITE_NAME}"
-	bench --site ${SITE_NAME} uninstall-app -y $app_name
+	# Remove app from site DB
+    if [ $is_installed_on_site -eq 1 ]; then
+        echo "Uninstalling $app_name app from site ${SITE_NAME}"
+        if ! bench --site ${SITE_NAME} uninstall-app -y "$app_name"; then
+            echo "--iua- uninstall-app failed for $app_name, trying remove-from-installed-apps"
+            bench --site ${SITE_NAME} remove-from-installed-apps "$app_name" || true
+        fi
+    else
+        echo "--iua- $app_name not installed on site, skipping uninstall-app"
+    fi
 
-	# Remove app from apps directory
+	# Remove app from bench (bench remove-app may fail if bench still thinks app is installed;
+	# we fall through to manual cleanup regardless)
 	echo "Removing $app_name app from apps directory"
-	bench remove-app $app_name
+	if [ -d "apps/$app_name" ]; then
+		bench remove-app "$app_name" || echo "--iua- bench remove-app $app_name failed (non-fatal), cleaning up manually"
+	else
+		echo "--iua- app directory apps/$app_name not found, skipping bench remove-app"
+	fi
 
-	# Remove app from sites/apps.txt
+	# Force-clean sites/apps.txt (use grep -v to avoid sed -i issues on volume filesystems)
 	echo "Removing $app_name from sites/apps.txt"
-	sed -i "/$app_name/d" sites/apps.txt
+	if [ -f sites/apps.txt ]; then
+		grep -v "^${app_name}$" sites/apps.txt > /tmp/apps_clean.txt && mv /tmp/apps_clean.txt sites/apps.txt || true
+	fi
 
-	# Force remove app directory
+	# Force remove app directory and archived copy
 	echo "Force removing $app_name directory"
 	rm -rf apps/$app_name
+	rm -rf archived/apps/${app_name}-*
 }
 
-echo "--iua- Installing or upgrading apps from SCENARIO_INSTALL_APPS: $SCENARIO_INSTALL_APPS"
+echo "--iua- Processing apps from: $APPS_JSON"
 
-# Add default apps
+# Add default apps (always kept)
 apps_installed+=(frappe)
 apps_installed+=(erpnext)
 
-# Install or update apps from SCENARIO_INSTALL_APPS
-# like "bench update --pull"
-IFS=',' read -r -a apps <<< "$SCENARIO_INSTALL_APPS"
-for app in "${apps[@]}"; do
-    # Get the app name and version
-    app_name=$(echo $app | cut -d'@' -f1)
-    app_url=$(echo $app | cut -d'@' -f2)
-    app_version=$(echo $app | cut -d'@' -f3)
-
-    # if app_name starts with "-" then uninstall it
-    if [[ $app_name == -* ]]; then
-        real_name="${app_name:1}"
-        echo "--iua- Deinstalling app $real_name (active=false)"
-        remove_app "$real_name"
-        continue
+# Process apps from JSON: active=true (default) -> install/update; active=false -> remove
+while IFS=$'\t' read -r app_name app_url app_version app_active; do
+    if [[ "$app_active" == "false" ]]; then
+        echo "--iua- Removing app $app_name (active=false)"
+        remove_app "$app_name"
+    else
+        install_upgrade_app "$app_url" "$app_name" "$app_version"
     fi
-
-	# Replace __at__ with @ in app_url
-	app_url=${app_url//__at__/@}
-	
-    install_upgrade_app $app_url $app_name $app_version
-done
+done < <(jq -r '.[] | [.name, .url, .version, (if .active == false then false else true end | tostring)] | @tsv' "$APPS_JSON")
 
 echo "--iua- Installed or upgraded apps: ${apps_installed[@]}"
 
 # Remove other apps
-echo "--iua- Removing other apps that are not in SCENARIO_INSTALL_APPS"
+echo "--iua- Removing other apps that are not in active apps JSON"
 for app in apps/*/; do
 	app_name=$(basename "$app")
 	if [[ ! " ${apps_installed[@]} " =~ " ${app_name} " ]]; then
@@ -175,6 +195,19 @@ ls
 echo "--iua- Updating requirements"
 # TODO: Fix error messages when erpnext or frappe are not on a branch
 bench update --requirements
+
+# Ensure pkg_resources is available for frappe integrations during migrate.
+echo "--iua- Ensuring setuptools/pkg_resources is available"
+/home/frappe/frappe-bench/env/bin/python -m pip install --quiet --upgrade setuptools wheel
+if ! /home/frappe/frappe-bench/env/bin/python -c "import pkg_resources" >/dev/null 2>&1; then
+    echo "--iua- pkg_resources still missing, retrying with setuptools<81"
+    uv pip install --quiet --python /home/frappe/frappe-bench/env/bin/python "setuptools<81" || \
+      /home/frappe/frappe-bench/env/bin/python -m pip install --quiet "setuptools<81"
+fi
+if ! /home/frappe/frappe-bench/env/bin/python -c "import pkg_resources" >/dev/null 2>&1; then
+    echo "Error: pkg_resources is still missing after setuptools repair"
+    exit 1
+fi
 
 # Migrate site
 echo "--iua- Migrating site ${SITE_NAME}"
