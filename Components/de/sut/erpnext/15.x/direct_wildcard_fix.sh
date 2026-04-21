@@ -61,8 +61,6 @@ for user in $FRAPPE_USERS; do
         PASSWORD_HASH=$(echo "$USER_INFO" | awk '{print $1}')
         AUTH_PLUGIN=$(echo "$USER_INFO" | awk '{print $2}')
 
-        echo "  🔑 Password hash length: ${#PASSWORD_HASH}"
-        echo "  🔑 Password hash: ${PASSWORD_HASH:0:20}..."
         echo "  🔌 Auth plugin: $AUTH_PLUGIN"
 
         if [ -z "$PASSWORD_HASH" ] || [ "$PASSWORD_HASH" = "authentication_string" ] || [ "$PASSWORD_HASH" = "NULL" ]; then
