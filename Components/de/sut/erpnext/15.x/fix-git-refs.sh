@@ -29,9 +29,9 @@ echo "🔧 Configuring git to fetch all remote refs for $APP_PATH"
 
 cd "$APP_PATH"
 
-# Configure SSH to skip host key checking
-echo "🔐 Configuring SSH to skip host key checking..."
-git config core.sshCommand "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+# Configure SSH to auto-accept new host keys (but still verify known ones)
+echo "🔐 Configuring SSH host key verification (accept-new)..."
+git config core.sshCommand "ssh -o StrictHostKeyChecking=accept-new"
 
 # Get remote name (usually 'upstream' for Frappe apps)
 REMOTE=$(git remote | head -n 1)
@@ -53,7 +53,7 @@ echo "✅ Updated fetch configuration"
 
 # Now fetch to get all the refs
 echo "📥 Fetching all remote branches..."
-GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" git fetch "$REMOTE"
+GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new" git fetch "$REMOTE"
 
 echo ""
 echo "📋 Remote branches now available:"
