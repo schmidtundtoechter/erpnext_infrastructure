@@ -39,7 +39,7 @@ function up() {
 
   # build before up
   deploy-tools.setEnvironment
-  docker-compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS build
+  docker compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS build
 
   deploy-tools.up
 }
@@ -119,7 +119,7 @@ function backup() {
 
   # Run bench backup in create-site container
   banner "Run bench backup in create-site container"
-  docker-compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS run --rm create-site "bash -c \"cd /home/frappe/frappe-bench && \
+  docker compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS run --rm create-site "bash -c \"cd /home/frappe/frappe-bench && \
      bench --site ${SCENARIO_SERVER_NAME} backup --with-files && \
      mkdir -p backups/${SCENARIO_NAME} && \
      mv sites/${SCENARIO_SERVER_NAME}/private/backups/* backups/${SCENARIO_NAME}/ && \
@@ -170,17 +170,165 @@ function restore() {
   deploy-tools.restoreVolume SCENARIO_DATA_VOLUME_8_PATH "assets" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
 }
 
+function normalizeAppsJsonForUpdate() {
+  if [[ "$SCENARIO_INSTALL_APPS" == *.json ]]; then
+    if [ -f "$SCENARIO_INSTALL_APPS" ]; then
+      echo "$SCENARIO_INSTALL_APPS"
+      return 0
+    fi
+    echo "Error: Apps JSON file not found: $SCENARIO_INSTALL_APPS" >&2
+    return 1
+  fi
+
+  local legacy_json="apps.updated.from-legacy.json"
+  IFS=',' read -r -a _legacy_apps <<< "$SCENARIO_INSTALL_APPS"
+  local _json="["
+  for _i in "${!_legacy_apps[@]}"; do
+    local _app="${_legacy_apps[$_i]}"
+    local _name=$(echo "$_app" | cut -d'@' -f1)
+    local _url=$(echo "$_app" | cut -d'@' -f2 | sed 's/__at__/@/g')
+    local _version=$(echo "$_app" | cut -d'@' -f3)
+    local _active="true"
+    if [[ "$_name" == -* ]]; then
+      _active="false"
+      _name="${_name:1}"
+    fi
+    local _comma="," 
+    [ $_i -eq $((${#_legacy_apps[@]}-1)) ] && _comma=""
+    _json+=$'\n'"  {\"name\": \"$_name\", \"url\": \"$_url\", \"version\": \"$_version\", \"active\": $_active}$_comma"
+  done
+  _json+=$'\n'"]"
+  echo "$_json" > "$legacy_json"
+  echo "$legacy_json"
+}
+
+function extractMajorFromVersion() {
+  local version="$1"
+  if [[ "$version" =~ ^version-([0-9]+)$ ]]; then
+    echo "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  if [[ "$version" =~ ^v?([0-9]+)(\..*)?$ ]]; then
+    echo "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  return 1
+}
+
+function latestVersionForRepo() {
+  local repo_url="$1"
+  local current_version="$2"
+  local major=""
+  local latest=""
+  local matching=()
+  mapfile -t tags < <(git ls-remote --tags --refs "$repo_url" 2>/dev/null | awk '{print $2}' | sed 's#refs/tags/##' | sort -V)
+
+  if [ ${#tags[@]} -eq 0 ]; then
+    echo "$current_version"
+    return 0
+  fi
+
+  major=$(extractMajorFromVersion "$current_version" || true)
+  if [ -n "$major" ]; then
+    for tag in "${tags[@]}"; do
+      if [[ "$tag" =~ ^v?${major}(\..*)?$ ]]; then
+        matching+=("$tag")
+      fi
+    done
+  fi
+
+  if [ ${#matching[@]} -gt 0 ]; then
+    latest="${matching[-1]}"
+  else
+    latest="${tags[-1]}"
+  fi
+
+  echo "$latest"
+}
+
+function printCoreVersionSuggestion() {
+  local app_name="$1"
+  local repo_url="$2"
+  local current_version="$3"
+  local latest_version=$(latestVersionForRepo "$repo_url" "$current_version")
+  if [ "$latest_version" = "$current_version" ]; then
+    echo "$app_name stays on $current_version"
+  else
+    echo "$app_name: $current_version -> $latest_version"
+  fi
+}
+
+function createUpdatedAppsJsonCopy() {
+  local source_json="$1"
+  local updated_json="${source_json%.json}.updated.json"
+
+  python3 - "$source_json" "$updated_json" <<'PY'
+import json
+import sys
+
+source_json = sys.argv[1]
+updated_json = sys.argv[2]
+
+with open(source_json, "r", encoding="utf-8") as fh:
+    apps = json.load(fh)
+
+with open(updated_json, "w", encoding="utf-8") as fh:
+    json.dump(apps, fh, indent=2)
+    fh.write("\n")
+PY
+
+  while IFS=$'\t' read -r name url version; do
+    local latest_version=$(latestVersionForRepo "$url" "$version")
+    python3 - "$updated_json" "$name" "$latest_version" <<'PY'
+import json
+import sys
+
+path, name, version = sys.argv[1:4]
+with open(path, "r", encoding="utf-8") as fh:
+    apps = json.load(fh)
+
+for app in apps:
+    if app.get("name") == name:
+        app["version"] = version
+
+with open(path, "w", encoding="utf-8") as fh:
+    json.dump(apps, fh, indent=2)
+    fh.write("\n")
+PY
+    echo "$name: $version -> $latest_version" >&2
+  done < <(python3 - "$source_json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as fh:
+    apps = json.load(fh)
+
+for app in apps:
+    print(f"{app['name']}\t{app['url']}\t{app['version']}")
+PY
+)
+
+  echo "$updated_json"
+}
+
 function update() {
-  # Check data volume (also sets the necessary environment variables)
-  checkAndCreateDataVolume
+  banner "Collect latest version suggestions"
 
-  # Set environment
-  setEnvironment
+  local apps_json
+  apps_json=$(normalizeAppsJsonForUpdate) || exit 1
 
-  banner "Update services"
+  banner "Create updated apps.json copy"
+  local updated_apps_json
+  updated_apps_json=$(createUpdatedAppsJsonCopy "$apps_json") || exit 1
+  echo "Created $updated_apps_json"
+  echo "Contents of $updated_apps_json:"
+  cat "$updated_apps_json"
 
-  # Restart create-site container which automatically calls install_upgrade_apps.sh
-  docker-compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS run --rm create-site
+  banner "Suggested core version updates"
+  printCoreVersionSuggestion "FRAPPE_VERSION" "https://github.com/frappe/frappe.git" "$FRAPPE_VERSION"
+  printCoreVersionSuggestion "ERPNEXT_VERSION" "https://github.com/frappe/erpnext.git" "$ERPNEXT_VERSION"
+
+  echo "No container changes were made. Review $updated_apps_json and update .env manually if desired."
 }
 
 # Scenario vars
