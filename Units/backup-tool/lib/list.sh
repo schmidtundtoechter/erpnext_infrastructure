@@ -71,10 +71,10 @@ list_main() {
   done
   
   bt_cache_init
-  [[ -f "${BT_CACHE_PATH}" ]] || bt_cache_rebuild
+  bt_cache_has_node_files || bt_cache_rebuild
   
   local all_entries
-  all_entries="$(jq -s . "${BT_CACHE_PATH}")"
+  all_entries="$(bt_cache_list_all)"
   
   local filtered_entries
   filtered_entries="$(bt_cache_filter "${all_entries}" "${node_filter}" "${site_filter}" \

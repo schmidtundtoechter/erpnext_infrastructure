@@ -91,7 +91,7 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 - [x] Konfigurationsformat final entscheiden:
   YAML oder JSON → **JSON gewählt und implementiert**.
 - [x] Cache-Speicherort final entscheiden:
-  **${XDG_CACHE_HOME:-$HOME/.cache}/backupctl/cache.jsonl definiert**.
+  **${XDG_CACHE_HOME:-$HOME/.cache}/backupctl/nodes/*.json definiert**.
 - [x] Format der `backup_id` final entscheiden:
   **node_site_timestamp definiert**.
 - [ ] Struktur von `apps.json` final entscheiden:
@@ -143,7 +143,7 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 - [x] Cache-Format festlegen:
   JSON Lines.
 - [x] Cache-Speicherort festlegen:
-  `${XDG_CACHE_HOME:-$HOME/.cache}/backupctl/cache.jsonl`.
+  `${XDG_CACHE_HOME:-$HOME/.cache}/backupctl/nodes/*.json`.
 - [x] Cache-Felder festlegen:
   `backup_id`, `source_node`, `source_site`, `reason`, `tags`, `created_at`, `file_count`, `total_size`, `complete`, `last_seen`.
 - [x] `cache clear` implementieren.
@@ -339,3 +339,75 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 - [ ] Typische Workflows dokumentieren:
   Scan, Create, Copy, Restore.
 - [ ] Grenzen des MVP dokumentieren.
+
+---
+
+# NACHARBEITEN VON ARCHITEKTUR-ÄNDERUNGEN
+
+**Kontext:** Zwei Architektur-Refactorings wurden implementiert:
+1. **Single-Pass Remote Plain-Backup Scanner** (statt 100+ SSH-Checks pro Backup)
+2. **Per-Node Cache Architektur** (statt globalem `cache.jsonl`)
+
+Diese Nacharbeiten stellen sicher, dass alle abhaengigen Befehle korrekt mit den neuen Strukturen arbeiten.
+
+## 20. Single-Pass Remote Scanner Nacharbeiten
+
+**Implikation:** Der Scanner erfasst jetzt `source_rel_dir` (relative Pfad unter `backup_root` fuer verschachtelte Backups).
+
+- [ ] `copy.sh`: `bt_get_backup_path_for_node()` anpassen, um `source_rel_dir` zu verwenden.
+  Falls `source_rel_dir` vorhanden, Pfad rekonstruieren als `${backup_root}/${source_rel_dir}`.
+  Falls leer/null (Legacy), alten Fallback-Mechanismus verwenden.
+  
+- [ ] `copy.sh`: Sicherstellen, dass bei direktem rsync/scp zwischen Nodes, `source_rel_dir` beruecksichtigt wird.
+  Test mit verschachtelten Backup-Verzeichnissen durchfuehren.
+  
+- [ ] `restore.sh`: `bt_get_target_backup_path_for_node()` anpassen, um `source_rel_dir` zu verwenden.
+  Backup-Artefakte (db_dump, site_config, public_files, private_files) mit korrektiem Pfad laden.
+  
+- [ ] `restore.sh`: Sicherstellen, dass `manifest.json` und andere Metadaten mit `source_rel_dir` gelesen werden.
+  Test mit verschachtelten Backup-Verzeichnissen durchfuehren.
+  
+- [ ] `lib/backup-model.sh`: Dokumentation ergaenzen: `source_rel_dir` ist Pfad relativ zu `backup_root` fuer plain-backup-dir Backups mit mehreren Verzeichnisebenen.
+  
+- [ ] Tests ergaenzen in `tests/test_backupctl.sh`:
+  - Test: `copy` zwischen Nodes mit verschachtelten plain-backup-dir Backups.
+  - Test: `restore` aus verschachteltem plain-backup-dir Backup.
+
+## 21. Per-Node Cache Architektur Nacharbeiten
+
+**Implikation:** Cache liegt jetzt unter `~/.cache/backupctl/nodes/<node>.json` statt in globalem `cache.jsonl`.
+
+- [ ] `cache.sh`: Migration von altem `cache.jsonl` auf neue Struktur implementieren (falls Anwender ein bestehendes Tool upgraden).
+  Alte `cache.jsonl` lesen, Eintraege pro Node gruppieren, in neue Dateien schreiben, alte Datei loeschen.
+  Migration nur beim Startup, falls alte Datei existiert und neue nicht.
+  
+- [ ] `cache.sh`: Cleanup-Logik erweitern: Alte `cache.jsonl` nach erfolgreicher Migration automatisch loeschen.
+  Option `cache clear` soll alle Dateien unter `nodes/` loeschen, nicht nur eine.
+  
+- [ ] `copy.sh`: Nach erfolgreichem Transfer, beide Node-Cache-Dateien aktualisieren:
+  Quell-Node: Backup als neu kopiert kennzeichnen (`last_seen` aktualisieren).
+  Ziel-Node: Neuen Backup-Eintrag hinzufuegen.
+  
+- [ ] `restore.sh`: Nach erfolgreichem Restore Quell-Node-Cache konsultieren (nicht Ziel-Node, der normalerweise kein Backup hat).
+  Sicherstellen, dass korrekter Node in aggregiertem Cache abgefragt wird.
+  
+- [ ] `lib/nodes.sh`: Hilfsfunktion `bt_find_backup_node_id(backup_id)` implementieren.
+  Diese durchsucht alle Node-Cache-Dateien und gibt die Node-ID zurueck, die das Backup enthaelt.
+  Wird von `copy` und `restore` verwendet, um auf das richtige Cache-Entry zu schreiben.
+  
+- [ ] Tests ergaenzen in `tests/test_backupctl.sh`:
+  - Test: `cache list` aggregiert alle Node-Dateien korrekt.
+  - Test: `cache clear` loescht alle Node-Dateien.
+  - Test: Migration von altem `cache.jsonl` auf neue Struktur.
+  - Test: `copy` aktualisiert beide Node-Cache-Dateien.
+
+## 22. Dokumentation der neuen Strukturen
+
+- [ ] `Backup-Tool-Konzept.md` aktualisieren: `source_rel_dir` in Backup-Modell dokumentieren.
+  
+- [ ] `Backup-Tool-Konzept.md` aktualisieren: Cache-Architektur erklaeren.
+  Pro-Node-Dateien, zentrale Aggregation, automatische Stale-Cleanup.
+  
+- [ ] README ergaenzen: Typischer Ablauf mit verschachtelten plain-backup-dir Backups.
+  
+- [ ] README ergaenzen: Cache-Verzeichnis-Struktur erklaeren.

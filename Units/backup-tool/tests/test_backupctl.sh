@@ -226,6 +226,27 @@ test_cache_entry_schema_exists() {
   assert_contains "${schema_text}" "last_seen"
 }
 
+test_cache_uses_per_node_files_and_aggregates_centrally() {
+  local tmp_cache_dir out
+
+  tmp_cache_dir="$(mktemp -d)"
+  out="$(run_libs "BT_CACHE_DIR='${tmp_cache_dir}'; BT_CACHE_NODES_DIR='${tmp_cache_dir}/nodes'; BT_CACHE_LEGACY_PATH='${tmp_cache_dir}/cache.jsonl'; bt_load_config '${CONFIG_PATH}'; bt_cache_upsert_entry '{\"backup_id\":\"demo_1\",\"source_node\":\"local-dev\",\"source_site\":\"site-a\",\"reason\":\"demo\",\"created_at\":\"2026-01-01T00:00:00Z\",\"complete\":true,\"artifacts\":{\"db_dump\":\"a.sql.gz\",\"site_config\":\"site_config.json\"}}'; bt_cache_upsert_entry '{\"backup_id\":\"demo_2\",\"source_node\":\"archive-share\",\"source_site\":\"site-b\",\"reason\":\"demo\",\"created_at\":\"2026-01-01T00:00:00Z\",\"complete\":true,\"artifacts\":{\"db_dump\":\"b.sql.gz\",\"site_config\":\"site_config.json\"}}'; printf 'FILES=%s\n' \"\$(find '${tmp_cache_dir}/nodes' -type f -name '*.json' | wc -l | tr -d ' ')\"; printf 'COUNT=%s\n' \"\$(bt_cache_list_all | jq 'length')\"")"
+
+  assert_contains "${out}" "FILES=2"
+  assert_contains "${out}" "COUNT=2"
+}
+
+test_cache_prunes_removed_node_files() {
+  local tmp_cache_dir
+
+  tmp_cache_dir="$(mktemp -d)"
+  mkdir -p "${tmp_cache_dir}/nodes"
+  printf '[]\n' > "${tmp_cache_dir}/nodes/obsolete-node.json"
+
+  run_libs "BT_CACHE_DIR='${tmp_cache_dir}'; BT_CACHE_NODES_DIR='${tmp_cache_dir}/nodes'; BT_CACHE_LEGACY_PATH='${tmp_cache_dir}/cache.jsonl'; bt_load_config '${CONFIG_PATH}'; bt_cache_list_all >/dev/null; [[ ! -e '${tmp_cache_dir}/nodes/obsolete-node.json' ]]" \
+    || fail "expected obsolete node cache file to be pruned"
+}
+
 test_backup_library_exists() {
   assert_file_exists "${ROOT_DIR}/lib/backup.sh"
   assert_file_contains "${ROOT_DIR}/lib/backup.sh" "backup_create_main"
@@ -325,6 +346,8 @@ run_all_tests() {
   test_backup_display_name
   test_cache_library_exists
   test_cache_entry_schema_exists
+  test_cache_uses_per_node_files_and_aggregates_centrally
+  test_cache_prunes_removed_node_files
   test_backup_library_exists
   test_list_library_exists
   test_copy_library_exists

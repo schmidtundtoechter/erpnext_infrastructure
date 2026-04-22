@@ -262,6 +262,20 @@ fi"
   done <<<"${scan_rows}"
 }
 
+bt_scan_collect_node_backups() {
+  local node_id="$1"
+  local collected_backups='[]'
+  local backup_json
+
+  while IFS= read -r backup_json; do
+    [[ -z "${backup_json}" ]] && continue
+    backup_json="$(bt_backup_with_hash "${backup_json}")"
+    collected_backups="$(jq --argjson entry "${backup_json}" '. + [$entry]' <<<"${collected_backups}")"
+  done < <(scan_node "${node_id}")
+
+  printf '%s\n' "${collected_backups}"
+}
+
 scan_main() {
   local node_id=""
   local live_check=0
@@ -292,16 +306,19 @@ scan_main() {
   _scan_and_cache() {
     local nid="$1"
     local found=0
+    local collected_backups backup_json
+
+    collected_backups="$(bt_scan_collect_node_backups "${nid}")"
+    found="$(jq 'length' <<<"${collected_backups}")"
+
+    if [[ "${BT_RUNNER_MODE:-execute}" != "dry-run" ]]; then
+      bt_cache_replace_node_backups "${nid}" "${collected_backups}"
+    fi
 
     while IFS= read -r backup_json; do
       [[ -z "${backup_json}" ]] && continue
-      backup_json="$(bt_backup_with_hash "${backup_json}")"
-      if [[ "${BT_RUNNER_MODE:-execute}" != "dry-run" ]]; then
-        bt_cache_upsert_entry "${backup_json}"
-      fi
       bt_scan_print_human "${backup_json}"
-      found=$((found + 1))
-    done < <(scan_node "${nid}")
+    done < <(jq -c '.[]' <<<"${collected_backups}")
 
     if [[ "${BT_RUNNER_MODE:-execute}" != "dry-run" && ${found} -eq 0 ]]; then
       printf 'FOUND [------] node=%s none\n' "${nid}"

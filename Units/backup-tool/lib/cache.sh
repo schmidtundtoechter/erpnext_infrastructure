@@ -1,30 +1,115 @@
 #!/usr/bin/env bash
 
-declare -g BT_CACHE_PATH="${BT_CACHE_PATH:-${XDG_CACHE_HOME:-$HOME/.cache}/backupctl/cache.jsonl}"
+declare -g BT_CACHE_DIR="${BT_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/backupctl}"
+declare -g BT_CACHE_NODES_DIR="${BT_CACHE_NODES_DIR:-${BT_CACHE_DIR}/nodes}"
+declare -g BT_CACHE_LEGACY_PATH="${BT_CACHE_LEGACY_PATH:-${BT_CACHE_DIR}/cache.jsonl}"
 
 bt_cache_init() {
-  local cache_dir
-  cache_dir="$(dirname "${BT_CACHE_PATH}")"
-  [[ -d "${cache_dir}" ]] || mkdir -p "${cache_dir}"
-  [[ -f "${BT_CACHE_PATH}" ]] || touch "${BT_CACHE_PATH}"
+  [[ -d "${BT_CACHE_DIR}" ]] || mkdir -p "${BT_CACHE_DIR}"
+  [[ -d "${BT_CACHE_NODES_DIR}" ]] || mkdir -p "${BT_CACHE_NODES_DIR}"
+}
+
+bt_cache_node_file_token() {
+  local node_id="$1"
+
+  jq -rn -r --arg s "${node_id}" '$s | @uri'
+}
+
+bt_cache_node_path() {
+  local node_id="$1"
+
+  printf '%s/%s.json' "${BT_CACHE_NODES_DIR}" "$(bt_cache_node_file_token "${node_id}")"
+}
+
+bt_cache_has_node_files() {
+  bt_cache_init
+  compgen -G "${BT_CACHE_NODES_DIR}/*.json" >/dev/null 2>&1
+}
+
+bt_cache_prune_removed_node_files() {
+  bt_cache_init
+  bt_require_loaded_config
+
+  local expected_files=""
+  local node_id
+  while IFS= read -r node_id; do
+    [[ -n "${node_id}" ]] || continue
+    expected_files+="$(basename "$(bt_cache_node_path "${node_id}")")"$'\n'
+  done < <(bt_list_node_ids)
+
+  local cache_file cache_name
+  for cache_file in "${BT_CACHE_NODES_DIR}"/*.json; do
+    [[ -e "${cache_file}" ]] || break
+    cache_name="$(basename "${cache_file}")"
+    if ! grep -Fxq "${cache_name}" <<<"${expected_files}"; then
+      rm -f "${cache_file}"
+    fi
+  done
+
+  if [[ -f "${BT_CACHE_LEGACY_PATH}" ]]; then
+    rm -f "${BT_CACHE_LEGACY_PATH}"
+  fi
+}
+
+bt_cache_node_entries() {
+  local node_id="$1"
+  local node_path
+
+  bt_cache_init
+  node_path="$(bt_cache_node_path "${node_id}")"
+
+  if [[ -s "${node_path}" ]]; then
+    jq -c . "${node_path}"
+  else
+    printf '[]\n'
+  fi
+}
+
+bt_cache_replace_node_entries() {
+  local node_id="$1"
+  local entries_json="$2"
+  local node_path tmp_path
+
+  bt_cache_init
+  node_path="$(bt_cache_node_path "${node_id}")"
+  tmp_path="${node_path}.tmp"
+
+  jq '.' <<<"${entries_json}" > "${tmp_path}"
+  mv "${tmp_path}" "${node_path}"
+  if [[ -f "${BT_CACHE_LEGACY_PATH}" ]]; then
+    rm -f "${BT_CACHE_LEGACY_PATH}"
+  fi
+}
+
+bt_cache_replace_node_backups() {
+  local node_id="$1"
+  local backups_json="$2"
+  local timestamp cache_entries
+
+  timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  cache_entries="$(jq --arg last_seen "${timestamp}" '[ .[] + {last_seen: $last_seen} ]' <<<"${backups_json}")"
+
+  bt_cache_replace_node_entries "${node_id}" "${cache_entries}"
 }
 
 bt_cache_entry_schema() {
   cat <<'EOM'
-Cache Entry (JSON object stream format):
-{
-  "backup_id": "string (required)",
-  "source_node": "string (required)",
-  "source_kind": "string (required)",
-  "source_site": "string (required)",
-  "reason": "string (required)",
-  "tags": "array (optional)",
-  "created_at": "string ISO 8601 (required)",
-  "file_count": "integer (optional)",
-  "total_size": "integer in bytes (optional)",
-  "complete": "boolean (required)",
-  "last_seen": "string ISO 8601 (required)"
-}
+Cache Entry (per-node pretty JSON arrays):
+[
+  {
+    "backup_id": "string (required)",
+    "source_node": "string (required)",
+    "source_kind": "string (required)",
+    "source_site": "string (required)",
+    "reason": "string (required)",
+    "tags": "array (optional)",
+    "created_at": "string ISO 8601 (required)",
+    "file_count": "integer (optional)",
+    "total_size": "integer in bytes (optional)",
+    "complete": "boolean (required)",
+    "last_seen": "string ISO 8601 (required)"
+  }
+]
 EOM
 }
 
@@ -35,36 +120,33 @@ bt_cache_build_entry() {
   jq -n \
     --argjson backup "${backup_obj_json}" \
     --arg last_seen "${timestamp}" \
-    '($backup | del(.source_kind)) + {last_seen: $last_seen}'
+    '$backup + {last_seen: $last_seen}'
 }
 
 bt_cache_add_entry() {
   local backup_obj_json="$1"
-  local timestamp
-  local cache_entry
-  
-  bt_cache_init
-  timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
-  cache_entry="$(bt_cache_build_entry "${backup_obj_json}" "${timestamp}")"
-
-  printf '%s\n' "${cache_entry}" >> "${BT_CACHE_PATH}"
+  bt_cache_upsert_entry "${backup_obj_json}"
 }
 
 bt_cache_get_by_backup_id() {
   local backup_id="$1"
-  
-  bt_cache_init
-  [[ -s "${BT_CACHE_PATH}" ]] || return 1
+  local all_entries
 
-  jq -s -e --arg bid "${backup_id}" '
-    ([ .[] | select(.backup_id == $bid) ][0])
-  ' "${BT_CACHE_PATH}"
+  all_entries="$(bt_cache_list_all)"
+  jq -e --arg bid "${backup_id}" 'map(select(.backup_id == $bid))[0]' <<<"${all_entries}"
 }
 
 bt_cache_list_all() {
   bt_cache_init
-  [[ -f "${BT_CACHE_PATH}" ]] && jq -s . "${BT_CACHE_PATH}"
+  bt_cache_prune_removed_node_files
+
+  if ! bt_cache_has_node_files; then
+    printf '[]\n'
+    return
+  fi
+
+  jq -s 'add // []' "${BT_CACHE_NODES_DIR}"/*.json
 }
 
 bt_cache_filter() {
@@ -87,37 +169,35 @@ bt_cache_filter() {
   [[ -n "${from_date}" ]] && filter_expr="${filter_expr} | select(.created_at >= \"${from_date}\")"
   [[ -n "${to_date}" ]] && filter_expr="${filter_expr} | select(.created_at <= \"${to_date}\")"
   
-  echo "${json_lines}" | jq -s ".[] | ${filter_expr}"
+  jq -c ".[] | ${filter_expr}" <<<"${json_lines}"
 }
 
 bt_cache_rebuild() {
   if [[ "${BT_RUNNER_MODE:-execute}" == "dry-run" ]]; then
-    bt_log_info "Would rebuild cache: ${BT_CACHE_PATH}"
+    bt_log_info "Would rebuild cache in: ${BT_CACHE_DIR}"
     return
   fi
-  
-  bt_cache_init
-  > "${BT_CACHE_PATH}"
-  
+
   bt_require_loaded_config
+  bt_cache_clear
+
   local node_id
   for node_id in $(bt_list_node_ids); do
-    scan_node "${node_id}" | while read -r backup_json; do
-      [[ -z "${backup_json}" ]] && continue
-      bt_cache_add_entry "${backup_json}"
-    done
+    bt_cache_replace_node_backups "${node_id}" "$(bt_scan_collect_node_backups "${node_id}")"
   done
 
-  bt_log_info "Cache rebuilt: $(jq -s 'length' "${BT_CACHE_PATH}") entries"
+  bt_log_info "Cache rebuilt: $(bt_cache_list_all | jq 'length') entries"
 }
 
 bt_cache_clear() {
   if [[ "${BT_RUNNER_MODE:-execute}" == "dry-run" ]]; then
-    bt_log_info "Would clear cache: ${BT_CACHE_PATH}"
+    bt_log_info "Would clear cache in: ${BT_CACHE_DIR}"
     return
   fi
-  
-  [[ -f "${BT_CACHE_PATH}" ]] && > "${BT_CACHE_PATH}"
+
+  bt_cache_init
+  rm -f "${BT_CACHE_NODES_DIR}"/*.json 2>/dev/null || true
+  rm -f "${BT_CACHE_LEGACY_PATH}" 2>/dev/null || true
   bt_log_info "Cache cleared"
 }
 
@@ -125,37 +205,30 @@ bt_cache_upsert_entry() {
   local backup_json="$1"
   local normalized_entry
   local timestamp
+  local node_id node_entries updated_entries
 
   bt_cache_init
 
   timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   normalized_entry="$(bt_cache_build_entry "${backup_json}" "${timestamp}")"
+  node_id="$(jq -r '.source_node' <<<"${normalized_entry}")"
+  node_entries="$(bt_cache_node_entries "${node_id}")"
+  updated_entries="$(jq --argjson entry "${normalized_entry}" '
+    [ .[] | select(.backup_id != $entry.backup_id) ] + [ $entry ]
+  ' <<<"${node_entries}")"
 
-  if [[ ! -s "${BT_CACHE_PATH}" ]]; then
-    printf '%s\n' "${normalized_entry}" >> "${BT_CACHE_PATH}"
-    return
-  fi
-
-  jq -s --argjson entry "${normalized_entry}" '
-    [ .[] | select(.backup_id != $entry.backup_id) ] + [ $entry ] | .[]
-  ' "${BT_CACHE_PATH}" > "${BT_CACHE_PATH}.tmp"
-  mv "${BT_CACHE_PATH}.tmp" "${BT_CACHE_PATH}"
+  bt_cache_replace_node_entries "${node_id}" "${updated_entries}"
 }
 
 bt_cache_update_incremental() {
   local node_id="$1"
-  
+
   if [[ "${BT_RUNNER_MODE:-execute}" == "dry-run" ]]; then
     bt_log_info "Would update cache for node: ${node_id}"
     return
   fi
-  
-  bt_cache_init
-  
-  scan_node "${node_id}" | while read -r backup_json; do
-    [[ -z "${backup_json}" ]] && continue
-    bt_cache_upsert_entry "${backup_json}"
-  done
+
+  bt_cache_replace_node_backups "${node_id}" "$(bt_scan_collect_node_backups "${node_id}")"
 }
 
 cache_rebuild_main() {

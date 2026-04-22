@@ -39,7 +39,7 @@ Commands:
   copy             Copy backup between nodes
   restore          Restore backup to target site
   cache rebuild    Rebuild cache from discovered backups
-  cache clear      Clear local cache file
+  cache clear      Clear local cache files
   help             Show this help or command help
 
 Examples:
@@ -64,7 +64,7 @@ Usage: backupctl cache <subcommand>
 
 Subcommands:
   rebuild          Rebuild cache from scan results
-  clear            Clear local cache file
+  clear            Clear local cache files
 EOF
 }
 
