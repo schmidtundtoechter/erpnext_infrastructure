@@ -281,6 +281,12 @@ Ein vollständiges ERPNext/Frappe-Backup soll aus vier fachlichen Bestandteilen 
 * Archiv der Private Files
 * `site_config.json`
 
+Ergänzend sollte das System drei weitere technische Dateien erzeugen:
+
+* Manifest-Datei (Beispiel: manifest.json)
+* Checksum-Datei (Beispiel: checksums.sha256)
+* Apps-/Versions-Metadaten (Beispiel: apps.json)
+
 ### 8.2 Erzeugung
 
 Die Sicherung erfolgt auf dem Quellsystem im Kontext der konkreten Site.
@@ -296,6 +302,10 @@ Zusätzlich wird `site_config.json` separat aufgenommen.
 Für die Logik des Skripts ist ein Backup eine zusammengehörige Menge von Dateien, nicht nur eine einzelne Datei.
 
 Das Skript muss diese Einheit als ein Backup-Objekt behandeln.
+
+## 8.4 Rückwärtskompatibilität
+
+Das System sollte auch standardmäßig erzeugte backups lesen, auflisten und Informationen darüber im lokalen cache speichern können.
 
 ---
 
