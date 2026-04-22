@@ -309,35 +309,62 @@ Das System sollte auch standardmäßig erzeugte backups lesen, auflisten und Inf
 
 ---
 
-## 9. Namens- und Tagging-Konzept
+## 9. Benennung und Metadaten
 
-Da kein zentrales Repository existiert, ist eine gute Benennung besonders wichtig.
+Ein eigenes, informationsreiches Dateinamensschema ist für diese Architektur nicht zwingend erforderlich.
 
-### 9.1 Anforderungen
+Da das System ausdrücklich mit Standard-Backups von Frappe kompatibel bleiben soll, ist es sinnvoller, die von Frappe erzeugten Dateinamen und die bestehende Backup-Struktur beizubehalten und zusätzliche Informationen strukturiert in Metadaten abzulegen.
 
-Ein Backupname soll folgende Informationen transportieren:
+### 9.1 Grundsatz
+
+Standardmäßig werden die von Frappe erzeugten Backup-Dateien nicht umbenannt.
+
+Das betrifft insbesondere:
+
+* Datenbank-Dump
+* Public-Files-Archiv
+* Private-Files-Archiv
+* die übliche Ablagestruktur unterhalb des Site-Backup-Verzeichnisses
+
+### 9.2 Zusätzliche Informationen
+
+Informationen, die für Verwaltung, Suche und Restore wichtig sind, gehören nicht primär in den Dateinamen, sondern in strukturierte Metadaten.
+
+Dazu gehören insbesondere:
 
 * Zeitpunkt
 * Ursprungssystem
-* Site
+* Ursprungs-Site
 * Art des Backups
-* optional Benutzer-Tag
+* Benutzer-Tags
+* Apps- und Versionsinformationen
+* Prüfsummen
+* Vollständigkeitsstatus
 
-### 9.2 Vorschlag
+### 9.3 Manifest als primärer Metadatenträger
 
-```text
-<timestamp>__<node>__<site>__<class>__<tag>
-```
+Zu jedem logisch zusammengehörigen Backup soll das Tool eine Manifest-Datei erzeugen oder pflegen, zum Beispiel `manifest.json`.
 
-Beispiel:
+Diese Datei ist der primäre Träger der zusätzlichen Informationen, die nicht bereits aus den Standarddateien von Frappe ableitbar sind.
 
-```text
-2026-04-22T101500+0200__customer-a-prod__erp.customer-a.de__manual__pre-update
-```
+Beispielhafte Inhalte:
 
-### 9.3 Tags
+* `backup_id`
+* `created_at`
+* `source_node`
+* `source_site`
+* `backup_type`
+* `tags`
+* `artifacts`
+* `checksums`
+* `apps`
+* `complete`
 
-Zusätzlich zum Dateinamen soll das Skript freie Tags unterstützen, z. B.:
+### 9.4 Tags
+
+Freie Tags bleiben sinnvoll, aber sie sollen als Metadaten im Manifest und im lokalen Cache geführt werden, nicht als Pflichtbestandteil eines speziellen Dateinamens.
+
+Beispiele:
 
 * `prod`
 * `pre-update`
@@ -345,7 +372,17 @@ Zusätzlich zum Dateinamen soll das Skript freie Tags unterstützen, z. B.:
 * `release-15-62`
 * `kundenfreigabe`
 
-Da die Wahrheit verteilt ist, müssen Tags idealerweise in einer kleinen begleitenden Metadatei oder in einem lokalen Cache referenzierbar sein.
+### 9.5 Interne Identifikation
+
+Für die interne Verarbeitung sollte das Tool mit einer stabilen `backup_id` arbeiten.
+
+Die `backup_id` identifiziert die zusammengehörige Backup-Einheit unabhängig davon, wie die einzelnen physischen Dateien heißen.
+
+### 9.6 Optional lesbare Namen
+
+Falls für manuelle Arbeitsschritte ein besser lesbarer Anzeigename hilfreich ist, kann das Tool einen abgeleiteten Anzeigenamen erzeugen oder im Cache führen.
+
+Dieser Anzeigename ist jedoch nur eine Benutzerhilfe und nicht die technische Identität des Backups.
 
 ---
 
