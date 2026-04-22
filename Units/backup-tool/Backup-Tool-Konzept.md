@@ -336,6 +336,7 @@ Dazu gehören insbesondere:
 * Ursprungssystem
 * Ursprungs-Site
 * Art des Backups
+* fachlicher Grund des Backups
 * Benutzer-Tags
 * Apps- und Versionsinformationen
 * Prüfsummen
@@ -354,6 +355,7 @@ Beispielhafte Inhalte:
 * `source_node`
 * `source_site`
 * `backup_type`
+* `reason`
 * `tags`
 * `artifacts`
 * `checksums`
@@ -372,13 +374,31 @@ Beispiele:
 * `release-15-62`
 * `kundenfreigabe`
 
-### 9.5 Interne Identifikation
+### 9.5 Verpflichtender Grundtext
+
+Zusätzlich zu optionalen Tags sollte beim Erzeugen eines Backups ein fachlicher Grundtext verpflichtend angegeben werden.
+
+Dieser Grundtext beschreibt den Anlass oder Zweck des Backups in freier Form und dient später als wichtigste menschlich lesbare Einordnung.
+
+Typische Beispiele:
+
+* `taegliches Backup`
+* `vor Demo fuer Kunde A`
+* `vor Update auf ERPNext 15.62`
+* `nach Datenkorrektur Debitoren`
+* `vor Migration Test nach Produktion`
+
+Der Grundtext ist damit fachlich naeher an einem Anzeigenamen oder Titel des Backups als an einem technischen Dateinamen.
+
+Er soll im Manifest und im lokalen Cache gespeichert werden und in Listenansichten gut sichtbar sein.
+
+### 9.6 Interne Identifikation
 
 Für die interne Verarbeitung sollte das Tool mit einer stabilen `backup_id` arbeiten.
 
 Die `backup_id` identifiziert die zusammengehörige Backup-Einheit unabhängig davon, wie die einzelnen physischen Dateien heißen.
 
-### 9.6 Optional lesbare Namen
+### 9.7 Optional lesbare Namen
 
 Falls für manuelle Arbeitsschritte ein besser lesbarer Anzeigename hilfreich ist, kann das Tool einen abgeleiteten Anzeigenamen erzeugen oder im Cache führen.
 
