@@ -33,6 +33,7 @@ run_libs() {
     source '${ROOT_DIR}/lib/log.sh'; \
     source '${ROOT_DIR}/lib/config.sh'; \
     source '${ROOT_DIR}/lib/nodes.sh'; \
+    source '${ROOT_DIR}/lib/backup-model.sh'; \
     ${snippet}"
 }
 
@@ -100,6 +101,73 @@ test_runner_reachability_dry_run_and_transfer_helper() {
   assert_contains "${transfer_cmd}" "ops@own-prod-01.example.net:/home/frappe/incoming/a.tgz"
 }
 
+test_backup_model_definition_exists() {
+  local model_text
+  model_text="$(run_libs "bt_backup_model_definition")"
+  assert_contains "${model_text}" "backup_id"
+  assert_contains "${model_text}" "source_node"
+  assert_contains "${model_text}" "source_kind"
+  assert_contains "${model_text}" "source_site"
+  assert_contains "${model_text}" "created_at"
+  assert_contains "${model_text}" "reason"
+  assert_contains "${model_text}" "artifacts"
+  assert_contains "${model_text}" "complete"
+}
+
+test_backup_id_generation() {
+  local backup_id
+  backup_id="$(run_libs "bt_generate_backup_id 'test-node' 'test.example.com'")"
+  assert_contains "${backup_id}" "test-node"
+  assert_contains "${backup_id}" "test.example.com"
+}
+
+test_manifest_json_generation() {
+  local artifacts_json manifest_json backup_id
+  
+  artifacts_json='{"db_dump":"test-database.sql.gz","site_config":"site_config.json"}'
+  manifest_json="$(run_libs "bt_generate_manifest_json 'backup_1234567890' 'test-node' 'test.site' 'Test backup reason' '${artifacts_json}' '[]' | jq -c .")"
+  
+  assert_contains "${manifest_json}" "backup_1234567890"
+  assert_contains "${manifest_json}" "test-node"
+  assert_contains "${manifest_json}" "test.site"
+  assert_contains "${manifest_json}" "Test backup reason"
+  assert_contains "${manifest_json}" "full-with-files"
+  assert_contains "${manifest_json}" "true"
+}
+
+test_backup_is_complete_check() {
+  local backup_complete backup_incomplete
+  
+  backup_complete='{"backup_id":"test","complete":true,"artifacts":{"db_dump":"db.gz","site_config":"config.json"}}'
+  backup_incomplete='{"backup_id":"test","complete":false,"artifacts":{"db_dump":"db.gz"}}'
+  
+  run_libs "bt_backup_is_complete '${backup_complete}'" >/dev/null || fail "Complete backup should validate"
+  
+  if run_libs "bt_backup_is_complete '${backup_incomplete}'" >/dev/null 2>&1; then
+    fail "Incomplete backup should not validate"
+  fi
+}
+
+test_backup_display_name() {
+  local backup_obj display_name
+  
+  backup_obj='{"backup_id":"test","reason":"Daily backup","display_name":"Custom name"}'
+  display_name="$(run_libs "bt_backup_display_name '${backup_obj}'")"
+  [[ "${display_name}" == "Custom name" ]] || fail "Should use display_name when present: ${display_name}"
+  
+  backup_obj='{"backup_id":"test","reason":"Daily backup"}'
+  display_name="$(run_libs "bt_backup_display_name '${backup_obj}'")"
+  [[ "${display_name}" == "Daily backup" ]] || fail "Should fallback to reason: ${display_name}"
+}
+
+test_backup_model_library_exists() {
+  assert_file_exists "${ROOT_DIR}/lib/backup-model.sh"
+  assert_file_contains "${ROOT_DIR}/lib/backup-model.sh" "bt_backup_model_definition"
+  assert_file_contains "${ROOT_DIR}/lib/backup-model.sh" "bt_generate_backup_id"
+  assert_file_contains "${ROOT_DIR}/lib/backup-model.sh" "bt_generate_manifest_json"
+  assert_file_contains "${ROOT_DIR}/lib/backup-model.sh" "bt_validate_manifest_json"
+}
+
 run_all_tests() {
   test_structure_files_exist
   test_shell_standard_is_set
@@ -108,6 +176,12 @@ run_all_tests() {
   test_config_model_fields_are_present
   test_runner_builds_commands_for_all_access_types
   test_runner_reachability_dry_run_and_transfer_helper
+  test_backup_model_library_exists
+  test_backup_model_definition_exists
+  test_backup_id_generation
+  test_manifest_json_generation
+  test_backup_is_complete_check
+  test_backup_display_name
   printf 'PASS: all tests successful\n'
 }
 

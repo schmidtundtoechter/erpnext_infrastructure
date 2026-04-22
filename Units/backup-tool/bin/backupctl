@@ -12,6 +12,8 @@ source "${ROOT_DIR}/lib/log.sh"
 source "${ROOT_DIR}/lib/config.sh"
 # shellcheck source=../lib/nodes.sh
 source "${ROOT_DIR}/lib/nodes.sh"
+# shellcheck source=../lib/backup-model.sh
+source "${ROOT_DIR}/lib/backup-model.sh"
 # shellcheck source=../lib/scan.sh
 source "${ROOT_DIR}/lib/scan.sh"
 # shellcheck source=../lib/backup.sh

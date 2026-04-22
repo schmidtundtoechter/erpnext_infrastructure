@@ -71,44 +71,44 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 
 ## 5. Backup-Modell definieren
 
-- [ ] Logisches Backup-Objekt definieren:
+- [x] Logisches Backup-Objekt definieren:
   `backup_id`, `source_node`, `source_kind`, `source_site`, `created_at`, `reason`, `tags`, `artifacts`, `complete`.
-- [ ] Erwartete Artefakte formal festlegen:
+- [x] Erwartete Artefakte formal festlegen:
   DB-Dump, Public Files, Private Files, `site_config.json`.
-- [ ] Zusatzartefakte festlegen:
+- [x] Zusatzartefakte festlegen:
   `manifest.json`, `checksums.sha256`, `apps.json`.
-- [ ] Rueckwaertskompatibilitaet definieren:
+- [x] Rueckwaertskompatibilitaet definieren:
   auch vorhandene Standard-Frappe-Backups ohne Manifest lesbar machen.
-- [ ] Regeln festlegen, wie ein logisches Backup aus mehreren physischen Dateien erkannt wird.
-- [ ] Fuer das Backup-Modell einen Testcase im zentralen Testscript ergaenzen.
+- [x] Regeln festlegen, wie ein logisches Backup aus mehreren physischen Dateien erkannt wird.
+- [x] Fuer das Backup-Modell einen Testcase im zentralen Testscript ergaenzen.
 
 ## 6. Manifest-Format festlegen
 
-- [ ] JSON-Schema fuer `manifest.json` definieren.
-- [ ] Pflichtfelder festlegen:
+- [x] JSON-Schema fuer `manifest.json` definieren.
+- [x] Pflichtfelder festlegen:
   `backup_id`, `created_at`, `source_node`, `source_site`, `backup_type`, `reason`, `artifacts`, `complete`.
-- [ ] Optionale Felder festlegen:
+- [x] Optionale Felder festlegen:
   `tags`, `apps`, `checksums`, `notes`, `created_by`.
-- [ ] Anzeigename festlegen:
+- [x] Anzeigename festlegen:
   entweder explizites Feld `display_name` oder aus `reason` ableiten.
-- [ ] Eindeutige `backup_id`-Strategie definieren.
-- [ ] Klar festlegen:
+- [x] Eindeutige `backup_id`-Strategie definieren.
+- [x] Klar festlegen:
   Dateinamen bleiben Frappe-kompatibel, Identitaet kommt aus Manifest und Cache.
-- [ ] Fuer das Manifest-Format einen Testcase im zentralen Testscript ergaenzen.
+- [x] Fuer das Manifest-Format einen Testcase im zentralen Testscript ergaenzen.
 
 ## 7. Scan und Discovery implementieren
 
-- [ ] `scan` fuer `frappe-backup-dir` implementieren.
-- [ ] `scan` fuer `plain-backup-dir` implementieren.
-- [ ] Erkennung fuer vorhandene Frappe-Standarddateien implementieren.
-- [ ] Erkennung fuer bereits vorhandene `manifest.json` implementieren.
-- [ ] Falls kein Manifest vorhanden ist:
+- [x] `scan` fuer `frappe-backup-dir` implementieren.
+- [x] `scan` fuer `plain-backup-dir` implementieren.
+- [x] Erkennung fuer vorhandene Frappe-Standarddateien implementieren.
+- [x] Erkennung fuer bereits vorhandene `manifest.json` implementieren.
+- [x] Falls kein Manifest vorhanden ist:
   Backup-Metadaten bestmoeglich aus Dateinamen und Verzeichnisstruktur ableiten.
-- [ ] Vollstaendigkeitspruefung pro Backup implementieren.
-- [ ] Scan-Ergebnis in ein einheitliches internes Backup-Objekt mappen.
-- [ ] `scan --node <id>` implementieren.
-- [ ] Vollstaendigen Rebuild ueber alle Knoten implementieren.
-- [ ] Fuer Scan und Discovery einen Testcase im zentralen Testscript ergaenzen.
+- [x] Vollstaendigkeitspruefung pro Backup implementieren.
+- [x] Scan-Ergebnis in ein einheitliches internes Backup-Objekt mappen.
+- [x] `scan --node <id>` implementieren.
+- [x] Vollstaendigen Rebuild ueber alle Knoten implementieren.
+- [x] Fuer Scan und Discovery einen Testcase im zentralen Testscript ergaenzen.
 
 ## 8. Cache-Modell implementieren
 

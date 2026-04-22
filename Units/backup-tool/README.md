@@ -10,6 +10,7 @@ Dieses Verzeichnis enthaelt den Startpunkt und die Modulstruktur fuer `backupctl
 - `lib/log.sh` - Logging-Helfer
 - `lib/config.sh` - Konfiguration laden und validieren
 - `lib/nodes.sh` - Knotenmodell, Runner und Transfer-Helfer
+- `lib/backup-model.sh` - Backup-Datenmodell und Manifest-Schema
 - `lib/scan.sh` - Scan/Discovery
 - `lib/backup.sh` - Backup-Erzeugung
 - `lib/copy.sh` - Transfer
