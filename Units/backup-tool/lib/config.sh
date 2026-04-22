@@ -3,6 +3,11 @@
 BT_CONFIG_PATH=""
 
 bt_default_config_path() {
+  if [[ -n "${BACKUPCTL_CONFIG_PATH:-}" ]]; then
+    printf '%s\n' "${BACKUPCTL_CONFIG_PATH}"
+    return
+  fi
+
   local root_dir
   root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
   printf '%s\n' "${root_dir}/config/nodes.json"

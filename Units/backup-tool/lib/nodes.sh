@@ -18,6 +18,63 @@ bt_quote() {
   printf '%q' "$1"
 }
 
+bt_docker_local_context() {
+  local node_json="$1"
+  local node_context
+
+  node_context="$(jq -r '.docker_context // empty' <<<"${node_json}")"
+  if [[ -n "${node_context}" ]]; then
+    printf '%s' "${node_context}"
+    return
+  fi
+
+  printf '%s' "${BT_DOCKER_LOCAL_CONTEXT:-default}"
+}
+
+bt_ensure_local_docker_context() {
+  local node_json="$1"
+  local expected current
+
+  command -v docker >/dev/null 2>&1 || bt_die "docker not found for local-docker node"
+
+  expected="$(bt_docker_local_context "${node_json}")"
+  current="$(docker context show 2>/dev/null || true)"
+
+  [[ -n "${current}" ]] || bt_die "Could not detect current docker context"
+
+  if [[ "${current}" != "${expected}" ]]; then
+    bt_die "Docker context mismatch: expected '${expected}', current '${current}'. Set correct context or configure node.docker_context."
+  fi
+}
+
+bt_wrap_local_docker_command() {
+  local node_json="$1"
+  local inner_command="$2"
+  local context container compose_service
+
+  context="$(bt_docker_local_context "${node_json}")"
+  container="$(jq -r '.container // empty' <<<"${node_json}")"
+  compose_service="$(jq -r '.compose_service // empty' <<<"${node_json}")"
+
+  if [[ -n "${compose_service}" ]]; then
+    printf 'docker --context %s compose exec -T %s bash -lc %s' \
+      "$(bt_quote "${context}")" \
+      "$(bt_quote "${compose_service}")" \
+      "$(bt_quote "${inner_command}")"
+    return
+  fi
+
+  if [[ -n "${container}" ]]; then
+    printf 'docker --context %s exec -i %s bash -lc %s' \
+      "$(bt_quote "${context}")" \
+      "$(bt_quote "${container}")" \
+      "$(bt_quote "${inner_command}")"
+    return
+  fi
+
+  bt_die "Docker access requires container or compose_service"
+}
+
 bt_build_ssh_base_cmd() {
   local node_json="$1"
   local host user port
@@ -63,7 +120,7 @@ bt_build_run_command() {
       printf '%s' "${command}"
       ;;
     local-docker)
-      bt_wrap_docker_exec_command "${node_json}" "${command}"
+      bt_wrap_local_docker_command "${node_json}" "${command}"
       ;;
     ssh-host)
       ssh_base="$(bt_build_ssh_base_cmd "${node_json}")"
@@ -83,13 +140,19 @@ bt_build_run_command() {
 run_on_node() {
   local node_id="$1"
   local command="$2"
-  local runner_cmd
+  local runner_cmd node_json access_type
 
   runner_cmd="$(bt_build_run_command "${node_id}" "${command}")"
 
   if [[ "${BT_RUNNER_MODE:-execute}" == "dry-run" ]]; then
     printf '%s\n' "${runner_cmd}"
     return 0
+  fi
+
+  node_json="$(bt_get_node_json "${node_id}")"
+  access_type="$(jq -r '.access_type' <<<"${node_json}")"
+  if [[ "${access_type}" == "local-docker" ]]; then
+    bt_ensure_local_docker_context "${node_json}"
   fi
 
   eval "${runner_cmd}"
@@ -111,7 +174,8 @@ bt_check_node_reachability() {
       return 0
       ;;
     local-docker)
-      command -v docker >/dev/null 2>&1
+      bt_ensure_local_docker_context "${node_json}"
+      docker ps >/dev/null 2>&1
       ;;
     ssh-host|ssh-docker)
       ssh_base="$(bt_build_ssh_base_cmd "${node_json}")"

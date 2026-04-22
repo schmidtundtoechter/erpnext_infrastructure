@@ -2,7 +2,33 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CONFIG_PATH="${ROOT_DIR}/config/nodes.json"
+CONFIG_PATH="${ROOT_DIR}/config/nodes.test.json"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --config)
+      [[ $# -ge 2 ]] || {
+        printf 'FAIL: --config requires a value\n' >&2
+        exit 1
+      }
+      CONFIG_PATH="$2"
+      shift 2
+      ;;
+    -h|--help)
+      cat <<EOF
+Usage: $(basename "$0") [--config <path>]
+
+Options:
+  --config <path>   Pfad zur Test-Konfigurationsdatei (Default: config/nodes.test.json)
+EOF
+      exit 0
+      ;;
+    *)
+      printf 'FAIL: unknown option: %s\n' "$1" >&2
+      exit 1
+      ;;
+  esac
+done
 
 fail() {
   printf 'FAIL: %s\n' "$1" >&2
@@ -88,8 +114,8 @@ test_runner_builds_commands_for_all_access_types() {
   assert_contains "${cmd_local}" "ops@own-prod-01.example.net"
 
   cmd_local_docker="$(run_libs "bt_load_config '${CONFIG_PATH}'; BT_RUNNER_MODE=dry-run run_on_node local-dev 'echo ok'" 2>/dev/null)"
-  assert_contains "${cmd_local_docker}" "docker exec -i"
-  assert_contains "${cmd_local_docker}" "backend"
+  assert_contains "${cmd_local_docker}" "docker --context"
+  assert_contains "${cmd_local_docker}" "exec -i"
 
   cmd_ssh_host="$(run_libs "bt_load_config '${CONFIG_PATH}'; BT_RUNNER_MODE=dry-run run_on_node archive-share 'echo ok'" 2>/dev/null)"
   assert_contains "${cmd_ssh_host}" "backup@archive.example.net"

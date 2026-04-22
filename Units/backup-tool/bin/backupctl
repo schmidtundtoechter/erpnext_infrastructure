@@ -29,7 +29,7 @@ source "${ROOT_DIR}/lib/list.sh"
 
 backupctl_usage() {
   cat <<'EOF'
-Usage: backupctl <command> [options]
+Usage: backupctl [--config <path>] <command> [options]
 
 Commands:
   nodes list       List configured nodes (placeholder)
@@ -44,9 +44,32 @@ EOF
 }
 
 main() {
+  local config_path=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --config)
+        [[ $# -ge 2 ]] || bt_die "--config requires a value"
+        config_path="$2"
+        shift 2
+        ;;
+      -h|--help|help)
+        backupctl_usage
+        return
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
   if [[ $# -eq 0 ]]; then
     backupctl_usage
     exit 1
+  fi
+
+  if [[ -n "${config_path}" ]]; then
+    bt_load_config "${config_path}"
   fi
 
   local command="$1"
