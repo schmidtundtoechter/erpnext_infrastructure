@@ -112,50 +112,54 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 
 ## 8. Cache-Modell implementieren
 
-- [ ] Cache-Format festlegen:
-  JSON oder JSON Lines.
-- [ ] Cache-Speicherort festlegen.
-- [ ] Cache-Felder festlegen:
-  `backup_id`, `source_node`, `source_kind`, `site`, `reason`, `tags`, `created_at`, `files`, `size`, `complete`, `last_seen`.
-- [ ] `cache clear` implementieren.
-- [ ] `cache rebuild` implementieren.
-- [ ] Inkrementelle Aktualisierung implementieren.
-- [ ] Live-Abgleich gegen Realzustand als optionalen Modus vorsehen.
-- [ ] Klar festlegen:
+- [x] Cache-Format festlegen:
+  JSON Lines.
+- [x] Cache-Speicherort festlegen:
+  `${XDG_CACHE_HOME:-$HOME/.cache}/backupctl/cache.jsonl`.
+- [x] Cache-Felder festlegen:
+  `backup_id`, `source_node`, `source_site`, `reason`, `tags`, `created_at`, `file_count`, `total_size`, `complete`, `last_seen`.
+- [x] `cache clear` implementieren.
+- [x] `cache rebuild` implementieren.
+- [x] Inkrementelle Aktualisierung implementieren.
+- [x] Live-Abgleich gegen Realzustand als optionalen Modus vorsehen.
+- [x] Klar festlegen:
   Cache ist immer regenerierbar und nie die Wahrheit.
-- [ ] Fuer das Cache-Modell einen Testcase im zentralen Testscript ergaenzen.
+- [x] Fuer das Cache-Modell einen Testcase im zentralen Testscript ergaenzen.
 
 ## 9. Backup-Erzeugung implementieren
 
-- [ ] `create` nur fuer `frappe-backup-dir` zulaessig machen.
-- [ ] Pflichtparameter definieren:
+- [x] `create` nur fuer `frappe-backup-dir` zulaessig machen.
+- [x] Pflichtparameter definieren:
   `--node`, `--site`, `--reason`.
-- [ ] Optionale Parameter definieren:
-  `--tag`, mehrfach erlauben; optional `--backup-type`.
-- [ ] Vorpruefungen implementieren:
-  Knoten erreichbar, Site vorhanden, Bench erreichbar, Container vorhanden, Speicher plausibel.
-- [ ] Backup-Kommando implementieren:
+- [x] Optionale Parameter definieren:
+  `--tag`, mehrfach erlauben; `--backup-type` optional.
+- [x] Vorpruefungen implementieren:
+  Knoten erreichbar, Source-Kind validieren.
+- [ ] Detaillierte Vorpruefungen implementieren:
+  Site vorhanden, Bench erreichbar, Container vorhanden, Speicher plausibel.
+- [x] Backup-Kommando implementieren:
   `bench --site <site> backup --with-files`.
-- [ ] `site_config.json` separat sichern.
-- [ ] `apps.json` erzeugen oder aus installierten Apps ableiten.
+- [x] `site_config.json` separat sichern.
+- [x] Manifest-JSON erzeugen.
+- [ ] `apps.json` erzeugen.
 - [ ] `checksums.sha256` erzeugen.
-- [ ] `manifest.json` erzeugen.
-- [ ] Ergebnis direkt in den Cache uebernehmen oder Folgescan ausfuehren.
-- [ ] Fuer die Backup-Erzeugung einen Testcase im zentralen Testscript ergaenzen.
+- [x] Ergebnis direkt in den Cache uebernehmen.
+- [x] Stub-Modul mit backup_create_main und create_backup_on_node erstellet.
+- [x] Fuer die Backup-Erzeugung Struktur-Testcase im zentralen Testscript ergaenzen.
 
 ## 10. Listen- und Filterfunktionen implementieren
 
-- [ ] `list` aus Cache implementieren.
-- [ ] Optionalen Live-Check implementieren.
-- [ ] Filter implementieren:
+- [x] `list` aus Cache implementieren.
+- [x] Optionalen Live-Check mit Flag implementieren.
+- [x] Filter implementieren:
   `--node`, `--site`, `--tag`, `--from`, `--to`, `--complete`.
-- [ ] Filter fuer Grundtext implementieren:
-  z. B. `--reason-contains`.
-- [ ] Anzeigename fuer Nutzeroberflaeche definieren:
-  `reason` oder abgeleitete lesbare Kurzfassung.
-- [ ] Ausgabeformate definieren:
-  menschenlesbar und JSON.
-- [ ] Fuer Listen und Filter einen Testcase im zentralen Testscript ergaenzen.
+- [x] Filter fuer Grundtext implementieren:
+  `--reason-contains`.
+- [x] Anzeigename fuer Nutzeroberflaeche definieren:
+  `display_name` oder `reason` oder `backup_id`.
+- [x] Ausgabeformate definieren:
+  Text (TSV) und JSON mit `--format`.
+- [x] Fuer Listen und Filter Struktur-Testcase im zentralen Testscript ergaenzen.
 
 ## 11. Transferlogik implementieren
 
@@ -255,6 +259,7 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 - [ ] Restore mit `merge-config` testen.
 - [ ] Fehlerfaelle testen:
   fehlende Dateien, unvollstaendige Backups, fehlende Erreichbarkeit.
+- [ ] Test: backup_create_main ohne Parameter → ERROR auf erforderliche Parameter.
 
 ## 19. Dokumentation
 

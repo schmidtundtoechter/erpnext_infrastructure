@@ -24,6 +24,8 @@ source "${ROOT_DIR}/lib/copy.sh"
 source "${ROOT_DIR}/lib/restore.sh"
 # shellcheck source=../lib/cache.sh
 source "${ROOT_DIR}/lib/cache.sh"
+# shellcheck source=../lib/list.sh
+source "${ROOT_DIR}/lib/list.sh"
 
 backupctl_usage() {
   cat <<'EOF'

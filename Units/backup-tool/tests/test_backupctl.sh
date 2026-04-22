@@ -34,6 +34,10 @@ run_libs() {
     source '${ROOT_DIR}/lib/config.sh'; \
     source '${ROOT_DIR}/lib/nodes.sh'; \
     source '${ROOT_DIR}/lib/backup-model.sh'; \
+    source '${ROOT_DIR}/lib/scan.sh'; \
+    source '${ROOT_DIR}/lib/backup.sh'; \
+    source '${ROOT_DIR}/lib/cache.sh'; \
+    source '${ROOT_DIR}/lib/list.sh'; \
     ${snippet}"
 }
 
@@ -41,11 +45,13 @@ test_structure_files_exist() {
   assert_file_exists "${ROOT_DIR}/bin/backupctl"
   assert_file_exists "${ROOT_DIR}/lib/config.sh"
   assert_file_exists "${ROOT_DIR}/lib/nodes.sh"
+  assert_file_exists "${ROOT_DIR}/lib/backup-model.sh"
   assert_file_exists "${ROOT_DIR}/lib/scan.sh"
   assert_file_exists "${ROOT_DIR}/lib/backup.sh"
   assert_file_exists "${ROOT_DIR}/lib/copy.sh"
   assert_file_exists "${ROOT_DIR}/lib/restore.sh"
   assert_file_exists "${ROOT_DIR}/lib/cache.sh"
+  assert_file_exists "${ROOT_DIR}/lib/list.sh"
   assert_file_exists "${ROOT_DIR}/lib/log.sh"
   assert_file_exists "${ROOT_DIR}/lib/common.sh"
 }
@@ -168,6 +174,36 @@ test_backup_model_library_exists() {
   assert_file_contains "${ROOT_DIR}/lib/backup-model.sh" "bt_validate_manifest_json"
 }
 
+test_cache_library_exists() {
+  assert_file_exists "${ROOT_DIR}/lib/cache.sh"
+  assert_file_contains "${ROOT_DIR}/lib/cache.sh" "bt_cache_init"
+  assert_file_contains "${ROOT_DIR}/lib/cache.sh" "bt_cache_add_entry"
+  assert_file_contains "${ROOT_DIR}/lib/cache.sh" "bt_cache_filter"
+  assert_file_contains "${ROOT_DIR}/lib/cache.sh" "bt_cache_rebuild"
+}
+
+test_cache_entry_schema_exists() {
+  local schema_text
+  schema_text="$(run_libs "bt_cache_entry_schema")"
+  assert_contains "${schema_text}" "backup_id"
+  assert_contains "${schema_text}" "source_node"
+  assert_contains "${schema_text}" "complete"
+  assert_contains "${schema_text}" "last_seen"
+}
+
+test_backup_library_exists() {
+  assert_file_exists "${ROOT_DIR}/lib/backup.sh"
+  assert_file_contains "${ROOT_DIR}/lib/backup.sh" "backup_create_main"
+  assert_file_contains "${ROOT_DIR}/lib/backup.sh" "create_backup_on_node"
+}
+
+test_list_library_exists() {
+  assert_file_exists "${ROOT_DIR}/lib/list.sh"
+  assert_file_contains "${ROOT_DIR}/lib/list.sh" "list_main"
+  assert_file_contains "${ROOT_DIR}/lib/list.sh" "bt_list_format_text"
+  assert_file_contains "${ROOT_DIR}/lib/list.sh" "bt_list_get_display_name"
+}
+
 run_all_tests() {
   test_structure_files_exist
   test_shell_standard_is_set
@@ -182,6 +218,10 @@ run_all_tests() {
   test_manifest_json_generation
   test_backup_is_complete_check
   test_backup_display_name
+  test_cache_library_exists
+  test_cache_entry_schema_exists
+  test_backup_library_exists
+  test_list_library_exists
   printf 'PASS: all tests successful\n'
 }
 

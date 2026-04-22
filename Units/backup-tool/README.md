@@ -11,12 +11,13 @@ Dieses Verzeichnis enthaelt den Startpunkt und die Modulstruktur fuer `backupctl
 - `lib/config.sh` - Konfiguration laden und validieren
 - `lib/nodes.sh` - Knotenmodell, Runner und Transfer-Helfer
 - `lib/backup-model.sh` - Backup-Datenmodell und Manifest-Schema
-- `lib/scan.sh` - Scan/Discovery
+- `lib/scan.sh` - Scan/Discovery für Backup-Verzeichnisse
+- `lib/cache.sh` - Cache-Management (JSON Lines, rebuild, clear)
 - `lib/backup.sh` - Backup-Erzeugung
 - `lib/copy.sh` - Transfer
 - `lib/restore.sh` - Restore
-- `lib/cache.sh` - Cache-Funktionen
-- `tests/test_backupctl.sh` - zentrales Testscript
+- `lib/list.sh` - Liste und Filter mit Text- und JSON-Ausgabe
+- `tests/test_backupctl.sh` - zentrales Testscript (17 Tests)
 
 ## Abhaengigkeiten
 
