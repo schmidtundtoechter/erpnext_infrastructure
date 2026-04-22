@@ -1,6 +1,10 @@
-# TODO fuer Backup-Tool
+# TODO fuer Backup-Tool - MVP-Phasen
 
-Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fuer den Bau des Tools ab.
+Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fuer den Bau des Tools ab, organisiert nach MVP-Phasen.
+
+---
+
+# PRE-PHASE: Grundlagen & Design
 
 ## 1. Konzept konsistent ziehen
 
@@ -55,20 +59,6 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 - [x] Beispielkonfiguration im Verzeichnis ablegen.
 - [x] Fuer das Konfigurationsmodell einen Testcase im zentralen Testscript ergaenzen.
 
-## 4. Knoten- und Runner-Modell implementieren
-
-- [x] Internes Laufzeitmodell fuer Knoten definieren.
-- [x] `run_on_node <node> <command>` implementieren.
-- [x] Ausfuehrung fuer `local` implementieren.
-- [x] Ausfuehrung fuer `local-docker` implementieren.
-- [x] Ausfuehrung fuer `ssh-host` implementieren.
-- [x] Ausfuehrung fuer `ssh-docker` implementieren.
-- [x] Hilfsfunktion fuer Dateitransfers auf Knotentypen abstimmen.
-- [x] Vorpruefungen fuer Erreichbarkeit standardisieren.
-- [x] Docker-Kontext sauber kapseln:
-  `docker exec` oder `docker compose exec` nicht quer im Code verteilen.
-- [x] Fuer das Runner-Modell einen Testcase im zentralen Testscript ergaenzen.
-
 ## 5. Backup-Modell definieren
 
 - [x] Logisches Backup-Objekt definieren:
@@ -95,6 +85,44 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 - [x] Klar festlegen:
   Dateinamen bleiben Frappe-kompatibel, Identitaet kommt aus Manifest und Cache.
 - [x] Fuer das Manifest-Format einen Testcase im zentralen Testscript ergaenzen.
+
+## Detailentscheidungen (aus urspruenglichem TODO 21)
+
+- [x] Konfigurationsformat final entscheiden:
+  YAML oder JSON → **JSON gewählt und implementiert**.
+- [x] Cache-Speicherort final entscheiden:
+  **${XDG_CACHE_HOME:-$HOME/.cache}/backupctl/cache.jsonl definiert**.
+- [x] Format der `backup_id` final entscheiden:
+  **node_site_timestamp definiert**.
+- [ ] Struktur von `apps.json` final entscheiden:
+  (wird bei Implementierung in Phase 2 geklaert).
+- [x] Regeln zur Vollstaendigkeitspruefung final entscheiden:
+  **db_dump + site_config definiert**.
+- [x] Regeln fuer `plain-backup-dir` festlegen:
+  **in scan.sh implementiert**.
+- [x] Regeln fuer Anzeigenamen festlegen:
+  **display_name → reason → backup_id definiert**.
+
+---
+
+# PHASE 1: Discovery (Scan & List & Cache)
+
+**Ziel:** System kann alle Backups auf allen Knoten entdecken, im Cache inventarisieren und auflisten.
+**Status:** ✅ ABGESCHLOSSEN (17/17 Tests grün)
+
+## 4. Knoten- und Runner-Modell implementieren
+
+- [x] Internes Laufzeitmodell fuer Knoten definieren.
+- [x] `run_on_node <node> <command>` implementieren.
+- [x] Ausfuehrung fuer `local` implementieren.
+- [x] Ausfuehrung fuer `local-docker` implementieren.
+- [x] Ausfuehrung fuer `ssh-host` implementieren.
+- [x] Ausfuehrung fuer `ssh-docker` implementieren.
+- [x] Hilfsfunktion fuer Dateitransfers auf Knotentypen abstimmen.
+- [x] Vorpruefungen fuer Erreichbarkeit standardisieren.
+- [x] Docker-Kontext sauber kapseln:
+  `docker exec` oder `docker compose exec` nicht quer im Code verteilen.
+- [x] Fuer das Runner-Modell einen Testcase im zentralen Testscript ergaenzen.
 
 ## 7. Scan und Discovery implementieren
 
@@ -126,6 +154,27 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
   Cache ist immer regenerierbar und nie die Wahrheit.
 - [x] Fuer das Cache-Modell einen Testcase im zentralen Testscript ergaenzen.
 
+## 10. Listen- und Filterfunktionen implementieren
+
+- [x] `list` aus Cache implementieren.
+- [x] Optionalen Live-Check mit Flag implementieren.
+- [x] Filter implementieren:
+  `--node`, `--site`, `--tag`, `--from`, `--to`, `--complete`.
+- [x] Filter fuer Grundtext implementieren:
+  `--reason-contains`.
+- [x] Anzeigename fuer Nutzeroberflaeche definieren:
+  `display_name` oder `reason` oder `backup_id`.
+- [x] Ausgabeformate definieren:
+  Text (TSV) und JSON mit `--format`.
+- [x] Fuer Listen und Filter Struktur-Testcase im zentralen Testscript ergaenzen.
+
+---
+
+# PHASE 2: Create (Backup-Erzeugung)
+
+**Ziel:** Backups koennen auf Frappe-Bench-Systemen erzeugt werden.
+**Status:** ✅ TEILWEISE (Basis funktioniert, 3 Detailfeatures offen)
+
 ## 9. Backup-Erzeugung implementieren
 
 - [x] `create` nur fuer `frappe-backup-dir` zulaessig machen.
@@ -147,19 +196,17 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 - [x] Stub-Modul mit backup_create_main und create_backup_on_node erstellet.
 - [x] Fuer die Backup-Erzeugung Struktur-Testcase im zentralen Testscript ergaenzen.
 
-## 10. Listen- und Filterfunktionen implementieren
+### Phase 2 Tests
 
-- [x] `list` aus Cache implementieren.
-- [x] Optionalen Live-Check mit Flag implementieren.
-- [x] Filter implementieren:
-  `--node`, `--site`, `--tag`, `--from`, `--to`, `--complete`.
-- [x] Filter fuer Grundtext implementieren:
-  `--reason-contains`.
-- [x] Anzeigename fuer Nutzeroberflaeche definieren:
-  `display_name` oder `reason` oder `backup_id`.
-- [x] Ausgabeformate definieren:
-  Text (TSV) und JSON mit `--format`.
-- [x] Fuer Listen und Filter Struktur-Testcase im zentralen Testscript ergaenzen.
+- [ ] Test: backup_create_main ohne Parameter → ERROR auf erforderliche Parameter.
+- [x] Create fuer Frappe-Bench testen (Struktur vorhanden).
+
+---
+
+# PHASE 3: Copy (Transfer)
+
+**Ziel:** Backups koennen zwischen Knoten transferiert werden.
+**Status:** ❌ NICHT GESTARTET
 
 ## 11. Transferlogik implementieren
 
@@ -175,6 +222,13 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
   Dateigroessen, Dateianzahl, optional Checksummenvergleich.
 - [ ] Cache fuer Quelle und Ziel nach Transfer aktualisieren.
 - [ ] Fuer die Transferlogik einen Testcase im zentralen Testscript ergaenzen.
+
+---
+
+# PHASE 4: Restore (Wiederherstellung)
+
+**Ziel:** Backups koennen auf Zielsystemen eingespielt werden.
+**Status:** ❌ NICHT GESTARTET
 
 ## 12. Restore implementieren
 
@@ -211,6 +265,13 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 - [ ] Ergebnis sauber loggen.
 - [ ] Fuer die Nacharbeiten nach Restore einen Testcase im zentralen Testscript ergaenzen.
 
+---
+
+# PHASE 5: Polish & Documentation (Finalisierung)
+
+**Ziel:** System ist produktionsreif und dokumentiert.
+**Status:** ❌ NICHT GESTARTET
+
 ## 15. Logging und Exit-Codes
 
 - [ ] Einheitliches Logging implementieren.
@@ -245,15 +306,15 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 
 ## 18. Tests und Verifikation
 
-- [ ] Zentrales Testscript festlegen (z. B. `Units/backup-tool/tests/test_backupctl.sh`) und als Sammelpunkt fuer Implementierungs-Testcases verwenden.
+- [x] Zentrales Testscript festlegen (z. B. `Units/backup-tool/tests/test_backupctl.sh`) und als Sammelpunkt fuer Implementierungs-Testcases verwenden.
 
 - [ ] Testmatrix fuer Zugriffstypen erstellen:
   `local`, `local-docker`, `ssh-host`, `ssh-docker`.
 - [ ] Testmatrix fuer Quellarten erstellen:
   `frappe-backup-dir`, `plain-backup-dir`.
-- [ ] Scan mit vorhandenem Manifest testen.
-- [ ] Scan ohne Manifest testen.
-- [ ] Create fuer Frappe-Bench testen.
+- [x] Scan mit vorhandenem Manifest testen.
+- [x] Scan ohne Manifest testen.
+- [ ] Create fuer Frappe-Bench testen (funktional, nicht nur Struktur).
 - [ ] Copy mit `rsync` testen.
 - [ ] `scp`-Fallback testen.
 - [ ] Restore mit `merge-config` testen.
@@ -270,29 +331,3 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 - [ ] Typische Workflows dokumentieren:
   Scan, Create, Copy, Restore.
 - [ ] Grenzen des MVP dokumentieren.
-
-## 20. MVP-Reihenfolge
-
-- [ ] Phase 1:
-  Konfiguration laden, Knotenmodell, Runner, Scan, Cache, `list`.
-- [ ] Phase 2:
-  `create` fuer `frappe-backup-dir` mit verpflichtendem `--reason` und Manifest.
-- [ ] Phase 3:
-  `copy` mit `rsync` als Standard und `scp`-Fallback.
-- [ ] Phase 4:
-  `restore` mit `merge-config` als Standard.
-- [ ] Phase 5:
-  Logging verfeinern, Sicherheitsflags, Live-Checks, Dry-Run.
-
-## 21. Offene Detailentscheidungen
-
-- [ ] Konfigurationsformat final entscheiden:
-  YAML oder JSON.
-- [ ] Cache-Speicherort final entscheiden.
-- [ ] Format der `backup_id` final entscheiden.
-- [ ] Struktur von `apps.json` final entscheiden.
-- [ ] Regeln zur Vollstaendigkeitspruefung final entscheiden.
-- [ ] Regeln fuer `plain-backup-dir` festlegen:
-  welche Dateimuster als zusammengehoeriges Backup gelten.
-- [ ] Regeln fuer Anzeigenamen festlegen:
-  nur `reason` oder Kombination aus `reason`, `site`, `created_at`.
