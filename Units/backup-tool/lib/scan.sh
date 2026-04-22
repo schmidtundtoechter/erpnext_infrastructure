@@ -355,7 +355,7 @@ scan_node() {
     fi
 
     case "${access_type}" in
-      ssh-host|ssh-docker)
+      ssh-host|ssh-docker|local-docker)
         bt_scan_remote_manifests "${node_id}" "${source_kind}" "${path}"
         case "${source_kind}" in
           frappe-backup-dir)
@@ -366,7 +366,7 @@ scan_node() {
             ;;
         esac
         ;;
-      local|local-docker)
+      local)
         case "${source_kind}" in
           frappe-backup-dir)
             bt_scan_frappe_backup_dir "${node_id}" "${path}"
