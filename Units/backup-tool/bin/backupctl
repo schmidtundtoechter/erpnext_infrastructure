@@ -196,7 +196,7 @@ main() {
             cache_usage
             return
           fi
-          cache_rebuild "$@"
+          cache_rebuild_main "$@"
           ;;
         clear)
           shift || true
@@ -204,7 +204,7 @@ main() {
             cache_usage
             return
           fi
-          cache_clear "$@"
+          cache_clear_main "$@"
           ;;
         *)
           bt_die "Unknown cache subcommand: ${cache_subcommand:-<empty>}"

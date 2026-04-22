@@ -11,7 +11,7 @@ bt_cache_init() {
 
 bt_cache_entry_schema() {
   cat <<'EOM'
-Cache Entry (JSON Lines format):
+Cache Entry (JSON object stream format):
 {
   "backup_id": "string (required)",
   "source_node": "string (required)",
@@ -28,25 +28,38 @@ Cache Entry (JSON Lines format):
 EOM
 }
 
-bt_cache_add_entry() {
+bt_cache_build_entry() {
   local backup_obj_json="$1"
-  local timestamp
-  
-  bt_cache_init
-  timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-  
+  local timestamp="$2"
+
   jq -n \
     --argjson backup "${backup_obj_json}" \
     --arg last_seen "${timestamp}" \
-    '($backup | del(.source_kind)) + {last_seen: $last_seen}' >> "${BT_CACHE_PATH}"
+    '($backup | del(.source_kind)) + {last_seen: $last_seen}'
+}
+
+bt_cache_add_entry() {
+  local backup_obj_json="$1"
+  local timestamp
+  local cache_entry
+  
+  bt_cache_init
+  timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+  cache_entry="$(bt_cache_build_entry "${backup_obj_json}" "${timestamp}")"
+
+  printf '%s\n' "${cache_entry}" >> "${BT_CACHE_PATH}"
 }
 
 bt_cache_get_by_backup_id() {
   local backup_id="$1"
   
   bt_cache_init
-  grep -F "\"${backup_id}\"" "${BT_CACHE_PATH}" 2>/dev/null | jq -e ".backup_id == \"${backup_id}\"" >/dev/null && \
-    grep -F "\"${backup_id}\"" "${BT_CACHE_PATH}" | jq -s '.[0]'
+  [[ -s "${BT_CACHE_PATH}" ]] || return 1
+
+  jq -s -e --arg bid "${backup_id}" '
+    ([ .[] | select(.backup_id == $bid) ][0])
+  ' "${BT_CACHE_PATH}"
 }
 
 bt_cache_list_all() {
@@ -94,8 +107,8 @@ bt_cache_rebuild() {
       bt_cache_add_entry "${backup_json}"
     done
   done
-  
-  bt_log_info "Cache rebuilt: $(wc -l <"${BT_CACHE_PATH}") entries"
+
+  bt_log_info "Cache rebuilt: $(jq -s 'length' "${BT_CACHE_PATH}") entries"
 }
 
 bt_cache_clear() {
@@ -106,6 +119,27 @@ bt_cache_clear() {
   
   [[ -f "${BT_CACHE_PATH}" ]] && > "${BT_CACHE_PATH}"
   bt_log_info "Cache cleared"
+}
+
+bt_cache_upsert_entry() {
+  local backup_json="$1"
+  local normalized_entry
+  local timestamp
+
+  bt_cache_init
+
+  timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  normalized_entry="$(bt_cache_build_entry "${backup_json}" "${timestamp}")"
+
+  if [[ ! -s "${BT_CACHE_PATH}" ]]; then
+    printf '%s\n' "${normalized_entry}" >> "${BT_CACHE_PATH}"
+    return
+  fi
+
+  jq -s --argjson entry "${normalized_entry}" '
+    [ .[] | select(.backup_id != $entry.backup_id) ] + [ $entry ] | .[]
+  ' "${BT_CACHE_PATH}" > "${BT_CACHE_PATH}.tmp"
+  mv "${BT_CACHE_PATH}.tmp" "${BT_CACHE_PATH}"
 }
 
 bt_cache_update_incremental() {
@@ -120,13 +154,7 @@ bt_cache_update_incremental() {
   
   scan_node "${node_id}" | while read -r backup_json; do
     [[ -z "${backup_json}" ]] && continue
-    local backup_id
-    backup_id="$(jq -r '.backup_id' <<<"${backup_json}")"
-    
-    grep -v "\"${backup_id}\"" "${BT_CACHE_PATH}" > "${BT_CACHE_PATH}.tmp"
-    mv "${BT_CACHE_PATH}.tmp" "${BT_CACHE_PATH}"
-    
-    bt_cache_add_entry "${backup_json}"
+    bt_cache_upsert_entry "${backup_json}"
   done
 }
 

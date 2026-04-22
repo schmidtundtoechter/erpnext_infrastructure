@@ -1,0 +1,46 @@
+{
+  "nodes": [
+    {
+      "id": "my-docker",
+      "source_kind": "frappe-backup-dir",
+      "access_type": "local-docker",
+      "bench_path": "/workspace/development/frappe-bench",
+      "backup_paths": [
+        "/workspace/development/frappe-bench/sites/*/private/backups"
+      ],
+      "container": "mkt_sage_import_devcontainer-frappe-1",
+      "tags": ["local", "dev"],
+      "description": "Lokales Entwicklungs-Bench in Docker",
+      "enabled": true
+    },
+    {
+      "id": "erpnext-demo",
+      "source_kind": "frappe-backup-dir",
+      "access_type": "ssh-docker",
+      "host": "test.schmidtundtoechter.com",
+      "port": 22,
+      "user": "root",
+      "bench_path": "/home/frappe/frappe-bench",
+      "backup_paths": [
+        "/home/frappe/frappe-bench/sites/*/private/backups"
+      ],
+      "compose_service": "erpnext-demo_erpnext_frontend_container",
+      "tags": ["sut", "prod"],
+      "vpn_required": false,
+      "enabled": true
+    },
+    {
+      "id": "sut-backupdir",
+      "source_kind": "plain-backup-dir",
+      "access_type": "ssh-host",
+      "host": "test.schmidtundtoechter.com",
+      "port": 22,
+      "user": "root",
+      "backup_paths": [
+        "/var/dev/MIMS-Scenarios/_backups"
+      ],
+      "tags": ["archive"],
+      "enabled": true
+    }
+  ]
+}

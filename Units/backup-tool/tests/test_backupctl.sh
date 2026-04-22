@@ -166,7 +166,14 @@ test_manifest_json_generation() {
   assert_contains "${manifest_json}" "test.site"
   assert_contains "${manifest_json}" "Test backup reason"
   assert_contains "${manifest_json}" "full-with-files"
+  assert_contains "${manifest_json}" "backup_hash"
   assert_contains "${manifest_json}" "true"
+}
+
+test_backup_hash_generation() {
+  local hash
+  hash="$(run_libs "bt_backup_hash_from_id 'backup_1234567890'")"
+  [[ "${#hash}" -eq 6 ]] || fail "backup hash should be 6 chars: ${hash}"
 }
 
 test_backup_is_complete_check() {
@@ -313,6 +320,7 @@ run_all_tests() {
   test_backup_model_definition_exists
   test_backup_id_generation
   test_manifest_json_generation
+  test_backup_hash_generation
   test_backup_is_complete_check
   test_backup_display_name
   test_cache_library_exists

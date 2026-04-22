@@ -50,6 +50,33 @@ bt_generate_backup_id() {
   printf '%s_%s_%s\n' "${node_id}" "${site}" "${timestamp}"
 }
 
+bt_backup_hash_from_id() {
+  local backup_id="$1"
+  local digest
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    digest="$(printf '%s' "${backup_id}" | sha256sum | awk '{print $1}')"
+  else
+    digest="$(printf '%s' "${backup_id}" | shasum -a 256 | awk '{print $1}')"
+  fi
+
+  printf '%s\n' "${digest}" | cut -c1-6
+}
+
+bt_backup_with_hash() {
+  local backup_obj_json="$1"
+  local backup_id backup_hash
+
+  backup_id="$(jq -r '.backup_id // empty' <<<"${backup_obj_json}")"
+  if [[ -z "${backup_id}" ]]; then
+    printf '%s\n' "${backup_obj_json}"
+    return
+  fi
+
+  backup_hash="$(bt_backup_hash_from_id "${backup_id}")"
+  jq -c --arg h "${backup_hash}" '. + {backup_hash: $h}' <<<"${backup_obj_json}"
+}
+
 bt_validate_manifest_json() {
   local manifest_path="$1"
   
@@ -77,11 +104,14 @@ bt_generate_manifest_json() {
   local artifacts_json="$5"
   local tags_json="${6:-}"
   local created_at
+  local backup_hash
   
   created_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  backup_hash="$(bt_backup_hash_from_id "${backup_id}")"
   
   jq -n \
     --arg bid "${backup_id}" \
+    --arg bh "${backup_hash}" \
     --arg node "${source_node}" \
     --arg site "${source_site}" \
     --arg reason "${reason}" \
@@ -90,6 +120,7 @@ bt_generate_manifest_json() {
     --argjson tags "${tags_json:-[]}" \
     '{
       backup_id: $bid,
+      backup_hash: $bh,
       created_at: $ts,
       source_node: $node,
       source_site: $site,
