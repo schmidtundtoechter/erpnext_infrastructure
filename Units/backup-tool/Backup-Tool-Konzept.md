@@ -30,18 +30,17 @@ Es gibt keine zentrale Server-Anwendung, keinen dauerhaft laufenden Dienst und k
 
 Neben dem Skript gibt es eine Konfiguration, in der alle bekannten Knoten beschrieben sind.
 
-Ein Knoten kann fachlich insbesondere eine der folgenden Quellarten bereitstellen:
+Ein Knoten kann fachlich insbesondere eine der folgenden Quellarten (`source_kind`) bereitstellen:
 
 * ein Frappe-Bench-Backup-Verzeichnis
 * ein einfaches Backup-Verzeichnis
 
-Diese Quellarten koennen technisch in unterschiedlichen Zugriffsformen vorliegen:
+Diese Quellarten koennen technisch in unterschiedlichen Zugriffstypen (`access_type`) vorliegen:
 
-* ein lokales Verzeichnis
-* ein per SSH erreichbarer Host
-* ein Host mit Docker-Containern
-* ein Kundensystem mit direktem Host-Zugriff
-* ein Kundensystem mit Docker-basiertem ERPNext/Frappe
+* `local`
+* `local-docker`
+* `ssh-host`
+* `ssh-docker`
 
 Die Konfiguration enthält alle Informationen, die nötig sind, um:
 
@@ -49,6 +48,11 @@ Die Konfiguration enthält alle Informationen, die nötig sind, um:
 * relevante Backup-Verzeichnisse zu finden
 * Bench-Kommandos auszuführen
 * bei Docker in den richtigen Container zu gelangen
+
+Damit gilt durchgaengig:
+
+* `source_kind` beschreibt die fachliche Quellart (`frappe-backup-dir`, `plain-backup-dir`).
+* `access_type` beschreibt den technischen Zugriff (`local`, `local-docker`, `ssh-host`, `ssh-docker`).
 
 ### 2.3 Kein zentrales Repository
 
@@ -256,10 +260,10 @@ Die Konfiguration soll dem Skript erlauben:
 
 Damit alle Knoten gleich behandelt werden können, braucht das Skript ein internes Laufzeitmodell.
 
-Dabei ist zwischen Quellart und Zugriffspfad zu unterscheiden:
+Dabei ist zwischen `source_kind` und `access_type` zu unterscheiden:
 
-* Die Quellart beschreibt, ob das Tool mit einem Frappe-Bench-Backup-Verzeichnis oder mit einem einfachen Backup-Verzeichnis arbeitet.
-* Der Zugriffspfad beschreibt, ob lokal, lokal in Docker, per SSH oder per SSH plus Docker gearbeitet wird.
+* `source_kind` beschreibt, ob das Tool mit `frappe-backup-dir` oder `plain-backup-dir` arbeitet.
+* `access_type` beschreibt, ob `local`, `local-docker`, `ssh-host` oder `ssh-docker` genutzt wird.
 
 ### 7.1 Lokaler Host
 
@@ -429,6 +433,31 @@ Falls für manuelle Arbeitsschritte ein besser lesbarer Anzeigename hilfreich is
 
 Dieser Anzeigename ist jedoch nur eine Benutzerhilfe und nicht die technische Identität des Backups.
 
+### 9.8 Beispiel fuer `manifest.json`
+
+```json
+{
+  "backup_id": "customer-a-prod_erp.customer-a.de_2026-04-22T08:15:30Z",
+  "created_at": "2026-04-22T08:15:30Z",
+  "source_node": "customer-a-prod",
+  "source_kind": "frappe-backup-dir",
+  "source_site": "erp.customer-a.de",
+  "backup_type": "full-with-files",
+  "reason": "vor Update ERPNext 15.62",
+  "display_name": "vor Update ERPNext 15.62",
+  "tags": ["pre-update", "prod"],
+  "artifacts": {
+    "db_dump": "20260422_081530-erp.customer-a.de-database.sql.gz",
+    "public_files": "20260422_081530-erp.customer-a.de-files.tar",
+    "private_files": "20260422_081530-erp.customer-a.de-private-files.tar",
+    "site_config": "site_config.json",
+    "apps": "apps.json",
+    "checksums": "checksums.sha256"
+  },
+  "complete": true
+}
+```
+
 ---
 
 ## 10. Lokaler Cache
@@ -454,9 +483,12 @@ Er darf niemals so gebaut werden, dass das System ohne ihn nicht mehr arbeitsfä
 
 Der Cache kann enthalten:
 
-* Knoten-ID
+* backup_id
+* source_node
+* source_kind
 * Site
-* Backupname
+* reason
+* display_name
 * Dateien
 * Zeitstempel
 * Pfade
@@ -510,7 +542,7 @@ Erkennen, welche Backups auf welchen Knoten tatsächlich vorhanden sind.
 
 Die Suchorte kommen aus der Knotenkonfiguration.
 
-Dabei sind mindestens zwei Quellarten zu unterscheiden.
+Dabei sind mindestens zwei Quellarten (`source_kind`) zu unterscheiden.
 
 ### A. Frappe-Bench-Backup-Verzeichnis
 
@@ -520,7 +552,7 @@ Typischerweise:
 * zusätzliche definierte Archivverzeichnisse
 * optionale manuelle Transfer-Ziele
 
-Diese Quellart kann lokal, lokal in Docker, per SSH oder per SSH plus Docker angesprochen werden.
+Diese Quellart kann mit den Zugriffstypen (`access_type`) `local`, `local-docker`, `ssh-host` oder `ssh-docker` angesprochen werden.
 
 ### B. Einfaches Backup-Verzeichnis
 
@@ -555,14 +587,19 @@ Ein vollständiges Backup liegt nur vor, wenn die erwarteten Bestandteile vorhan
 
 ## 12. Backup erzeugen
 
+`create` ist nur fuer Knoten mit `source_kind=frappe-backup-dir` zulaessig.
+
+Fuer `source_kind=plain-backup-dir` gibt es kein `create`; diese Quellart wird nur fuer Scan/List/Copy/Restore genutzt.
+
 ## 12.1 Ablauf
 
 1. Knoten wählen
 2. Site wählen
-3. Ziel-Tag optional angeben
-4. im richtigen Kontext sichern
-5. entstandene Artefakte erfassen
-6. Cache aktualisieren
+3. fachlichen Grundtext verpflichtend angeben (`--reason`)
+4. Ziel-Tag optional angeben (`--tag`, mehrfach moeglich)
+5. im richtigen Kontext sichern
+6. entstandene Artefakte erfassen
+7. Cache aktualisieren
 
 ## 12.2 Vorprüfungen
 
@@ -574,6 +611,7 @@ Vor einem Backup sollte geprüft werden:
 * bei Docker: Container vorhanden
 * Backupverzeichnis vorhanden oder erzeugbar
 * freier Speicher plausibel
+* Parameter `--reason` gesetzt
 
 ## 12.3 Ergebnis
 
@@ -800,7 +838,7 @@ backupctl nodes list
 backupctl scan
 backupctl scan --node customer-a-prod
 backupctl list
-backupctl create --node customer-a-prod --site erp.customer-a.de --tag pre-update
+backupctl create --node customer-a-prod --site erp.customer-a.de --reason "vor Update ERPNext 15.62" --tag pre-update
 backupctl copy --from customer-a-prod --to own-prod-01 --backup <id>
 backupctl restore --node own-prod-01 --site test.customer-a.local --backup <id>
 backupctl cache clear
@@ -885,19 +923,20 @@ Auf Basis dieses Konzepts sollten als Nächstes definiert werden:
 
 ## 27. MVP-Schnitt
 
-Ein pragmatischer MVP sollte zuerst nur Folgendes können:
+Ein pragmatischer MVP sollte zuerst nur Folgendes koennen:
 
 * Knoten aus Konfiguration lesen
 * bekannte Backup-Verzeichnisse scannen
 * lokalen Cache aufbauen
 * Backups listen
-* Backup auf Quellsystem erzeugen
+* Backup auf Quellsystem erzeugen (`create` nur fuer `source_kind=frappe-backup-dir` und mit verpflichtendem `--reason`)
 * Backup von A nach B kopieren
 * Restore auf Zielsystem ausführen
 
+Dabei gehoeren `reason` und Manifest-Metadaten bereits im MVP zum Kernmodell.
+
 Erst danach sollten ergänzt werden:
 
-* Tagging-Metadaten
 * Prüfsummen
 * Live-Validierung
 * Dry-Run
@@ -912,6 +951,9 @@ Erst danach sollten ergänzt werden:
 
 * lokal laufendes Bash-Skript oder Skriptset
 * deklarative Konfiguration der Knoten
+* durchgaengige Begriffe: `source_kind` fuer Quellart, `access_type` fuer Zugriffstyp
+* Quellarten: `frappe-backup-dir`, `plain-backup-dir`
+* Zugriffstypen: `local`, `local-docker`, `ssh-host`, `ssh-docker`
 * kein zentrales Backup-Repository
 * lokaler, regenerierbarer Cache
 
@@ -932,6 +974,11 @@ Erst danach sollten ergänzt werden:
 * restore
 * cache clear
 * cache rebuild
+
+Hinweis zu Transfers:
+
+* `rsync` ist der Standardpfad.
+* `scp` ist nur Fallback, wenn `rsync` auf einem beteiligten Remote-System fehlt.
 
 ### Grundprinzip
 

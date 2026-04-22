@@ -4,25 +4,25 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 
 ## 1. Konzept konsistent ziehen
 
-- [ ] Begrifflichkeiten vereinheitlichen:
+- [x] Begrifflichkeiten vereinheitlichen:
   `source_kind` fuer fachliche Quellart und `access_type` fuer technischen Zugriff durchgaengig verwenden.
-- [ ] Ueberall klarziehen:
+- [x] Ueberall klarziehen:
   `frappe-backup-dir` und `plain-backup-dir` sind Quellarten.
-- [ ] Ueberall klarziehen:
+- [x] Ueberall klarziehen:
   `local`, `local-docker`, `ssh-host`, `ssh-docker` sind Zugriffstypen.
-- [ ] Abschnitt Backup-Erzeugung anpassen:
+- [x] Abschnitt Backup-Erzeugung anpassen:
   `create` gilt nur fuer `frappe-backup-dir`, nicht fuer `plain-backup-dir`.
-- [ ] CLI-Beispiele anpassen:
+- [x] CLI-Beispiele anpassen:
   `backupctl create` muss `--reason` verpflichtend verlangen.
-- [ ] CLI-Beispiele pruefen:
+- [x] CLI-Beispiele pruefen:
   `--tag` nur optional, `--reason` fachlich verpflichtend.
-- [ ] MVP-Abschnitt korrigieren:
+- [x] MVP-Abschnitt korrigieren:
   `reason` und Manifest-Metadaten sind kein spaeteres Nice-to-have, sondern Teil des Kernmodells.
-- [ ] Cache-Abschnitt anpassen:
+- [x] Cache-Abschnitt anpassen:
   statt nur `Backupname` besser `backup_id`, `reason`, `display_name`, `source_node`, `source_kind`.
-- [ ] Transfer-Abschnitt sprachlich vereinheitlichen:
+- [x] Transfer-Abschnitt sprachlich vereinheitlichen:
   `rsync` ist Standard, `scp` nur Fallback.
-- [ ] Optional:
+- [x] Optional:
   Abschnitt 8 oder 9 um ein Beispiel fuer `manifest.json` ergaenzen.
 
 ## 2. Verzeichnis- und Skriptstruktur anlegen
