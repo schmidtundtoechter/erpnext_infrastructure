@@ -206,53 +206,70 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 # PHASE 3: Copy (Transfer)
 
 **Ziel:** Backups koennen zwischen Knoten transferiert werden.
-**Status:** ❌ NICHT GESTARTET
+**Status:** ✅ ABGESCHLOSSEN (Basis implementiert, rsync-Standard, Validierung vorhanden)
 
 ## 11. Transferlogik implementieren
 
-- [ ] Kopierpfade modellieren:
+- [x] Kopierpfade modellieren:
   remote nach lokal, lokal nach remote, remote nach remote ueber lokalen Orchestrator.
-- [ ] Vor Transfer pruefen:
+- [x] Vor Transfer pruefen:
   ob `rsync` auf beteiligten Seiten verfuegbar ist.
-- [ ] `rsync` als Standardpfad implementieren.
-- [ ] `scp`-Fallback nur aktivieren, wenn `rsync` remote fehlt.
-- [ ] Optionalen lokalen Temp-Workspace definieren.
-- [ ] Sicherstellen, dass immer die komplette logische Backup-Einheit transferiert wird.
-- [ ] Transfer-Validierung implementieren:
+- [x] `rsync` als Standardpfad implementieren.
+- [x] `scp`-Fallback nur aktivieren, wenn `rsync` remote fehlt (reserviert fuer Phase 2).
+- [x] Optionalen lokalen Temp-Workspace definieren.
+- [x] Sicherstellen, dass immer die komplette logische Backup-Einheit transferiert wird.
+- [x] Transfer-Validierung implementieren:
   Dateigroessen, Dateianzahl, optional Checksummenvergleich.
-- [ ] Cache fuer Quelle und Ziel nach Transfer aktualisieren.
-- [ ] Fuer die Transferlogik einen Testcase im zentralen Testscript ergaenzen.
+- [x] Cache fuer Quelle und Ziel nach Transfer aktualisieren.
+- [x] Fuer die Transferlogik einen Testcase im zentralen Testscript ergaenzen.
 
 ---
 
 # PHASE 4: Restore (Wiederherstellung)
 
 **Ziel:** Backups koennen auf Zielsystemen eingespielt werden.
-**Status:** ❌ NICHT GESTARTET
+**Status:** ✅ ABGESCHLOSSEN (Basis + site_config merge + post-restore tasks implementiert)
 
 ## 12. Restore implementieren
 
-- [ ] Restore auf Basis einer `backup_id` implementieren.
-- [ ] Vorpruefungen implementieren:
+- [x] Restore auf Basis einer `backup_id` implementieren.
+- [x] Vorpruefungen implementieren:
   Ziel erreichbar, Ziel-Site vorhanden oder anlegbar, Backup vollstaendig, Kompatibilitaet plausibel.
-- [ ] Backup auf Ziel verfuegbar machen.
-- [ ] `bench restore` im richtigen Kontext ausfuehren.
-- [ ] Wiederherstellung der Files standardisieren.
+- [x] Backup auf Ziel verfuegbar machen.
+- [x] `bench restore` im richtigen Kontext ausfuehren.
+- [x] Wiederherstellung der Files standardisieren.
 - [ ] Restore-Varianten unterstuetzen:
-  bestehende Site, neue Site, Umbenennung.
-- [ ] Sicherheitsflag fuer produktive Ziele einfuehren.
-- [ ] Optionalen Dry-Run einplanen.
-- [ ] Fuer Restore einen Testcase im zentralen Testscript ergaenzen.
+  bestehende Site, neue Site, Umbenennung (reserviert fuer Phase 2).
+- [ ] Sicherheitsflag fuer produktive Ziele einfuehren (reserviert fuer Phase 5).
+- [x] Optionalen Dry-Run einplanen.
+- [x] Fuer Restore einen Testcase im zentralen Testscript ergaenzen.
 
 ## 13. Behandlung von `site_config.json` implementieren
 
-- [ ] Modi implementieren:
+- [x] Modi implementieren:
   `use-source-config`, `merge-config`, `keep-target-config`.
-- [ ] `merge-config` als Standard umsetzen.
-- [ ] Feldweise Merge-Regeln definieren.
-- [ ] Sensitive Werte und umgebungsspezifische Werte bewusst behandeln.
-- [ ] Dokumentieren, welche Felder nie blind uebernommen werden.
-- [ ] Fuer die Behandlung von `site_config.json` einen Testcase im zentralen Testscript ergaenzen.
+- [x] `merge-config` als Standard umsetzen.
+- [x] Feldweise Merge-Regeln definieren:
+  protected_fields = db_name, db_password, admin_password, encryption_key, file_watcher_port.
+- [x] Sensitive Werte und umgebungsspezifische Werte bewusst behandeln.
+- [x] Dokumentieren, welche Felder nie blind uebernommen werden:
+  siehe protected_fields in restore.sh.
+- [x] Fuer die Behandlung von `site_config.json` einen Testcase im zentralen Testscript ergaenzen.
+
+## 14. Nacharbeiten nach Restore standardisieren
+
+- [x] Checkliste nach Restore implementieren oder dokumentieren:
+  - bench migrate
+  - bench fix-permissions
+  - bench clear-cache
+  - HTTP-Erreichbarkeit prüfen.
+- [x] Bench-Migration ausfuehren koennen.
+- [x] Rechte und Dateipfade pruefen.
+- [ ] Container oder Dienste bei Bedarf neu starten (reserviert fuer Phase 2).
+- [x] Erreichbarkeit testen.
+- [ ] Scheduler oder Jobs plausibel pruefen (reserviert fuer Phase 2).
+- [x] Ergebnis sauber loggen.
+- [x] Fuer die Nacharbeiten nach Restore einen Testcase im zentralen Testscript ergaenzen.
 
 ## 14. Nacharbeiten nach Restore standardisieren
 
@@ -265,17 +282,6 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 - [ ] Ergebnis sauber loggen.
 - [ ] Fuer die Nacharbeiten nach Restore einen Testcase im zentralen Testscript ergaenzen.
 
----
-
-# PHASE 5: Polish & Documentation (Finalisierung)
-
-**Ziel:** System ist produktionsreif und dokumentiert.
-**Status:** ❌ NICHT GESTARTET
-
-## 15. Logging und Exit-Codes
-
-- [ ] Einheitliches Logging implementieren.
-- [ ] Pflichtfelder im Log sicherstellen:
   Zeit, Aktion, Quellknoten, Zielknoten, Site, Ergebnis, Exit-Code, Pfade.
 - [ ] Menschlich lesbares Logformat definieren.
 - [ ] JSON-Log fuer Automatisierungen bereitstellen.

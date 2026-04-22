@@ -68,13 +68,13 @@ main() {
       scan_main "$@"
       ;;
     create)
-      backup_create "$@"
+      backup_create_main "$@"
       ;;
     copy)
-      backup_copy "$@"
+      backup_copy_main "$@"
       ;;
     restore)
-      backup_restore "$@"
+      backup_restore_main "$@"
       ;;
     cache)
       local cache_subcommand="${1:-}"
