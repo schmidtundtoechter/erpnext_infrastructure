@@ -40,34 +40,34 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 
 ## 3. Konfigurationsformat festlegen
 
-- [ ] Endgueltiges Konfigurationsformat waehlen:
+- [x] Endgueltiges Konfigurationsformat waehlen:
   YAML oder JSON.
-- [ ] Schema fuer Knoten definieren.
-- [ ] Pflichtfelder fuer `frappe-backup-dir` festlegen:
+- [x] Schema fuer Knoten definieren.
+- [x] Pflichtfelder fuer `frappe-backup-dir` festlegen:
   `id`, `source_kind`, `access_type`, `backup_paths`.
-- [ ] Zusatzfelder fuer Bench-basierte Quellen festlegen:
+- [x] Zusatzfelder fuer Bench-basierte Quellen festlegen:
   `bench_path`, optional `container`, optional `compose_service`.
-- [ ] Pflichtfelder fuer Remote-Zugriff festlegen:
+- [x] Pflichtfelder fuer Remote-Zugriff festlegen:
   `host`, `user`, optional `port`.
-- [ ] Optionalfelder definieren:
+- [x] Optionalfelder definieren:
   `tags`, `vpn_required`, `description`, `enabled`.
-- [ ] Validierungslogik fuer Konfigurationsdatei implementieren.
-- [ ] Beispielkonfiguration im Verzeichnis ablegen.
-- [ ] Fuer das Konfigurationsmodell einen Testcase im zentralen Testscript ergaenzen.
+- [x] Validierungslogik fuer Konfigurationsdatei implementieren.
+- [x] Beispielkonfiguration im Verzeichnis ablegen.
+- [x] Fuer das Konfigurationsmodell einen Testcase im zentralen Testscript ergaenzen.
 
 ## 4. Knoten- und Runner-Modell implementieren
 
-- [ ] Internes Laufzeitmodell fuer Knoten definieren.
-- [ ] `run_on_node <node> <command>` implementieren.
-- [ ] Ausfuehrung fuer `local` implementieren.
-- [ ] Ausfuehrung fuer `local-docker` implementieren.
-- [ ] Ausfuehrung fuer `ssh-host` implementieren.
-- [ ] Ausfuehrung fuer `ssh-docker` implementieren.
-- [ ] Hilfsfunktion fuer Dateitransfers auf Knotentypen abstimmen.
-- [ ] Vorpruefungen fuer Erreichbarkeit standardisieren.
-- [ ] Docker-Kontext sauber kapseln:
+- [x] Internes Laufzeitmodell fuer Knoten definieren.
+- [x] `run_on_node <node> <command>` implementieren.
+- [x] Ausfuehrung fuer `local` implementieren.
+- [x] Ausfuehrung fuer `local-docker` implementieren.
+- [x] Ausfuehrung fuer `ssh-host` implementieren.
+- [x] Ausfuehrung fuer `ssh-docker` implementieren.
+- [x] Hilfsfunktion fuer Dateitransfers auf Knotentypen abstimmen.
+- [x] Vorpruefungen fuer Erreichbarkeit standardisieren.
+- [x] Docker-Kontext sauber kapseln:
   `docker exec` oder `docker compose exec` nicht quer im Code verteilen.
-- [ ] Fuer das Runner-Modell einen Testcase im zentralen Testscript ergaenzen.
+- [x] Fuer das Runner-Modell einen Testcase im zentralen Testscript ergaenzen.
 
 ## 5. Backup-Modell definieren
 

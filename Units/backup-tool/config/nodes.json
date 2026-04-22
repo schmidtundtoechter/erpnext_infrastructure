@@ -1,0 +1,61 @@
+{
+  "nodes": [
+    {
+      "id": "local-dev",
+      "source_kind": "frappe-backup-dir",
+      "access_type": "local-docker",
+      "bench_path": "/Users/matthias/projects/frappe-bench",
+      "backup_paths": [
+        "/Users/matthias/projects/frappe-bench/sites/*/private/backups"
+      ],
+      "container": "backend",
+      "tags": ["local", "dev"],
+      "description": "Lokales Entwicklungs-Bench in Docker",
+      "enabled": true
+    },
+    {
+      "id": "own-prod-01",
+      "source_kind": "frappe-backup-dir",
+      "access_type": "ssh-host",
+      "host": "own-prod-01.example.net",
+      "port": 22,
+      "user": "ops",
+      "bench_path": "/home/frappe/frappe-bench",
+      "backup_paths": [
+        "/home/frappe/frappe-bench/sites/*/private/backups"
+      ],
+      "tags": ["own", "prod"],
+      "vpn_required": false,
+      "enabled": true
+    },
+    {
+      "id": "customer-a-prod",
+      "source_kind": "frappe-backup-dir",
+      "access_type": "ssh-docker",
+      "host": "customer-a.example.net",
+      "port": 22,
+      "user": "frappe",
+      "bench_path": "/opt/frappe-bench",
+      "backup_paths": [
+        "/opt/frappe-bench/sites/*/private/backups"
+      ],
+      "compose_service": "backend",
+      "tags": ["customer-a", "prod"],
+      "vpn_required": true,
+      "enabled": true
+    },
+    {
+      "id": "archive-share",
+      "source_kind": "plain-backup-dir",
+      "access_type": "ssh-host",
+      "host": "archive.example.net",
+      "port": 22,
+      "user": "backup",
+      "backup_paths": [
+        "/srv/customer-backups"
+      ],
+      "tags": ["archive"],
+      "enabled": true
+    }
+  ]
+}
