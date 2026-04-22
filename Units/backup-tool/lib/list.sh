@@ -98,14 +98,15 @@ bt_list_format_text() {
   
   printf '%-40s %-20s %-30s %-15s %s\n' "BACKUP_ID" "SOURCE_SITE" "REASON" "CREATED_AT" "COMPLETE"
   printf '%s\n' "$(printf '=%.0s' {1..150})"
-  
+
+  if [[ -z "${entries//[[:space:]]/}" ]]; then
+    return 0
+  fi
+
   echo "${entries}" | jq -r '
-    @csv | gsub("\""; "") | 
-    split(",") as $row |
-    "\($row[0] | (if length > 40 then .[0:37] + "..." else . end))  \($row[4] | (if length > 20 then .[0:17] + "..." else . end))  \($row[2] | (if length > 30 then .[0:27] + "..." else . end))  \($row[5] | (if length > 15 then .[0:12] + "..." else . end))  \($row[8])"
-  ' 2>/dev/null || {
-    echo "${entries}" | jq -r '.[] | "\(.backup_id | (if length > 40 then .[0:37] + "..." else . end))  \(.source_site | (if length > 20 then .[0:17] + "..." else . end))  \(.reason | (if length > 30 then .[0:27] + "..." else . end))  \(.created_at | (if length > 15 then .[0:12] + "..." else . end))  \(.complete)"'
-  }
+    select(type == "object") |
+    "\(.backup_id // "?" | (if length > 40 then .[0:37] + "..." else . end))  \(.source_site // "?" | (if length > 20 then .[0:17] + "..." else . end))  \(.reason // "?" | (if length > 30 then .[0:27] + "..." else . end))  \(.created_at // "?" | (if length > 15 then .[0:12] + "..." else . end))  \(.complete // "?")"
+  '
 }
 
 bt_list_count() {
