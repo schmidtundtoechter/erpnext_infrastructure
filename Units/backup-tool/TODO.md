@@ -36,6 +36,7 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
   Logging, Fehlerausgabe, JSON-Helfer, Temp-Verzeichnisse, Cleanup.
 - [ ] Abhaengigkeiten dokumentieren:
   `bash`, `jq`, `ssh`, `rsync`, optional `scp`, optional `docker`.
+- [ ] Fuer die umgesetzte Struktur einen Testcase im zentralen Testscript ergaenzen.
 
 ## 3. Konfigurationsformat festlegen
 
@@ -52,6 +53,7 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
   `tags`, `vpn_required`, `description`, `enabled`.
 - [ ] Validierungslogik fuer Konfigurationsdatei implementieren.
 - [ ] Beispielkonfiguration im Verzeichnis ablegen.
+- [ ] Fuer das Konfigurationsmodell einen Testcase im zentralen Testscript ergaenzen.
 
 ## 4. Knoten- und Runner-Modell implementieren
 
@@ -65,6 +67,7 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 - [ ] Vorpruefungen fuer Erreichbarkeit standardisieren.
 - [ ] Docker-Kontext sauber kapseln:
   `docker exec` oder `docker compose exec` nicht quer im Code verteilen.
+- [ ] Fuer das Runner-Modell einen Testcase im zentralen Testscript ergaenzen.
 
 ## 5. Backup-Modell definieren
 
@@ -77,6 +80,7 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 - [ ] Rueckwaertskompatibilitaet definieren:
   auch vorhandene Standard-Frappe-Backups ohne Manifest lesbar machen.
 - [ ] Regeln festlegen, wie ein logisches Backup aus mehreren physischen Dateien erkannt wird.
+- [ ] Fuer das Backup-Modell einen Testcase im zentralen Testscript ergaenzen.
 
 ## 6. Manifest-Format festlegen
 
@@ -90,6 +94,7 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 - [ ] Eindeutige `backup_id`-Strategie definieren.
 - [ ] Klar festlegen:
   Dateinamen bleiben Frappe-kompatibel, Identitaet kommt aus Manifest und Cache.
+- [ ] Fuer das Manifest-Format einen Testcase im zentralen Testscript ergaenzen.
 
 ## 7. Scan und Discovery implementieren
 
@@ -103,6 +108,7 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 - [ ] Scan-Ergebnis in ein einheitliches internes Backup-Objekt mappen.
 - [ ] `scan --node <id>` implementieren.
 - [ ] Vollstaendigen Rebuild ueber alle Knoten implementieren.
+- [ ] Fuer Scan und Discovery einen Testcase im zentralen Testscript ergaenzen.
 
 ## 8. Cache-Modell implementieren
 
@@ -117,6 +123,7 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 - [ ] Live-Abgleich gegen Realzustand als optionalen Modus vorsehen.
 - [ ] Klar festlegen:
   Cache ist immer regenerierbar und nie die Wahrheit.
+- [ ] Fuer das Cache-Modell einen Testcase im zentralen Testscript ergaenzen.
 
 ## 9. Backup-Erzeugung implementieren
 
@@ -134,6 +141,7 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 - [ ] `checksums.sha256` erzeugen.
 - [ ] `manifest.json` erzeugen.
 - [ ] Ergebnis direkt in den Cache uebernehmen oder Folgescan ausfuehren.
+- [ ] Fuer die Backup-Erzeugung einen Testcase im zentralen Testscript ergaenzen.
 
 ## 10. Listen- und Filterfunktionen implementieren
 
@@ -147,6 +155,7 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
   `reason` oder abgeleitete lesbare Kurzfassung.
 - [ ] Ausgabeformate definieren:
   menschenlesbar und JSON.
+- [ ] Fuer Listen und Filter einen Testcase im zentralen Testscript ergaenzen.
 
 ## 11. Transferlogik implementieren
 
@@ -161,6 +170,7 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 - [ ] Transfer-Validierung implementieren:
   Dateigroessen, Dateianzahl, optional Checksummenvergleich.
 - [ ] Cache fuer Quelle und Ziel nach Transfer aktualisieren.
+- [ ] Fuer die Transferlogik einen Testcase im zentralen Testscript ergaenzen.
 
 ## 12. Restore implementieren
 
@@ -174,6 +184,7 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
   bestehende Site, neue Site, Umbenennung.
 - [ ] Sicherheitsflag fuer produktive Ziele einfuehren.
 - [ ] Optionalen Dry-Run einplanen.
+- [ ] Fuer Restore einen Testcase im zentralen Testscript ergaenzen.
 
 ## 13. Behandlung von `site_config.json` implementieren
 
@@ -183,6 +194,7 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 - [ ] Feldweise Merge-Regeln definieren.
 - [ ] Sensitive Werte und umgebungsspezifische Werte bewusst behandeln.
 - [ ] Dokumentieren, welche Felder nie blind uebernommen werden.
+- [ ] Fuer die Behandlung von `site_config.json` einen Testcase im zentralen Testscript ergaenzen.
 
 ## 14. Nacharbeiten nach Restore standardisieren
 
@@ -193,6 +205,7 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 - [ ] Erreichbarkeit testen.
 - [ ] Scheduler oder Jobs plausibel pruefen.
 - [ ] Ergebnis sauber loggen.
+- [ ] Fuer die Nacharbeiten nach Restore einen Testcase im zentralen Testscript ergaenzen.
 
 ## 15. Logging und Exit-Codes
 
@@ -203,6 +216,7 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 - [ ] JSON-Log fuer Automatisierungen bereitstellen.
 - [ ] Exit-Code-Konzept definieren:
   Konfigurationsfehler, Verbindungsfehler, Validierungsfehler, Restore-Fehler usw.
+- [ ] Fuer Logging und Exit-Codes einen Testcase im zentralen Testscript ergaenzen.
 
 ## 16. Sicherheitsmechanismen
 
@@ -212,6 +226,7 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 - [ ] Schutz gegen falschen Knoten oder falschen Container einbauen.
 - [ ] Schutz gegen unvollstaendige Backups einbauen.
 - [ ] Plausibilitaetscheck fuer App- und Versionsunterschiede einbauen.
+- [ ] Fuer Sicherheitsmechanismen einen Testcase im zentralen Testscript ergaenzen.
 
 ## 17. CLI finalisieren
 
@@ -222,8 +237,11 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 - [ ] `--tag` mehrfach zulaessig machen.
 - [ ] `--backup <id>` ueberall auf `backup_id` beziehen.
 - [ ] JSON-Ausgabeoptionen fuer Automatisierung einbauen.
+- [ ] Fuer die finale CLI einen Testcase im zentralen Testscript ergaenzen.
 
 ## 18. Tests und Verifikation
+
+- [ ] Zentrales Testscript festlegen (z. B. `Units/backup-tool/tests/test_backupctl.sh`) und als Sammelpunkt fuer Implementierungs-Testcases verwenden.
 
 - [ ] Testmatrix fuer Zugriffstypen erstellen:
   `local`, `local-docker`, `ssh-host`, `ssh-docker`.
