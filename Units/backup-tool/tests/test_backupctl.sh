@@ -289,6 +289,18 @@ test_restore_config_mode_validation() {
   fi
 }
 
+test_global_dry_run_scan() {
+  local out
+  out="$("${ROOT_DIR}/bin/backupctl" --config "${CONFIG_PATH}" --dry-run scan --node local-dev 2>&1)"
+  assert_contains "${out}" "Would scan:"
+}
+
+test_global_dry_run_restore() {
+  local out
+  out="$("${ROOT_DIR}/bin/backupctl" --config "${CONFIG_PATH}" --dry-run restore --backup demo_1 --to local-dev --site demo.local 2>&1)"
+  assert_contains "${out}" "DRY-RUN: Would restore"
+}
+
 run_all_tests() {
   test_structure_files_exist
   test_shell_standard_is_set
@@ -312,6 +324,8 @@ run_all_tests() {
   test_copy_requires_parameters
   test_restore_requires_parameters
   test_restore_config_mode_validation
+  test_global_dry_run_scan
+  test_global_dry_run_restore
   printf 'PASS: all tests successful\n'
 }
 

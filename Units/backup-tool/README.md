@@ -89,6 +89,8 @@ Optionale Felder:
 	- Zeigt konfigurierte Knoten mit source_kind/access_type.
 - backupctl --config config/nodes.test.json nodes list
 	- Nutzt explizit eine alternative Konfiguration (z. B. fuer Tests).
+- backupctl --dry-run <command> ...
+	- Fuehrt Kommandos im Planungsmodus aus (keine echten Aenderungen, nur geplante Aktionen).
 - backupctl scan --node <id>
 	- Liest Backups vom Zielknoten und mappt sie auf das interne Modell.
 - backupctl cache rebuild

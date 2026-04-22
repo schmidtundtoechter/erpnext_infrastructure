@@ -29,22 +29,24 @@ source "${ROOT_DIR}/lib/list.sh"
 
 backupctl_usage() {
   cat <<'EOF'
-Usage: backupctl [--config <path>] <command> [options]
+Usage: backupctl [--config <path>] [--dry-run] <command> [options]
 
 Commands:
-  nodes list       List configured nodes (placeholder)
-  scan             Scan backups (placeholder)
-  create           Create backup (placeholder)
-  copy             Copy backup (placeholder)
-  restore          Restore backup (placeholder)
-  cache rebuild    Rebuild cache (placeholder)
-  cache clear      Clear cache (placeholder)
+  nodes list       List configured nodes
+  scan             Discover backups on configured nodes
+  list             List backups from cache (text/json, with filters)
+  create           Create backup on frappe-backup-dir sources
+  copy             Copy backup between nodes
+  restore          Restore backup to target site
+  cache rebuild    Rebuild cache from discovered backups
+  cache clear      Clear local cache file
   help             Show this help
 EOF
 }
 
 main() {
   local config_path=""
+  local dry_run_global=0
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -52,6 +54,10 @@ main() {
         [[ $# -ge 2 ]] || bt_die "--config requires a value"
         config_path="$2"
         shift 2
+        ;;
+      --dry-run)
+        dry_run_global=1
+        shift
         ;;
       -h|--help|help)
         backupctl_usage
@@ -72,6 +78,11 @@ main() {
     bt_load_config "${config_path}"
   fi
 
+  if [[ "${dry_run_global}" -eq 1 ]]; then
+    BT_RUNNER_MODE="dry-run"
+    export BT_RUNNER_MODE
+  fi
+
   local command="$1"
   shift || true
 
@@ -90,6 +101,9 @@ main() {
     scan)
       scan_main "$@"
       ;;
+    list)
+      list_main "$@"
+      ;;
     create)
       backup_create_main "$@"
       ;;
@@ -97,7 +111,11 @@ main() {
       backup_copy_main "$@"
       ;;
     restore)
+      if [[ "${dry_run_global}" -eq 1 ]]; then
+        backup_restore_main --dry-run "$@"
+      else
       backup_restore_main "$@"
+      fi
       ;;
     cache)
       local cache_subcommand="${1:-}"
