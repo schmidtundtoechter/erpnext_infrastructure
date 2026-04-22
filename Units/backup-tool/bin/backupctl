@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# shellcheck source=../lib/common.sh
+source "${ROOT_DIR}/lib/common.sh"
+# shellcheck source=../lib/log.sh
+source "${ROOT_DIR}/lib/log.sh"
+# shellcheck source=../lib/config.sh
+source "${ROOT_DIR}/lib/config.sh"
+# shellcheck source=../lib/nodes.sh
+source "${ROOT_DIR}/lib/nodes.sh"
+# shellcheck source=../lib/scan.sh
+source "${ROOT_DIR}/lib/scan.sh"
+# shellcheck source=../lib/backup.sh
+source "${ROOT_DIR}/lib/backup.sh"
+# shellcheck source=../lib/copy.sh
+source "${ROOT_DIR}/lib/copy.sh"
+# shellcheck source=../lib/restore.sh
+source "${ROOT_DIR}/lib/restore.sh"
+# shellcheck source=../lib/cache.sh
+source "${ROOT_DIR}/lib/cache.sh"
+
+backupctl_usage() {
+  cat <<'EOF'
+Usage: backupctl <command> [options]
+
+Commands:
+  nodes list       List configured nodes (placeholder)
+  scan             Scan backups (placeholder)
+  create           Create backup (placeholder)
+  copy             Copy backup (placeholder)
+  restore          Restore backup (placeholder)
+  cache rebuild    Rebuild cache (placeholder)
+  cache clear      Clear cache (placeholder)
+  help             Show this help
+EOF
+}
+
+main() {
+  if [[ $# -eq 0 ]]; then
+    backupctl_usage
+    exit 1
+  fi
+
+  local command="$1"
+  shift || true
+
+  case "${command}" in
+    help|-h|--help)
+      backupctl_usage
+      ;;
+    nodes)
+      local subcommand="${1:-}"
+      if [[ "${subcommand}" != "list" ]]; then
+        bt_die "Unknown nodes subcommand: ${subcommand:-<empty>}"
+      fi
+      shift || true
+      nodes_list "$@"
+      ;;
+    scan)
+      scan_main "$@"
+      ;;
+    create)
+      backup_create "$@"
+      ;;
+    copy)
+      backup_copy "$@"
+      ;;
+    restore)
+      backup_restore "$@"
+      ;;
+    cache)
+      local cache_subcommand="${1:-}"
+      case "${cache_subcommand}" in
+        rebuild)
+          shift || true
+          cache_rebuild "$@"
+          ;;
+        clear)
+          shift || true
+          cache_clear "$@"
+          ;;
+        *)
+          bt_die "Unknown cache subcommand: ${cache_subcommand:-<empty>}"
+          ;;
+      esac
+      ;;
+    *)
+      bt_die "Unknown command: ${command}"
+      ;;
+  esac
+}
+
+main "$@"

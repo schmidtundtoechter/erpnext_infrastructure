@@ -27,16 +27,16 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 
 ## 2. Verzeichnis- und Skriptstruktur anlegen
 
-- [ ] Zielstruktur festlegen, z. B.:
+- [x] Zielstruktur festlegen, z. B.:
   `bin/backupctl`, `lib/config.sh`, `lib/nodes.sh`, `lib/scan.sh`, `lib/backup.sh`, `lib/copy.sh`, `lib/restore.sh`, `lib/cache.sh`, `lib/log.sh`.
-- [ ] Einstiegspunkt `backupctl` anlegen.
-- [ ] Shell-Standards definieren:
+- [x] Einstiegspunkt `backupctl` anlegen.
+- [x] Shell-Standards definieren:
   `set -euo pipefail`, einheitliche Fehlerbehandlung, portable Bash-Version pruefen.
-- [ ] Gemeinsame Hilfsfunktionen anlegen:
+- [x] Gemeinsame Hilfsfunktionen anlegen:
   Logging, Fehlerausgabe, JSON-Helfer, Temp-Verzeichnisse, Cleanup.
-- [ ] Abhaengigkeiten dokumentieren:
+- [x] Abhaengigkeiten dokumentieren:
   `bash`, `jq`, `ssh`, `rsync`, optional `scp`, optional `docker`.
-- [ ] Fuer die umgesetzte Struktur einen Testcase im zentralen Testscript ergaenzen.
+- [x] Fuer die umgesetzte Struktur einen Testcase im zentralen Testscript ergaenzen.
 
 ## 3. Konfigurationsformat festlegen
 
