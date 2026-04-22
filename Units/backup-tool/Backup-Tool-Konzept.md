@@ -30,7 +30,12 @@ Es gibt keine zentrale Server-Anwendung, keinen dauerhaft laufenden Dienst und k
 
 Neben dem Skript gibt es eine Konfiguration, in der alle bekannten Knoten beschrieben sind.
 
-Ein Knoten kann sein:
+Ein Knoten kann fachlich insbesondere eine der folgenden Quellarten bereitstellen:
+
+* ein Frappe-Bench-Backup-Verzeichnis
+* ein einfaches Backup-Verzeichnis
+
+Diese Quellarten koennen technisch in unterschiedlichen Zugriffsformen vorliegen:
 
 * ein lokales Verzeichnis
 * ein per SSH erreichbarer Host
@@ -176,7 +181,8 @@ Die Konfiguration ist das Herzstück des Systems. Sie beschreibt, **wo** und **w
 Ein Knoten sollte mindestens diese Informationen enthalten:
 
 * Knotenname
-* Typ: `local`, `ssh-host`, `ssh-docker`
+* Quellart: `frappe-backup-dir`, `plain-backup-dir`
+* Zugriffstyp: `local`, `local-docker`, `ssh-host`, `ssh-docker`
 * Hostname oder lokaler Pfad
 * SSH-User
 * SSH-Port
@@ -192,7 +198,8 @@ Ein Knoten sollte mindestens diese Informationen enthalten:
 ```yaml
 nodes:
   - id: local-dev
-    type: local-docker
+    source_kind: frappe-backup-dir
+    access_type: local-docker
     base_path: /Users/matthias/projects/frappe-bench
     bench_path: /Users/matthias/projects/frappe-bench
     backup_paths:
@@ -201,7 +208,8 @@ nodes:
     tags: [local, dev]
 
   - id: own-prod-01
-    type: ssh-docker
+    source_kind: frappe-backup-dir
+    access_type: ssh-docker
     host: own-prod-01.example.net
     port: 22
     user: frappe
@@ -212,7 +220,8 @@ nodes:
     tags: [own, prod]
 
   - id: customer-a-prod
-    type: ssh-host
+    source_kind: frappe-backup-dir
+    access_type: ssh-host
     host: customer-a.example.net
     port: 22
     user: frappe
@@ -220,6 +229,16 @@ nodes:
     backup_paths:
       - /opt/frappe-bench/sites/*/private/backups
     tags: [customer-a, prod]
+
+  - id: archive-share
+    source_kind: plain-backup-dir
+    access_type: ssh-host
+    host: archive.example.net
+    port: 22
+    user: backup
+    backup_paths:
+      - /srv/customer-backups
+    tags: [archive]
 ```
 
 ### 6.2 Ziel der Konfiguration
@@ -229,12 +248,18 @@ Die Konfiguration soll dem Skript erlauben:
 * Kommandos im richtigen Kontext auszuführen
 * Dateien an den richtigen Orten zu suchen
 * lokal, remote, host-basiert und docker-basiert einheitlich zu behandeln
+* zwischen Frappe-Backup-Quellen und einfachen Backup-Verzeichnissen zu unterscheiden
 
 ---
 
 ## 7. Ausführungsmodell für Knoten
 
 Damit alle Knoten gleich behandelt werden können, braucht das Skript ein internes Laufzeitmodell.
+
+Dabei ist zwischen Quellart und Zugriffspfad zu unterscheiden:
+
+* Die Quellart beschreibt, ob das Tool mit einem Frappe-Bench-Backup-Verzeichnis oder mit einem einfachen Backup-Verzeichnis arbeitet.
+* Der Zugriffspfad beschreibt, ob lokal, lokal in Docker, per SSH oder per SSH plus Docker gearbeitet wird.
 
 ### 7.1 Lokaler Host
 
@@ -485,11 +510,28 @@ Erkennen, welche Backups auf welchen Knoten tatsächlich vorhanden sind.
 
 Die Suchorte kommen aus der Knotenkonfiguration.
 
+Dabei sind mindestens zwei Quellarten zu unterscheiden.
+
+### A. Frappe-Bench-Backup-Verzeichnis
+
 Typischerweise:
 
 * `sites/*/private/backups`
 * zusätzliche definierte Archivverzeichnisse
 * optionale manuelle Transfer-Ziele
+
+Diese Quellart kann lokal, lokal in Docker, per SSH oder per SSH plus Docker angesprochen werden.
+
+### B. Einfaches Backup-Verzeichnis
+
+Typischerweise:
+
+* ein lokales Verzeichnis mit bereits exportierten Backup-Dateien
+* ein per SSH erreichbares Verzeichnis mit bereits exportierten Backup-Dateien
+
+Diese Quellart ist bewusst einfacher und benoetigt keinen Bench-Kontext.
+
+Sie dient vor allem dazu, bereits erzeugte oder manuell abgelegte Backups zu inventarisieren und weiterzuverteilen.
 
 ## 11.3 Ergebnis
 
@@ -579,11 +621,21 @@ Quelle lesen, lokal zwischenspeichern oder streamen, dann auf Ziel schieben
 
 ## 14.2 Technische Mittel
 
+Primär soll `rsync` verwendet werden.
+
+`scp` ist nur ein Fallback für Fälle, in denen `rsync` auf einem beteiligten Remote-System nicht verfügbar ist.
+
 * `scp`
 * `rsync`
 * `sftp`
 
-Für Bash ist `rsync` meist am robustesten, `scp` am einfachsten.
+Für diese Architektur ist `rsync` der bevorzugte Standard, weil damit Übertragungen robuster, nachvollziehbarer und bei Wiederholungen effizienter durchgeführt werden können.
+
+Das Tool sollte daher vor einem Transfer prüfen, ob `rsync` auf Quelle und Ziel verfügbar ist.
+
+Falls `rsync` auf einem beteiligten Remote-System nicht vorhanden ist, darf kontrolliert auf `scp` zurückgefallen werden.
+
+`sftp` ist hier höchstens ein Sonderfall, aber nicht der vorgesehene Standardpfad.
 
 ## 14.3 Prinzip
 
