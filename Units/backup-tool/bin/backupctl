@@ -40,8 +40,66 @@ Commands:
   restore          Restore backup to target site
   cache rebuild    Rebuild cache from discovered backups
   cache clear      Clear local cache file
-  help             Show this help
+  help             Show this help or command help
+
+Examples:
+  backupctl help scan
+  backupctl scan --help
+  backupctl --dry-run copy --backup <id> --from <src> --to <dst>
 EOF
+}
+
+nodes_usage() {
+  cat <<'EOF'
+Usage: backupctl nodes list
+
+Subcommands:
+  list             List configured nodes
+EOF
+}
+
+cache_usage() {
+  cat <<'EOF'
+Usage: backupctl cache <subcommand>
+
+Subcommands:
+  rebuild          Rebuild cache from scan results
+  clear            Clear local cache file
+EOF
+}
+
+backupctl_command_help() {
+  local topic="${1:-}"
+
+  case "${topic}" in
+    ""|main)
+      backupctl_usage
+      ;;
+    nodes)
+      nodes_usage
+      ;;
+    scan)
+      scan_usage
+      ;;
+    list)
+      list_usage
+      ;;
+    create)
+      backup_create_usage
+      ;;
+    copy)
+      backup_copy_usage
+      ;;
+    restore)
+      backup_restore_usage
+      ;;
+    cache)
+      cache_usage
+      ;;
+    *)
+      bt_die "Unknown help topic: ${topic}"
+      ;;
+  esac
 }
 
 main() {
@@ -59,7 +117,7 @@ main() {
         dry_run_global=1
         shift
         ;;
-      -h|--help|help)
+      -h|--help)
         backupctl_usage
         return
         ;;
@@ -88,14 +146,22 @@ main() {
 
   case "${command}" in
     help|-h|--help)
-      backupctl_usage
+      backupctl_command_help "${1:-}"
       ;;
     nodes)
+      if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
+        nodes_usage
+        return
+      fi
       local subcommand="${1:-}"
       if [[ "${subcommand}" != "list" ]]; then
         bt_die "Unknown nodes subcommand: ${subcommand:-<empty>}"
       fi
       shift || true
+      if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
+        nodes_usage
+        return
+      fi
       nodes_list "$@"
       ;;
     scan)
@@ -118,14 +184,26 @@ main() {
       fi
       ;;
     cache)
+      if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
+        cache_usage
+        return
+      fi
       local cache_subcommand="${1:-}"
       case "${cache_subcommand}" in
         rebuild)
           shift || true
+          if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
+            cache_usage
+            return
+          fi
           cache_rebuild "$@"
           ;;
         clear)
           shift || true
+          if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
+            cache_usage
+            return
+          fi
           cache_clear "$@"
           ;;
         *)

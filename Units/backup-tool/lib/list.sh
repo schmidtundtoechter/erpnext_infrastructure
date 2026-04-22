@@ -1,11 +1,33 @@
 #!/usr/bin/env bash
 
+list_usage() {
+  cat <<'EOF'
+Usage: backupctl list [options]
+
+Options:
+  --format text|json        Output format (default: text)
+  --node <id>               Filter by source node
+  --site <site>             Filter by source site
+  --tag <tag>               Filter by tag
+  --reason-contains <text>  Filter by reason substring
+  --complete true|false     Filter by completeness
+  --from <iso8601>          Filter created_at >= from
+  --to <iso8601>            Filter created_at <= to
+  --live-check              Reserved for optional real-state verification mode
+  -h, --help                Show this help
+EOF
+}
+
 list_main() {
   local format="text" node_filter="" site_filter="" tag_filter="" reason_filter=""
   local complete_filter="" from_date="" to_date="" live_check=0
   
   while [[ $# -gt 0 ]]; do
     case "$1" in
+      -h|--help)
+        list_usage
+        return
+        ;;
       --format)
         format="$2"
         shift 2

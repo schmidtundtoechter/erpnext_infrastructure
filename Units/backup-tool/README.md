@@ -85,6 +85,12 @@ Optionale Felder:
 
 ## CLI-Kommandos und Bedeutung
 
+Hilfe aufrufen:
+
+- backupctl --help
+- backupctl help <command>
+- backupctl <command> --help
+
 - backupctl nodes list
 	- Zeigt konfigurierte Knoten mit source_kind/access_type.
 - backupctl --config config/nodes.test.json nodes list

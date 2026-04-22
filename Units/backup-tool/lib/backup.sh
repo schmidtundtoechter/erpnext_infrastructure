@@ -1,10 +1,28 @@
 #!/usr/bin/env bash
 
+backup_create_usage() {
+  cat <<'EOF'
+Usage: backupctl create --node <id> --site <site> --reason <text> [options]
+
+Options:
+  --node <id>           Source node id (required)
+  --site <site>         Site name (required)
+  --reason <text>       Business reason (required)
+  --tag <tag>           Add tag (repeatable)
+  --backup-type <type>  Backup type label (default: full-with-files)
+  -h, --help            Show this help
+EOF
+}
+
 backup_create_main() {
   local node_id="" site="" reason="" tags_list="" backup_type="full-with-files"
   
   while [[ $# -gt 0 ]]; do
     case "$1" in
+      -h|--help)
+        backup_create_usage
+        return
+        ;;
       --node)
         node_id="$2"
         shift 2

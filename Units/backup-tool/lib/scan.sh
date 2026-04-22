@@ -1,5 +1,16 @@
 #!/usr/bin/env bash
 
+scan_usage() {
+  cat <<'EOF'
+Usage: backupctl scan [--node <id>] [--live-check]
+
+Options:
+  --node <id>     Scan only a single configured node
+  --live-check    Reserved for optional real-state verification mode
+  -h, --help      Show this help
+EOF
+}
+
 bt_scan_frappe_backup_dir() {
   local node_id="$1"
   local backup_root="$2"
@@ -85,6 +96,10 @@ scan_main() {
   
   while [[ $# -gt 0 ]]; do
     case "$1" in
+      -h|--help)
+        scan_usage
+        return
+        ;;
       --node)
         node_id="$2"
         shift 2

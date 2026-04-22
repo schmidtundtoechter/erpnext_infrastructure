@@ -4,11 +4,28 @@
 # Kopiert ein Backup von einem Quellknoten auf einen Zielknoten
 # Unterstützt rsync als Standard mit scp als Fallback
 
+backup_copy_usage() {
+  cat <<'EOF'
+Usage: backupctl copy --backup <id> --from <node> --to <node> [options]
+
+Options:
+  --backup <id>     Backup id (required)
+  --from <node>     Source node id (required)
+  --to <node>       Target node id (required)
+  --no-validate     Skip transfer validation step
+  -h, --help        Show this help
+EOF
+}
+
 backup_copy_main() {
   local backup_id="" from_node="" to_node="" no_validate=""
   
   while [[ $# -gt 0 ]]; do
     case "$1" in
+      -h|--help)
+        backup_copy_usage
+        return
+        ;;
       --backup)
         backup_id="$2"
         shift 2

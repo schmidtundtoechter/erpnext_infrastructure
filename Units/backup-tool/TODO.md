@@ -304,6 +304,8 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 - [ ] Subcommands final festlegen:
   `nodes list`, `scan`, `list`, `create`, `copy`, `restore`, `cache clear`, `cache rebuild`.
 - [ ] Argumente und Hilfeausgaben definieren.
+- [ ] Abschlusspruefung: Alle Help-Pfade final gegen Implementierungsstand pruefen
+  (`backupctl --help`, `backupctl help <command>`, `<command> --help`) sobald alle Features fertig sind.
 - [ ] `create --reason` verpflichtend machen.
 - [ ] `--tag` mehrfach zulaessig machen.
 - [ ] `--backup <id>` ueberall auf `backup_id` beziehen.

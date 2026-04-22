@@ -2,12 +2,33 @@
 
 # TODO 12-14: Restore implementieren mit site_config.json Handling und Nacharbeiten
 
+backup_restore_usage() {
+  cat <<'EOF'
+Usage: backupctl restore --backup <id> --to <node> --site <site> [options]
+
+Options:
+  --backup <id>                              Backup id (required)
+  --to <node>                                Target node id (required)
+  --site <site>                              Target site (required)
+  --config-mode use-source-config|merge-config|keep-target-config
+                                             site_config handling mode (default: merge-config)
+  --dry-run                                  Simulate restore without changes
+  --force                                    Reserved for strict destructive confirmations
+  --no-checks                                Skip pre-check validations
+  -h, --help                                 Show this help
+EOF
+}
+
 backup_restore_main() {
   local backup_id="" target_node="" target_site="" config_mode="merge-config" \
     dry_run="" force="" no_checks=""
   
   while [[ $# -gt 0 ]]; do
     case "$1" in
+      -h|--help)
+        backup_restore_usage
+        return
+        ;;
       --backup)
         backup_id="$2"
         shift 2
