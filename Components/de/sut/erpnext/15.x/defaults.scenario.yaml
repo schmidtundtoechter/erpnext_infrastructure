@@ -44,6 +44,11 @@ scenario:
     # What is the timestamp of the backup to restore (format: YYYYMMDDHHMMSS) in non-interactive mode?
     backuptimestamp: latest
 
+  ## ERPNext frontend setup
+  erpnext:
+    # Which frontend port should ERPNext use internally (nginx listen port)?
+    frontendport: 8080
+
   ## Traefik proxy setup
   traefik:
     # What is the url?

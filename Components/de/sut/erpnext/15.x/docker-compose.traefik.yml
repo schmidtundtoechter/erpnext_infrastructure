@@ -18,7 +18,7 @@ services:
       - "traefik.http.middlewares.${SCENARIO_NAME}-stripprefix.stripprefix.prefixes=${SCENARIO_TRAEFIK_ROUTE}"
       - "traefik.http.middlewares.${SCENARIO_NAME}-stripprefix.stripprefix.forceSlash=false"
       - "traefik.http.routers.${SCENARIO_NAME}.middlewares=${SCENARIO_NAME}-stripprefix,${SCENARIO_NAME}-headers"
-      - "traefik.http.services.${SCENARIO_NAME}.loadbalancer.server.port=8080"
+      - "traefik.http.services.${SCENARIO_NAME}.loadbalancer.server.port=${SCENARIO_ERPNEXT_FRONTENDPORT:-8080}"
   backend:
     networks:
       - traefik

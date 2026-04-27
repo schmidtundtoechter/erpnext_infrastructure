@@ -153,6 +153,7 @@ services:
       - nginx-entrypoint.sh
     environment:
       BACKEND: backend:8000
+      FRONTEND_PORT: ${SCENARIO_ERPNEXT_FRONTENDPORT:-8080}
       FRAPPE_SITE_NAME_HEADER: ${SCENARIO_SERVER_NAME}
       SOCKETIO: websocket:9000
       UPSTREAM_REAL_IP_ADDRESS: 127.0.0.1
