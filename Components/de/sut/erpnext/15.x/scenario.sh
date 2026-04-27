@@ -7,7 +7,6 @@
 # Set some variables
 function setEnvironment() {
   deploy-tools.setEnvironment
-  log "SCENARIO_TRAEFIK_ENABLE=$SCENARIO_TRAEFIK_ENABLE"
   if [[ $SCENARIO_TRAEFIK_ENABLE != "true" ]]; then
 	log "Traefik is disabled, will publish frontend port on the host so an external proxy can reach it"
     # No Traefik: publish frontend port on the host so an external proxy can reach it

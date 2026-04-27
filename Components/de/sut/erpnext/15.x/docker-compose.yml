@@ -7,6 +7,13 @@ services:
         FRAPPE_VERSION: ${FRAPPE_VERSION}
         ERPNEXT_VERSION: ${ERPNEXT_VERSION}
     image: ${SCENARIO_NAME}_erpnext_image
+    depends_on:
+      db:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+      redis-queue:
+        condition: service_healthy
     deploy:
       restart_policy:
         condition: on-failure
@@ -145,22 +152,27 @@ services:
     container_name: ${SCENARIO_NAME}_erpnext_frontend_container
     image: ${SCENARIO_NAME}_erpnext_image
     depends_on:
-      - websocket
+      backend:
+        condition: service_started
+      websocket:
+        condition: service_started
     deploy:
       restart_policy:
         condition: on-failure
     command:
       - nginx-entrypoint.sh
     environment:
-      BACKEND: backend:8000
-      FRONTEND_PORT: ${SCENARIO_ERPNEXT_FRONTENDPORT:-8080}
-      FRAPPE_SITE_NAME_HEADER: ${SCENARIO_SERVER_NAME}
-      SOCKETIO: websocket:9000
-      UPSTREAM_REAL_IP_ADDRESS: 127.0.0.1
-      UPSTREAM_REAL_IP_HEADER: X-Forwarded-For
-      UPSTREAM_REAL_IP_RECURSIVE: "off"
-      PROXY_READ_TIMEOUT: 120
-      CLIENT_MAX_BODY_SIZE: 50m
+      - FRAPPE_HOST_NAME=https://${SCENARIO_TRAEFIK_URL}
+      - FRAPPE_WEBSERVER_ROOT=${SCENARIO_TRAEFIK_ROUTE}
+      - BACKEND=backend:8000
+      - FRONTEND_PORT=8080
+      - FRAPPE_SITE_NAME_HEADER=${SCENARIO_SERVER_NAME}
+      - SOCKETIO=websocket:9000
+      - UPSTREAM_REAL_IP_ADDRESS=127.0.0.1
+      - UPSTREAM_REAL_IP_HEADER=X-Forwarded-For
+      - UPSTREAM_REAL_IP_RECURSIVE=off
+      - PROXY_READ_TIMEOUT=120
+      - CLIENT_MAX_BODY_SIZE=50m
     volumes:
       - ${SCENARIO_DATA_MOUNTPOINT_1}:/home/frappe/frappe-bench/env
       - ${SCENARIO_DATA_MOUNTPOINT_2}:/home/frappe/frappe-bench/apps
@@ -176,6 +188,9 @@ services:
   queue-long:
     container_name: ${SCENARIO_NAME}_erpnext_queue-long_container
     image: ${SCENARIO_NAME}_erpnext_image
+    depends_on:
+      redis-queue:
+        condition: service_healthy
     deploy:
       restart_policy:
         condition: on-failure
@@ -196,6 +211,9 @@ services:
   queue-short:
     container_name: ${SCENARIO_NAME}_erpnext_queue-short_container
     image: ${SCENARIO_NAME}_erpnext_image
+    depends_on:
+      redis-queue:
+        condition: service_healthy
     deploy:
       restart_policy:
         condition: on-failure
@@ -216,6 +234,10 @@ services:
   redis-queue:
     container_name: ${SCENARIO_NAME}_erpnext_redis-queue_container
     image: redis:6.2-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
     deploy:
       restart_policy:
         condition: on-failure
@@ -228,6 +250,10 @@ services:
   redis-cache:
     container_name: ${SCENARIO_NAME}_erpnext_redis-cache_container
     image: redis:6.2-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
     deploy:
       restart_policy:
         condition: on-failure
@@ -270,6 +296,11 @@ services:
   websocket:
     container_name: ${SCENARIO_NAME}_erpnext_websocket_container
     image: ${SCENARIO_NAME}_erpnext_image
+    depends_on:
+      redis-cache:
+        condition: service_healthy
+      redis-queue:
+        condition: service_healthy
     deploy:
       restart_policy:
         condition: on-failure
