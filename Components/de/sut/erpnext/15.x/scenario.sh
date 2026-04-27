@@ -7,6 +7,14 @@
 # Set some variables
 function setEnvironment() {
   deploy-tools.setEnvironment
+  log "SCENARIO_TRAEFIK_ENABLE=$SCENARIO_TRAEFIK_ENABLE"
+  if [[ $SCENARIO_TRAEFIK_ENABLE != "true" ]]; then
+	log "Traefik is disabled, will publish frontend port on the host so an external proxy can reach it"
+    # No Traefik: publish frontend port on the host so an external proxy can reach it
+    COMPOSE_FILE_ARGUMENTS="${COMPOSE_FILE_ARGUMENTS} -f docker-compose.ports.yml"
+  else
+	log "Traefik is enabled, will not publish frontend port on the host"
+  fi
 }
 
 function checkAndCreateDataVolume() {
@@ -37,11 +45,13 @@ function up() {
   # Open permissions to docker sock
   deploy-tools.setDockerSockPermissions
 
-  # build before up
-  deploy-tools.setEnvironment
+  # build and run — setEnvironment must be called BEFORE deploy-tools.up because
+  # deploy-tools.up re-runs deploy-tools.setEnvironment internally and would overwrite
+  # the COMPOSE_FILE_ARGUMENTS extension (e.g. docker-compose.ports.yml) added here.
+  setEnvironment
   docker compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS build
-
-  deploy-tools.up
+  banner "Create and run container"
+  docker compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS up -d
 }
 
 function start() {
