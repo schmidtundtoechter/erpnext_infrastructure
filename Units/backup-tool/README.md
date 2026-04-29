@@ -1,4 +1,4 @@
-# Backup-Tool (MVP Scaffold)
+# Backup-Tool
 
 Dieses Verzeichnis enthaelt den Bash-basierten Einstiegspunkt und die Modulstruktur fuer backupctl.
 Das Tool verwaltet ERPNext/Frappe-Backups ueber mehrere Systeme (lokal, SSH, Docker) ohne zentrale Datenbank.
@@ -13,26 +13,30 @@ Das Tool verwaltet ERPNext/Frappe-Backups ueber mehrere Systeme (lokal, SSH, Doc
 	- local-docker: Ausfuehrung lokal im Container.
 	- ssh-host: Ausfuehrung auf Remote-Host via SSH.
 	- ssh-docker: Ausfuehrung via SSH im Remote-Container.
-- Cache: Lokaler, regenerierbarer Index fuer schnelle Suche und Filterung. Der Cache ist nie die Wahrheit.
-- backup_id: Eindeutige technische Kennung eines logischen Backups.
+- Cache: Lokaler, regenerierbarer Index fuer schnelle Suche und Filterung. Liegt unter `~/.cache/backupctl/nodes/<node-id>.json` (eine JSON-Array-Datei pro Knoten). Der Cache ist nie die Wahrheit.
+- backup_id: Eindeutige technische Kennung eines logischen Backups. Format: `<node>_<site>_<timestamp>`.
+- backup_hash: Kurzform der backup_id (6 Zeichen SHA256). Wird in der Scan-Ausgabe als `[abc123]` angezeigt.
 - display_name: Nutzerfreundliche Anzeige. Fallback-Reihenfolge: display_name -> reason -> backup_id.
+- source_rel_dir: Relativer Pfad des Backup-Verzeichnisses unterhalb von backup_root (relevant fuer plain-backup-dir mit Unterverzeichnissen).
 
 ## Verzeichnisstruktur
 
 - bin/backupctl: CLI-Einstiegspunkt und Command-Dispatcher.
 - config/nodes.json: Beispielkonfiguration der bekannten Knoten.
-- lib/common.sh: Gemeinsame Hilfsfunktionen (Fehler, Utilities).
-- lib/log.sh: Logging-Helfer.
-- lib/config.sh: Konfiguration laden und validieren.
-- lib/nodes.sh: Knotenmodell, Runner, SSH/Docker-Ausfuehrung, Transfer-Helfer.
-- lib/backup-model.sh: Backup-Datenmodell und Manifest-Schema.
-- lib/scan.sh: Discovery fuer frappe-backup-dir und plain-backup-dir.
-- lib/cache.sh: Cache-Management (JSON Lines, rebuild, clear, incremental update).
-- lib/backup.sh: Backup-Erzeugung (create).
-- lib/copy.sh: Transferlogik (rsync als Standardpfad, Validierung, Cache-Update).
+- config/nodes.mkt.json: Reale Konfiguration fuer mkt-Knoten.
+- config/nodes.test.json: Testkonfiguration fuer automatisierte Tests.
+- lib/common.sh: Gemeinsame Hilfsfunktionen (Fehler, Temp-Verzeichnisse, Cleanup-Trap).
+- lib/log.sh: Logging-Helfer (bt_log_info, bt_log_warn, bt_log_error mit ISO-8601-Zeitstempel).
+- lib/config.sh: Konfiguration laden und validieren (inkl. vollstaendiger Schema-Validierung).
+- lib/nodes.sh: Knotenmodell, Runner, SSH/Docker-Ausfuehrung, Transfer-Helfer, nodes list.
+- lib/backup-model.sh: Backup-Datenmodell, Manifest-Schema, backup_id/backup_hash-Generierung.
+- lib/scan.sh: Discovery fuer frappe-backup-dir und plain-backup-dir (lokal und remote, Single-Pass).
+- lib/cache.sh: Cache-Management (per-Node JSON-Arrays, rebuild, clear, upsert, aggregierte Abfrage).
+- lib/backup.sh: Backup-Erzeugung (create, nur fuer frappe-backup-dir).
+- lib/copy.sh: Transferlogik (rsync als Standard, Validierung, Cache-Update).
 - lib/restore.sh: Restore, site_config-Modi, Post-Restore-Aufgaben.
 - lib/list.sh: Listen- und Filterausgabe (Text/JSON).
-- tests/test_backupctl.sh: Zentrales Testscript.
+- tests/test_backupctl.sh: Zentrales Testscript (27 Tests).
 
 ## Abhaengigkeiten
 
@@ -97,17 +101,24 @@ Hilfe aufrufen:
 	- Nutzt explizit eine alternative Konfiguration (z. B. fuer Tests).
 - backupctl --dry-run <command> ...
 	- Fuehrt Kommandos im Planungsmodus aus (keine echten Aenderungen, nur geplante Aktionen).
-- backupctl scan --node <id>
-	- Liest Backups vom Zielknoten und mappt sie auf das interne Modell.
+- backupctl scan [--node <id>]
+	- Liest Backups von einem oder allen konfigurierten Knoten (Single-Pass remote).
+	- Ausgabe: `FOUND [<hash>] node=X site=Y kind=Z complete=true|false id=<backup_id>`
 - backupctl cache rebuild
-	- Baut den lokalen Cache vollstaendig aus Realzustand neu auf.
-- backupctl list --format text|json [Filter]
-	- Listet Cache-Eintraege und filtert z. B. nach node/site/tag/zeitraum/complete.
-- backupctl create --node <id> --site <site> --reason <text>
-	- Erzeugt auf frappe-backup-dir ein neues Backup inkl. Manifest.
-- backupctl copy --backup <id> --from <source-node> --to <target-node>
-	- Uebertraegt ein Backup zwischen Knoten.
+	- Baut den lokalen Cache vollstaendig neu auf (loescht bestehende Node-Dateien).
+- backupctl cache clear
+	- Loescht alle lokalen Cache-Dateien unter `~/.cache/backupctl/nodes/`.
+- backupctl list [--format text|json] [--node <id>] [--site <site>] [--tag <tag>]
+               [--reason-contains <text>] [--complete true|false]
+               [--from <iso8601>] [--to <iso8601>]
+	- Listet Cache-Eintraege mit optionalen Filtern.
+- backupctl create --node <id> --site <site> --reason <text> [--tag <tag>] [--backup-type <type>]
+	- Erzeugt auf frappe-backup-dir ein neues Backup inkl. Manifest (nur frappe-backup-dir).
+- backupctl copy --backup <id> --from <source-node> --to <target-node> [--no-validate]
+	- Uebertraegt ein Backup zwischen Knoten (rsync, mit optionaler Validierung).
 - backupctl restore --backup <id> --to <target-node> --site <target-site>
+               [--config-mode use-source-config|merge-config|keep-target-config]
+               [--dry-run] [--force] [--no-checks]
 	- Stellt ein Backup auf dem Ziel wieder her.
 
 ## Restore: site_config Modi
@@ -124,15 +135,32 @@ Aktuell geschuetzte Felder beim Merge:
 - encryption_key
 - file_watcher_port
 
+## Post-Restore-Aufgaben (automatisch)
+
+Nach einem `restore` fuehrt das Tool automatisch folgende Schritte aus:
+
+1. `bench migrate --site <site>` - Datenbankmigrationen.
+2. `bench fix-permissions --user frappe` - Dateirechte korrigieren.
+3. `bench --site <site> clear-cache` - Cache leeren.
+4. HTTP-Erreichbarkeit pruefen (`curl localhost:8000/app/home`).
+
 ## Typischer Ablauf
 
 1. Konfiguration validieren und Knoten pruefen.
-2. scan oder cache rebuild ausfuehren.
-3. list fuer Auswahl eines Backups nutzen.
-4. Optional create fuer neues Backup.
-5. copy auf Zielknoten.
-6. restore auf Zielsite.
-7. Post-Restore-Aufgaben und Verifikation prüfen.
+2. `scan` oder `cache rebuild` ausfuehren.
+3. `list` fuer Auswahl eines Backups nutzen.
+4. Optional `create` fuer neues Backup auf frappe-bench.
+5. `copy` auf Zielknoten (rsync).
+6. `restore` auf Zielsite.
+7. Post-Restore-Aufgaben laufen automatisch; Ergebnis-Log pruefen.
+
+## Bekannte Grenzen (Stand MVP)
+
+- `create`: Keine Erzeugung von `apps.json` und `checksums.sha256`.
+- `restore`: Kein automatischer Neustart von Containern/Diensten nach Restore.
+- `restore`: Keine explizite Produktiv-Schutzflag (--force ist reserviert).
+- `copy`/`restore`: Pfadrekonstruktion fuer `source_rel_dir` bei verschachtelten plain-backup-dir Backups noch nicht vollstaendig implementiert.
+- Keine Migration von altem globalen `cache.jsonl` auf neue per-Node-Struktur.
 
 ## Schnelltest
 

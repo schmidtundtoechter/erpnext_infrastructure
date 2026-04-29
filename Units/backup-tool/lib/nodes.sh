@@ -224,5 +224,8 @@ build_transfer_command() {
 
 nodes_list() {
   bt_require_loaded_config
-  jq -r '.nodes[] | [.id, .source_kind, .access_type, (.enabled // true)] | @tsv' "${BT_CONFIG_PATH}"
+  printf '%-25s %-22s %-16s %s\n' "NODE_ID" "SOURCE_KIND" "ACCESS_TYPE" "ENABLED"
+  printf '%s\n' "$(printf '=%.0s' {1..80})"
+  jq -r '.nodes[] | [.id, .source_kind, .access_type, (.enabled // true | tostring)] | @tsv' "${BT_CONFIG_PATH}" \
+    | awk -F'\t' '{ printf "%-25s %-22s %-16s %s\n", $1, $2, $3, $4 }'
 }

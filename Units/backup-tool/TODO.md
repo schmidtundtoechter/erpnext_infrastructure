@@ -271,19 +271,8 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 - [x] Ergebnis sauber loggen.
 - [x] Fuer die Nacharbeiten nach Restore einen Testcase im zentralen Testscript ergaenzen.
 
-## 14. Nacharbeiten nach Restore standardisieren
-
-- [ ] Checkliste nach Restore implementieren oder dokumentieren.
-- [ ] Bench-Migration ausfuehren koennen.
-- [ ] Rechte und Dateipfade pruefen.
-- [ ] Container oder Dienste bei Bedarf neu starten.
-- [ ] Erreichbarkeit testen.
-- [ ] Scheduler oder Jobs plausibel pruefen.
-- [ ] Ergebnis sauber loggen.
-- [ ] Fuer die Nacharbeiten nach Restore einen Testcase im zentralen Testscript ergaenzen.
-
   Zeit, Aktion, Quellknoten, Zielknoten, Site, Ergebnis, Exit-Code, Pfade.
-- [ ] Menschlich lesbares Logformat definieren.
+- [ ] Menschlich lesbares Logformat definieren (aktuell: ISO-8601 Prefix + Level, stdout fuer Daten, stderr fuer Logs).
 - [ ] JSON-Log fuer Automatisierungen bereitstellen.
 - [ ] Exit-Code-Konzept definieren:
   Konfigurationsfehler, Verbindungsfehler, Validierungsfehler, Restore-Fehler usw.
@@ -301,16 +290,18 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 
 ## 17. CLI finalisieren
 
-- [ ] Subcommands final festlegen:
+- [x] Subcommands final festlegen:
   `nodes list`, `scan`, `list`, `create`, `copy`, `restore`, `cache clear`, `cache rebuild`.
-- [ ] Argumente und Hilfeausgaben definieren.
-- [ ] Abschlusspruefung: Alle Help-Pfade final gegen Implementierungsstand pruefen
-  (`backupctl --help`, `backupctl help <command>`, `<command> --help`) sobald alle Features fertig sind.
-- [ ] `create --reason` verpflichtend machen.
-- [ ] `--tag` mehrfach zulaessig machen.
-- [ ] `--backup <id>` ueberall auf `backup_id` beziehen.
-- [ ] JSON-Ausgabeoptionen fuer Automatisierung einbauen.
-- [ ] Fuer die finale CLI einen Testcase im zentralen Testscript ergaenzen.
+- [x] `--config <path>` und `BACKUPCTL_CONFIG_PATH` als Global-Option implementieren.
+- [x] `--dry-run` als Global-Option implementieren.
+- [x] Argumente und Hilfeausgaben definieren.
+- [x] Abschlusspruefung: Alle Help-Pfade implementiert
+  (`backupctl --help`, `backupctl help <command>`, `<command> --help`).
+- [x] `create --reason` verpflichtend machen.
+- [x] `--tag` mehrfach zulaessig machen.
+- [x] `--backup <id>` ueberall auf `backup_id` beziehen.
+- [x] `list --format json` fuer Automatisierung implementiert.
+- [ ] Fuer die finale CLI einen vollstaendigen Testcase im zentralen Testscript ergaenzen.
 
 ## 18. Tests und Verifikation
 
@@ -332,13 +323,13 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 
 ## 19. Dokumentation
 
-- [ ] README fuer das Tool schreiben.
-- [ ] Beispielkonfiguration dokumentieren.
-- [ ] Beispiel fuer `manifest.json` dokumentieren.
-- [ ] Restore-Modi fuer `site_config.json` dokumentieren.
-- [ ] Typische Workflows dokumentieren:
-  Scan, Create, Copy, Restore.
-- [ ] Grenzen des MVP dokumentieren.
+- [x] README fuer das Tool schreiben.
+- [x] Beispielkonfiguration dokumentieren (nodes.json, nodes.mkt.json, nodes.test.json).
+- [x] Restore-Modi fuer `site_config.json` dokumentieren.
+- [x] Typische Workflows dokumentieren: Scan, Create, Copy, Restore.
+- [x] Bekannte Grenzen im README dokumentieren.
+- [ ] Beispiel fuer `manifest.json` im README ergaenzen.
+- [ ] Backup-Tool-Konzept.md aktualisieren: source_rel_dir und per-Node Cache-Architektur dokumentieren.
 
 ---
 

@@ -29,7 +29,13 @@ source "${ROOT_DIR}/lib/list.sh"
 
 backupctl_usage() {
   cat <<'EOF'
-Usage: backupctl [--config <path>] [--dry-run] <command> [options]
+Usage: backupctl [global options] <command> [options]
+
+Global Options:
+  --config <path>  Path to node config file
+                   (default: config/nodes.json, override via BACKUPCTL_CONFIG_PATH)
+  --dry-run        Plan mode: show what would happen, make no changes
+  -h, --help       Show this help
 
 Commands:
   nodes list       List configured nodes
@@ -43,9 +49,14 @@ Commands:
   help             Show this help or command help
 
 Examples:
+  backupctl nodes list
+  backupctl --config config/nodes.mkt.json nodes list
+  backupctl scan --node own-prod-01
+  backupctl list --format json --node own-prod-01 --complete true
+  backupctl create --node own-prod-01 --site mysite.example.net --reason "before update"
+  backupctl copy --backup <id> --from own-prod-01 --to archive-share
+  backupctl --dry-run restore --backup <id> --to own-prod-01 --site mysite.example.net
   backupctl help scan
-  backupctl scan --help
-  backupctl --dry-run copy --backup <id> --from <src> --to <dst>
 EOF
 }
 
