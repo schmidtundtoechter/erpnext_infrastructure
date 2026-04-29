@@ -16,7 +16,7 @@ main
 
 - **`main`** ist der produktionsreife Stand. Jeder Merge auf `main` löst ein Release aus.
 - **`staging`** ist der Integrations-Branch. Änderungen werden hier zusammengeführt und getestet, bevor sie nach `main` gehen.
-- **Feature- und Fix-Branches** werden immer von `staging` abgezweigt und per PR wieder in `staging` gemergt.
+- **`development`** ist der Team-Entwicklungsbranch. Feature- und Fix-Branches werden von `development` abgezweigt und per PR zurück nach `development` gemergt.
 
 ---
 
@@ -34,13 +34,14 @@ main
 - Ein Pull Request von `feature/*` oder `fix/*` nach **`development`** wird geöffnet.
 - Mindestens ein weiteres Teammitglied reviewed den PR.
 - CI-Checks (Lint, Syntax, Skript-Validierung) müssen grün sein.
-- Nach Approval: Squash-Merge in `staging`.
+- Nach Approval: Squash-Merge in `development`.
 
 ### Stage 3 — Staging Server beim Kunden (staging = Pre-Production)
 
+- Für den Release-Kandidaten wird ein PR von `development` nach `staging` geöffnet und gemergt.
 - `staging` wird auf einem dedizierten Acceptance-System deployt (z. B. ein Testmandant / Bench).
 - Funktionaler Smoke-Test: Kann ERPNext gestartet werden? Sind alle Apps installiert?
-- Gefundene Fehler werden als `fix/*`-Branch auf `staging` behoben — kein direktes Pushen auf `staging`.
+- Gefundene Fehler werden als `fix/*`-Branch von `development` erstellt und über `development` erneut nach `staging` gebracht — kein direktes Pushen auf `staging`.
 - Ist der Acceptance-Test bestanden, wird ein PR von `staging` nach `main` geöffnet.
 
 ### Stage 4 — Production (main)
