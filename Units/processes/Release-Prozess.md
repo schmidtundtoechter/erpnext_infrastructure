@@ -34,8 +34,8 @@ Nur ein Fehler behoben?
 ### 1. Pre-Release-Checks
 
 - [ ] Alle CI-Checks auf `main` sind grün
-- [ ] PR wurde reviewt und per Squash-Merge zusammengeführt
-- [ ] Keine offenen, kritischen Issues auf dem Milestone
+- [ ] PR wurde reviewt
+- [ ] Keine offenen, kritischen Issues
 - [ ] CHANGELOG wurde im PR aktualisiert
 
 ### 2. Versionsnummer bestimmen
@@ -65,10 +65,12 @@ Format in `CHANGELOG.md`:
 
 ### 4. Git-Operationen
 
+[ ] Überarbeiten !!!
+
 ```bash
-# Auf main arbeiten
-git checkout main
-git pull origin main
+# Auf development arbeiten
+git checkout development
+git pull origin development
 
 # Tag setzen
 git tag vX.Y.Z -m "Release vX.Y.Z: <kurze Zusammenfassung>"

@@ -14,9 +14,9 @@ main
             └── fix/<name>
 ```
 
-- **`main`** ist der produktionsreife Stand. Jeder Merge auf `main` löst ein Release aus.
-- **`staging`** ist der Integrations-Branch. Änderungen werden hier zusammengeführt und getestet, bevor sie nach `main` gehen.
-- **`development`** ist der Team-Entwicklungsbranch. Feature- und Fix-Branches werden von `development` abgezweigt und per PR zurück nach `development` gemergt.
+- **`main`** ist der produktionsreife Stand. Jeder Merge auf `main` löst ein Release aus. Es muss eine neue Versionsnummer sein.
+- **`staging`** ist der Integrations-Branch. Hier wird reingemergt, wenn etwas zum Kunden geliefert werden soll. Es muss eine neue Versionsnummer sein.
+- **`development`** ist der Team-Entwicklungsbranch. Feature- und Fix-Branches werden von `development` abgezweigt und per PR zurück nach `development` gemergt. Änderungen werden hier zusammengeführt und getestet, bevor sie nach `staging` gehen.
 
 ---
 
