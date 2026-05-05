@@ -1,0 +1,322 @@
+services:
+  backend:
+    container_name: ${SCENARIO_NAME}_erpnext_backend_container
+    build:
+      context: .
+      args:
+        FRAPPE_VERSION: ${FRAPPE_VERSION}
+        ERPNEXT_VERSION: ${ERPNEXT_VERSION}
+    image: ${SCENARIO_NAME}_erpnext_image
+    depends_on:
+      db:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+      redis-queue:
+        condition: service_healthy
+    deploy:
+      restart_policy:
+        condition: on-failure
+    volumes:
+      - ${SCENARIO_DATA_MOUNTPOINT_1}:/home/frappe/frappe-bench/env
+      - ${SCENARIO_DATA_MOUNTPOINT_2}:/home/frappe/frappe-bench/apps
+      - ${SCENARIO_DATA_MOUNTPOINT_3}:/home/frappe/frappe-bench/sites
+      - ${SCENARIO_DATA_MOUNTPOINT_4}:/home/frappe/frappe-bench/logs
+      - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${SCENARIO_SERVER_CONFIGSDIR}:${SCENARIO_SERVER_CONFIGSDIR}
+    networks:
+      - erpnext_network
+
+  configurator:
+    container_name: ${SCENARIO_NAME}_erpnext_configurator_container
+    image: ${SCENARIO_NAME}_erpnext_image
+    deploy:
+      restart_policy:
+        condition: none
+    entrypoint:
+      - bash
+      - -c
+    # add redis_socketio for backward compatibility
+    command:
+      - >
+        ls -1 apps > sites/apps.txt;
+        bench set-config -g db_host $$DB_HOST;
+        bench set-config -gp db_port $$DB_PORT;
+        bench set-config -g redis_cache "redis://$$REDIS_CACHE";
+        bench set-config -g redis_queue "redis://$$REDIS_QUEUE";
+        bench set-config -g redis_socketio "redis://$$REDIS_QUEUE";
+        bench set-config -gp socketio_port $$SOCKETIO_PORT;
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      REDIS_CACHE: redis-cache:6379
+      REDIS_QUEUE: redis-queue:6379
+      SOCKETIO_PORT: "9000"
+    volumes:
+      - ${SCENARIO_DATA_MOUNTPOINT_1}:/home/frappe/frappe-bench/env
+      - ${SCENARIO_DATA_MOUNTPOINT_2}:/home/frappe/frappe-bench/apps
+      - ${SCENARIO_DATA_MOUNTPOINT_3}:/home/frappe/frappe-bench/sites
+      - ${SCENARIO_DATA_MOUNTPOINT_4}:/home/frappe/frappe-bench/logs
+      - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
+      - ${SCENARIO_SERVER_CONFIGSDIR}:${SCENARIO_SERVER_CONFIGSDIR}
+    networks:
+      - erpnext_network
+
+  create-site:
+    container_name: ${SCENARIO_NAME}_erpnext_create-site_container
+    image: ${SCENARIO_NAME}_erpnext_image
+    deploy:
+      restart_policy:
+        condition: none
+    volumes:
+      - ${SCENARIO_DATA_MOUNTPOINT_1}:/home/frappe/frappe-bench/env
+      - ${SCENARIO_DATA_MOUNTPOINT_2}:/home/frappe/frappe-bench/apps
+      - ${SCENARIO_DATA_MOUNTPOINT_3}:/home/frappe/frappe-bench/sites
+      - ${SCENARIO_DATA_MOUNTPOINT_4}:/home/frappe/frappe-bench/logs
+      - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
+      - ./install_upgrade_apps.sh:/tmp/install_upgrade_apps.sh
+      - ./apps.json:/tmp/apps.json:ro
+      - ./direct_wildcard_fix.sh:/tmp/direct_wildcard_fix.sh
+      - ./fix-git-refs.sh:/tmp/fix-git-refs.sh
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${SCENARIO_SERVER_CONFIGSDIR}:${SCENARIO_SERVER_CONFIGSDIR}
+      - ${SCENARIO_DATA_BACKUPDIR}:/home/frappe/frappe-bench/backups
+      - ${SCENARIO_SRC_SECRETSDIR}/.ssh:/home/frappe/.ssh:ro
+    environment:
+      DB_HOST: db
+      DB_ROOT_USER: ${DB_ROOT_USER}
+      DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    entrypoint:
+      - bash
+      - -c
+    command:
+      - >
+        wait-for-it -t 120 db:3306;
+        wait-for-it -t 120 redis-cache:6379;
+        wait-for-it -t 120 redis-queue:6379;
+        export start=`date +%s`;
+        until [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".db_host // empty"` ]] && \
+          [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".redis_cache // empty"` ]] && \
+          [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".redis_queue // empty"` ]];
+        do
+          echo "Waiting for sites/common_site_config.json to be created";
+          sleep 5;
+          if (( `date +%s`-start > 120 )); then
+            echo "could not find sites/common_site_config.json with required keys";
+            exit 1
+          fi
+        done;
+        echo "sites/common_site_config.json found";
+        SITE_NAME="${SCENARIO_TRAEFIK_URL}";
+        EXISTING_DEFAULT=$$(grep -oP '"default_site":\s*"\K[^"]+' sites/common_site_config.json 2>/dev/null || echo "");
+        if [ -n "$$EXISTING_DEFAULT" ]; then echo "Using existing default site: $$EXISTING_DEFAULT"; SITE_NAME="$$EXISTING_DEFAULT"; fi;
+        if [ ! -f sites/$$SITE_NAME/site_config.json ]; then
+          bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=$$DB_ROOT_PASSWORD --install-app erpnext --set-default $$SITE_NAME;
+        else echo "Site $$SITE_NAME already exists, skipping new-site"; fi;
+        cp -f /tmp/install_upgrade_apps.sh /home/frappe/frappe-bench/install_upgrade_apps.sh;
+        chmod +x /home/frappe/frappe-bench/install_upgrade_apps.sh;
+        cp -f /tmp/fix-git-refs.sh /home/frappe/frappe-bench/fix-git-refs.sh;
+        chmod +x /home/frappe/frappe-bench/fix-git-refs.sh;
+        /home/frappe/frappe-bench/install_upgrade_apps.sh $$SITE_NAME ${SCENARIO_INSTALL_APPS};
+        cp -f /tmp/direct_wildcard_fix.sh /home/frappe/frappe-bench/direct_wildcard_fix.sh;
+        chmod +x /home/frappe/frappe-bench/direct_wildcard_fix.sh;
+        /home/frappe/frappe-bench/direct_wildcard_fix.sh;
+        docker restart ${SCENARIO_NAME}_erpnext_backend_container ${SCENARIO_NAME}_erpnext_frontend_container
+    networks:
+      - erpnext_network
+
+  db:
+    container_name: ${SCENARIO_NAME}_erpnext_db_container
+    image: mariadb:10.6
+    healthcheck:
+      test: mysqladmin ping -h localhost --password=$$MYSQL_ROOT_PASSWORD
+      interval: 1s
+      retries: 20
+    deploy:
+      restart_policy:
+        condition: on-failure
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+      - --skip-innodb-read-only-compressed # Temporary fix for MariaDB 10.6
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    volumes:
+      - ${SCENARIO_DATA_MOUNTPOINT_7}:/var/lib/mysql
+    networks:
+      - erpnext_network
+
+  frontend:
+    container_name: ${SCENARIO_NAME}_erpnext_frontend_container
+    image: ${SCENARIO_NAME}_erpnext_image
+    depends_on:
+      backend:
+        condition: service_started
+      websocket:
+        condition: service_started
+    deploy:
+      restart_policy:
+        condition: on-failure
+    command:
+      - nginx-entrypoint.sh
+    environment:
+      - FRAPPE_HOST_NAME=https://${SCENARIO_TRAEFIK_URL}
+      - FRAPPE_WEBSERVER_ROOT=${SCENARIO_TRAEFIK_ROUTE}
+      - BACKEND=backend:8000
+      - FRONTEND_PORT=8080
+      - FRAPPE_SITE_NAME_HEADER=${SCENARIO_TRAEFIK_URL}
+      - SOCKETIO=websocket:9000
+      - UPSTREAM_REAL_IP_ADDRESS=127.0.0.1
+      - UPSTREAM_REAL_IP_HEADER=X-Forwarded-For
+      - UPSTREAM_REAL_IP_RECURSIVE=off
+      - PROXY_READ_TIMEOUT=120
+      - CLIENT_MAX_BODY_SIZE=50m
+    volumes:
+      - ${SCENARIO_DATA_MOUNTPOINT_1}:/home/frappe/frappe-bench/env
+      - ${SCENARIO_DATA_MOUNTPOINT_2}:/home/frappe/frappe-bench/apps
+      - ${SCENARIO_DATA_MOUNTPOINT_3}:/home/frappe/frappe-bench/sites
+      - ${SCENARIO_DATA_MOUNTPOINT_4}:/home/frappe/frappe-bench/logs
+      - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${SCENARIO_SERVER_CONFIGSDIR}:${SCENARIO_SERVER_CONFIGSDIR}
+      - ${SCENARIO_SRC_SECRETSDIR}/.ssh:/home/frappe/.ssh:ro
+    networks:
+      - erpnext_network
+
+  queue-long:
+    container_name: ${SCENARIO_NAME}_erpnext_queue-long_container
+    image: ${SCENARIO_NAME}_erpnext_image
+    depends_on:
+      redis-queue:
+        condition: service_healthy
+    deploy:
+      restart_policy:
+        condition: on-failure
+    command:
+      - bench
+      - worker
+      - --queue
+      - long,default,short
+    volumes:
+      - ${SCENARIO_DATA_MOUNTPOINT_1}:/home/frappe/frappe-bench/env
+      - ${SCENARIO_DATA_MOUNTPOINT_2}:/home/frappe/frappe-bench/apps
+      - ${SCENARIO_DATA_MOUNTPOINT_3}:/home/frappe/frappe-bench/sites
+      - ${SCENARIO_DATA_MOUNTPOINT_4}:/home/frappe/frappe-bench/logs
+      - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
+    networks:
+      - erpnext_network
+
+  queue-short:
+    container_name: ${SCENARIO_NAME}_erpnext_queue-short_container
+    image: ${SCENARIO_NAME}_erpnext_image
+    depends_on:
+      redis-queue:
+        condition: service_healthy
+    deploy:
+      restart_policy:
+        condition: on-failure
+    command:
+      - bench
+      - worker
+      - --queue
+      - short,default
+    volumes:
+      - ${SCENARIO_DATA_MOUNTPOINT_1}:/home/frappe/frappe-bench/env
+      - ${SCENARIO_DATA_MOUNTPOINT_2}:/home/frappe/frappe-bench/apps
+      - ${SCENARIO_DATA_MOUNTPOINT_3}:/home/frappe/frappe-bench/sites
+      - ${SCENARIO_DATA_MOUNTPOINT_4}:/home/frappe/frappe-bench/logs
+      - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
+    networks:
+      - erpnext_network
+
+  redis-queue:
+    container_name: ${SCENARIO_NAME}_erpnext_redis-queue_container
+    image: redis:6.2-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+    deploy:
+      restart_policy:
+        condition: on-failure
+    command: redis-server --maxmemory-policy noeviction
+    volumes:
+      - ${SCENARIO_DATA_MOUNTPOINT_5}:/data
+    networks:
+      - erpnext_network
+
+  redis-cache:
+    container_name: ${SCENARIO_NAME}_erpnext_redis-cache_container
+    image: redis:6.2-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+    deploy:
+      restart_policy:
+        condition: on-failure
+    command: redis-server --maxmemory-policy allkeys-lru
+    volumes:
+      - ${SCENARIO_DATA_MOUNTPOINT_6}:/data
+    networks:
+      - erpnext_network
+
+  scheduler:
+    container_name: ${SCENARIO_NAME}_erpnext_scheduler_container
+    image: ${SCENARIO_NAME}_erpnext_image
+    deploy:
+      restart_policy:
+        condition: on-failure
+    entrypoint:
+      - bash
+      - -c
+    command:
+      - >
+        echo "⏳ Waiting for bench initialization...";
+        until [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".db_host // empty"` ]] &&
+          [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".redis_cache // empty"` ]] &&
+          [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".redis_queue // empty"` ]];
+        do
+          echo "Waiting for sites/common_site_config.json";
+          sleep 5;
+        done;
+        echo "✅ Bench initialized. Starting scheduler...";
+        bench schedule
+    volumes:
+      - ${SCENARIO_DATA_MOUNTPOINT_1}:/home/frappe/frappe-bench/env
+      - ${SCENARIO_DATA_MOUNTPOINT_2}:/home/frappe/frappe-bench/apps
+      - ${SCENARIO_DATA_MOUNTPOINT_3}:/home/frappe/frappe-bench/sites
+      - ${SCENARIO_DATA_MOUNTPOINT_4}:/home/frappe/frappe-bench/logs
+      - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
+    networks:
+      - erpnext_network
+
+  websocket:
+    container_name: ${SCENARIO_NAME}_erpnext_websocket_container
+    image: ${SCENARIO_NAME}_erpnext_image
+    depends_on:
+      redis-cache:
+        condition: service_healthy
+      redis-queue:
+        condition: service_healthy
+    deploy:
+      restart_policy:
+        condition: on-failure
+    command:
+      - node
+      - /home/frappe/frappe-bench/apps/frappe/socketio.js
+    volumes:
+      - ${SCENARIO_DATA_MOUNTPOINT_1}:/home/frappe/frappe-bench/env
+      - ${SCENARIO_DATA_MOUNTPOINT_2}:/home/frappe/frappe-bench/apps
+      - ${SCENARIO_DATA_MOUNTPOINT_3}:/home/frappe/frappe-bench/sites
+      - ${SCENARIO_DATA_MOUNTPOINT_4}:/home/frappe/frappe-bench/logs
+      - ${SCENARIO_DATA_MOUNTPOINT_8}:/home/frappe/frappe-bench/sites/assets
+    networks:
+      - erpnext_network
+
+networks:
+  erpnext_network:
+    driver: bridge
+    name: ${SCENARIO_NAME}_erpnext_network
