@@ -88,13 +88,19 @@ list_main() {
   local filtered_entries
   filtered_entries="$(bt_cache_filter "${all_entries}" "${node_filter}" "${site_filter}" \
     "${tag_filter}" "${reason_filter}" "${complete_filter}" "${from_date}" "${to_date}")"
+
+  local filtered_entries_json enriched_entries
+  filtered_entries_json="$(printf '%s\n' "${filtered_entries}" | jq -s '.')"
+  enriched_entries="$(bt_cache_entries_with_scan_state "${filtered_entries_json}")"
   
   case "${format}" in
     json)
-      printf '%s\n' "${filtered_entries}" | jq -s .
+      printf '%s\n' "${enriched_entries}" | jq .
       ;;
     text)
-      bt_list_format_text "${filtered_entries}"
+      bt_list_print_scan_overview "${node_filter}"
+      printf '\n'
+      bt_list_format_text "${enriched_entries}"
       ;;
     *)
       bt_die "Unknown list format: ${format}"
@@ -102,11 +108,28 @@ list_main() {
   esac
 }
 
+bt_list_print_scan_overview() {
+  local node_filter="${1:-}"
+  local overview_rows
+
+  overview_rows="$(bt_cache_scan_state_rows_json)"
+  if [[ -n "${node_filter}" ]]; then
+    overview_rows="$(jq -c --arg node "${node_filter}" 'map(select(.node == $node))' <<<"${overview_rows}")"
+  fi
+
+  printf 'Cache overview:\n'
+  printf '%-25s %-10s %-10s %-20s %s\n' 'NODE' 'REACHABLE' 'BACKUPS' 'LAST_SCAN' 'CACHE'
+  printf '%s\n' "$(printf '=%.0s' {1..86})"
+
+  jq -r '.[] | [.node, .reachable, (.backups | tostring), .last_scan_at, .cache_status] | @tsv' <<<"${overview_rows}" \
+    | awk -F'\t' '{ printf "%-25s %-10s %-10s %-20s %s\n", $1, $2, $3, $4, $5 }'
+}
+
 bt_list_format_text() {
   local entries="$1"
   
-  printf '%-8s %-40s %-20s %-30s %-15s %s\n' "HASH" "BACKUP_ID" "SOURCE_SITE" "REASON" "CREATED_AT" "ART"
-  printf '%s\n' "$(printf '=%.0s' {1..177})"
+  printf '%-8s %-40s %-20s %-30s %-20s %-20s %s\n' "HASH" "BACKUP_ID" "SOURCE_SITE" "REASON" "CREATED_AT" "LAST_SCAN" "ART"
+  printf '%s\n' "$(printf '=%.0s' {1..198})"
 
   if [[ -z "${entries//[[:space:]]/}" ]]; then
     return 0
@@ -126,8 +149,17 @@ bt_list_format_text() {
     normalize_input
     | map(select(type == "object"))[]
     | (.artifacts // {}) as $a
-    | "\(.backup_hash // "?" | tostring | .[0:8])  \(.backup_id // "?" | tostring | if length > 40 then .[0:37] + "..." else . end)  \(.source_site // "?" | tostring | if length > 20 then .[0:17] + "..." else . end)  \(.reason // "?" | tostring | if length > 30 then .[0:27] + "..." else . end)  \(.created_at // "?" | tostring | if length > 15 then .[0:12] + "..." else . end)  \(artifact_code($a))"
-  '
+    | [
+        (.backup_hash // "?" | tostring | .[0:8]),
+        (.backup_id // "?" | tostring | if length > 40 then .[0:37] + "..." else . end),
+        (.source_site // "?" | tostring | if length > 20 then .[0:17] + "..." else . end),
+        (.reason // "?" | tostring | if length > 30 then .[0:27] + "..." else . end),
+        (.created_at // "?" | tostring | if length > 20 then .[0:19] else . end),
+        (.last_scan_at // "-" | tostring | if length > 20 then .[0:19] else . end),
+        artifact_code($a)
+      ]
+    | @tsv
+  ' | awk -F'\t' '{ printf "%-8s %-40s %-20s %-30s %-20s %-20s %s\n", $1, $2, $3, $4, $5, $6, $7 }'
 }
 
 bt_list_count() {

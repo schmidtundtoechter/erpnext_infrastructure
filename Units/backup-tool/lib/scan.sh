@@ -389,46 +389,16 @@ scan_main() {
   done
   
   bt_require_loaded_config
-  local -a bt_scan_reports=()
-
-  bt_scan_add_report() {
-    local nid="$1"
-    local reachable="$2"
-    local found_count="$3"
-    local cache_status="$4"
-
-    bt_scan_reports+=("${nid}|${reachable}|${found_count}|${cache_status}")
-  }
 
   bt_scan_print_reports() {
-    local report_entry nid reachable found_count cache_status
-    local reachable_text cache_text
+    local overview_rows
 
-    [[ ${#bt_scan_reports[@]} -gt 0 ]] || return 0
-
+    overview_rows="$(bt_cache_scan_state_rows_json)"
     printf 'Scan overview:\n'
-    printf '%-25s %-10s %-10s %s\n' 'NODE' 'REACHABLE' 'BACKUPS' 'CACHE'
-    printf '%s\n' "$(printf '=%.0s' {1..68})"
-
-    for report_entry in "${bt_scan_reports[@]}"; do
-      IFS='|' read -r nid reachable found_count cache_status <<<"${report_entry}"
-
-      case "${reachable}" in
-        yes) reachable_text="yes" ;;
-        no) reachable_text="no" ;;
-        *) reachable_text="${reachable}" ;;
-      esac
-
-      case "${cache_status}" in
-        updated) cache_text="updated" ;;
-        unchanged) cache_text="not updated" ;;
-        dry-run) cache_text="not updated (dry-run)" ;;
-        *) cache_text="${cache_status}" ;;
-      esac
-
-      printf '%-25s %-10s %-10s %s\n' \
-        "${nid}" "${reachable_text}" "${found_count}" "${cache_text}"
-    done
+    printf '%-25s %-10s %-10s %-20s %s\n' 'NODE' 'REACHABLE' 'BACKUPS' 'LAST_SCAN' 'CACHE'
+    printf '%s\n' "$(printf '=%.0s' {1..86})"
+    jq -r '.[] | [.node, .reachable, (.backups | tostring), .last_scan_at, .cache_status] | @tsv' <<<"${overview_rows}" \
+      | awk -F'\t' '{ printf "%-25s %-10s %-10s %-20s %s\n", $1, $2, $3, $4, $5 }'
   }
 
   local _scan_and_cache
@@ -444,7 +414,7 @@ scan_main() {
         reachable="no"
         bt_log_warn "Node ${nid}: scan skipped (cache not updated)"
         printf 'WARN  [------] node=%s unavailable\n' "${nid}"
-        bt_scan_add_report "${nid}" "${reachable}" "0" "${cache_status}"
+        bt_cache_upsert_scan_state "${nid}" "${reachable}" "0" "${cache_status}"
         return 0
       fi
     fi
@@ -468,7 +438,9 @@ scan_main() {
       printf 'FOUND [------] node=%s none\n' "${nid}"
     fi
 
-    bt_scan_add_report "${nid}" "${reachable}" "${found}" "${cache_status}"
+    if [[ "${BT_RUNNER_MODE:-execute}" != "dry-run" ]]; then
+      bt_cache_upsert_scan_state "${nid}" "${reachable}" "${found}" "${cache_status}"
+    fi
   }
 
   if [[ -z "${node_id}" ]]; then

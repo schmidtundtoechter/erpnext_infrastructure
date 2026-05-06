@@ -3,6 +3,7 @@
 declare -g BT_CACHE_DIR="${BT_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/backupctl}"
 declare -g BT_CACHE_NODES_DIR="${BT_CACHE_NODES_DIR:-${BT_CACHE_DIR}/nodes}"
 declare -g BT_CACHE_LEGACY_PATH="${BT_CACHE_LEGACY_PATH:-${BT_CACHE_DIR}/cache.jsonl}"
+declare -g BT_CACHE_SCAN_STATE_PATH="${BT_CACHE_SCAN_STATE_PATH:-${BT_CACHE_DIR}/scan-state.json}"
 
 bt_cache_init() {
   [[ -d "${BT_CACHE_DIR}" ]] || mkdir -p "${BT_CACHE_DIR}"
@@ -19,6 +20,120 @@ bt_cache_node_path() {
   local node_id="$1"
 
   printf '%s/%s.json' "${BT_CACHE_NODES_DIR}" "$(bt_cache_node_file_token "${node_id}")"
+}
+
+bt_cache_scan_state_all() {
+  bt_cache_init
+
+  if [[ -s "${BT_CACHE_SCAN_STATE_PATH}" ]]; then
+    jq -c . "${BT_CACHE_SCAN_STATE_PATH}"
+  else
+    printf '{}\n'
+  fi
+}
+
+bt_cache_replace_scan_state_all() {
+  local states_json="$1"
+  local tmp_path
+
+  bt_cache_init
+  tmp_path="${BT_CACHE_SCAN_STATE_PATH}.tmp"
+
+  jq '.' <<<"${states_json}" > "${tmp_path}"
+  mv "${tmp_path}" "${BT_CACHE_SCAN_STATE_PATH}"
+}
+
+bt_cache_node_backup_count() {
+  local node_id="$1"
+  local node_entries
+
+  node_entries="$(bt_cache_node_entries "${node_id}")"
+  jq 'length' <<<"${node_entries}"
+}
+
+bt_cache_node_last_seen() {
+  local node_id="$1"
+  local node_entries
+
+  node_entries="$(bt_cache_node_entries "${node_id}")"
+  jq -r 'if length == 0 then "" else (map(.last_seen // "") | map(select(. != "")) | sort | last // "") end' <<<"${node_entries}"
+}
+
+bt_cache_upsert_scan_state() {
+  local node_id="$1"
+  local reachable="$2"
+  local backups="$3"
+  local cache_status="$4"
+  local last_scan_at="${5:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}"
+  local states_json updated_states
+
+  states_json="$(bt_cache_scan_state_all)"
+  updated_states="$(jq -c \
+    --arg node_id "${node_id}" \
+    --arg reachable "${reachable}" \
+    --arg cache_status "${cache_status}" \
+    --arg last_scan_at "${last_scan_at}" \
+    --argjson backups "${backups}" \
+    '. + {($node_id): {reachable: $reachable, backups: $backups, cache_status: $cache_status, last_scan_at: $last_scan_at}}' <<<"${states_json}")"
+
+  bt_cache_replace_scan_state_all "${updated_states}"
+}
+
+bt_cache_scan_state_rows_json() {
+  bt_require_loaded_config
+
+  local states_json rows_json node_id backup_count state_json last_scan_at reachable cache_status
+  rows_json='[]'
+  states_json="$(bt_cache_scan_state_all)"
+
+  while IFS= read -r node_id; do
+    [[ -n "${node_id}" ]] || continue
+
+    backup_count="$(bt_cache_node_backup_count "${node_id}")"
+    state_json="$(jq -c --arg node_id "${node_id}" '.[$node_id] // {}' <<<"${states_json}")"
+    last_scan_at="$(jq -r '.last_scan_at // empty' <<<"${state_json}")"
+    if [[ -z "${last_scan_at}" ]]; then
+      last_scan_at="$(bt_cache_node_last_seen "${node_id}")"
+    fi
+    [[ -n "${last_scan_at}" ]] || last_scan_at='-'
+
+    reachable="$(jq -r '.reachable // "-"' <<<"${state_json}")"
+    cache_status="$(jq -r '.cache_status // empty' <<<"${state_json}")"
+    if [[ -z "${cache_status}" ]]; then
+      if [[ "${backup_count}" -gt 0 ]]; then
+        cache_status='cached'
+      else
+        cache_status='not-scanned'
+      fi
+    fi
+
+    rows_json="$(jq -c \
+      --arg node "${node_id}" \
+      --arg reachable "${reachable}" \
+      --arg last_scan_at "${last_scan_at}" \
+      --arg cache_status "${cache_status}" \
+      --argjson backups "${backup_count}" \
+      '. + [{node: $node, reachable: $reachable, backups: $backups, last_scan_at: $last_scan_at, cache_status: $cache_status}]' <<<"${rows_json}")"
+  done < <(bt_list_node_ids)
+
+  printf '%s\n' "${rows_json}"
+}
+
+bt_cache_entries_with_scan_state() {
+  local entries_json="$1"
+  local states_json
+
+  states_json="$(bt_cache_scan_state_all)"
+
+  jq -c --argjson states "${states_json}" '
+    map(
+      . + {
+        last_scan_at: ($states[.source_node].last_scan_at // .last_seen // "-"),
+        node_reachable: ($states[.source_node].reachable // "-"),
+        node_cache_status: ($states[.source_node].cache_status // "cached")
+      }
+    )
+  ' <<<"${entries_json}"
 }
 
 bt_cache_has_node_files() {
@@ -245,6 +360,7 @@ bt_cache_clear() {
   bt_cache_init
   rm -f "${BT_CACHE_NODES_DIR}"/*.json 2>/dev/null || true
   rm -f "${BT_CACHE_LEGACY_PATH}" 2>/dev/null || true
+  rm -f "${BT_CACHE_SCAN_STATE_PATH}" 2>/dev/null || true
   bt_log_info "Cache cleared"
 }
 
