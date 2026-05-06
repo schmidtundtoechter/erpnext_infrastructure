@@ -221,8 +221,8 @@ build_transfer_command() {
 
 nodes_list() {
   bt_require_loaded_config
-  printf '%-25s %-22s %-16s %s\n' "NODE_ID" "NODE_TYPE" "ACCESS" "ENABLED"
-  printf '%s\n' "$(printf '=%.0s' {1..80})"
+  printf '%-25s %-24s %-22s %-16s %s\n' "NODE_ID" "HOST" "NODE_TYPE" "ACCESS" "ENABLED"
+  printf '%s\n' "$(printf '=%.0s' {1..106})"
   jq -r '
     def normalize_node_type:
       if . == "frappe-backup-dir" then "frappe-node"
@@ -234,9 +234,11 @@ nodes_list() {
       elif . == "ssh-host" then "ssh"
       else .
       end;
+    def host_value:
+      (.ssh_config // .host // "-");
     .nodes[]
-    | [.id, ((.node_type // .source_kind // "?") | normalize_node_type), ((.access // .access_type // "?") | normalize_access), (.enabled // true | tostring)]
+    | [.id, host_value, ((.node_type // .source_kind // "?") | normalize_node_type), ((.access // .access_type // "?") | normalize_access), (.enabled // true | tostring)]
     | @tsv
   ' "${BT_CONFIG_PATH}" \
-    | awk -F'\t' '{ printf "%-25s %-22s %-16s %s\n", $1, $2, $3, $4 }'
+    | awk -F'\t' '{ printf "%-25s %-24s %-22s %-16s %s\n", $1, $2, $3, $4, $5 }'
 }
