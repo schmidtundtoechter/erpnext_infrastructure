@@ -1,6 +1,8 @@
 # Deployment Flow — ERPNext / Frappe (15.x.1)
 
-Dieses Dokument beschreibt, was bei jedem MIMS-Step passiert, wann Apps installiert/deinstalliert werden und wie frappe/erpnext versioniert sind.
+Dieses Dokument beschreibt, was bei jedem MIMS-Step passiert, wann Apps installiert/deinstalliert/aktualisiert werden und wie frappe/erpnext versioniert sind.
+
+**Designprinzip:** `down,up` aktualisiert nie. Es startet Container neu und gleicht den App-Installationsstatus an `apps.json` an. Ein echtes Update wird ausschließlich über den `update`-Step vorbereitet und ausgelöst.
 
 ---
 
@@ -27,41 +29,35 @@ Alle Daten-Volumes sind **external** (persistent über down/up hinaus):
 
 ---
 
+## Typische Abläufe
+
+### Normaler Neustart (kein Update)
+
+```bash
+scenario.deploy <scenario> down,up
+```
+
+- Container stoppen und neu starten.
+- Kein Docker-Pull, kein `build --pull`.
+- Keine App-Upgrades, keine Migrationen.
+- `install_upgrade_apps.sh` läuft im **reconcile**-Modus: fehlende Apps werden installiert, deaktivierte entfernt, vorhandene aktive Apps bleiben unverändert.
+
+### Update vorbereiten und ausführen
+
+```bash
+# Schritt 1: Versionsvorschläge erzeugen, Images aktualisieren, Upgrade-Marker setzen
+scenario.deploy <scenario> init,update
+
+# Schritt 2: apps.updated.json und .env-Vorschläge prüfen und manuell übernehmen
+# Dann: Dateien hochladen und Upgrade ausführen
+scenario.deploy <scenario> init,update,down,up
+```
+
+`init,update` allein erzeugt den Upgrade-Marker `sites/.run-app-upgrade`. Bleibt er liegen (kein `up` danach), wird der Upgrade beim nächsten `up` nachgeholt — das ist gewollt.
+
+---
+
 ## Steps im Detail
-
-### `update`
-
-> **Update-Vorbereitung: Versionsvorschläge, Docker-Pull/Build und Upgrade-Marker.**
-
-```
-scenario.deploy → scenario.sh update
-```
-
-1. Liest `apps.json` (oder konvertiert Legacy-Format)
-2. Ruft für jede App `git ls-remote --tags` auf dem Remote-Repo auf
-3. Schreibt `apps.updated.json` mit Vorschlägen für neuere Tags (gleiche Major-Version)
-4. Gibt für `FRAPPE_VERSION` / `ERPNEXT_VERSION` aus `.env` ebenfalls Vorschläge aus
-5. Führt `docker compose pull` aus
-6. Führt `docker compose build --pull` aus
-7. Schreibt `sites/.run-app-upgrade` ueber einen kurzlebigen Compose-Container in das persistente Sites-Volume
-
-→ Zum Übernehmen: `apps.updated.json` prüfen und manuell in `apps.json` / `.env` eintragen, dann `init,update,down,up` ausführen. Der eigentliche App-Upgrade-/Migrationslauf passiert beim folgenden `up`, weil dann der `create-site`-Container neu erzeugt wird.
-
----
-
-### `down`
-
-```
-scenario.deploy → scenario.sh down → deploy-tools.down → docker compose down
-```
-
-1. Prüft Data-Volumes (mit `nocreate` — legt keine neuen an)
-2. Stoppt alle Container und entfernt sie
-3. **Alle Volumes bleiben erhalten** (extern deklariert in docker-compose.yml)
-
-→ Daten (DB, Apps, Sites, Redis) sind nach `down` vollständig vorhanden, nur Container-Prozesse weg.
-
----
 
 ### `init`
 
@@ -89,6 +85,40 @@ scenario.deploy init
 
 ---
 
+### `update`
+
+> **Update-Vorbereitung: Versionsvorschläge, Docker-Pull/Build, Upgrade-Marker.**
+
+```
+scenario.deploy → scenario.sh update
+```
+
+1. Liest `apps.json` (oder konvertiert Legacy-Format)
+2. Ruft für jede App `git ls-remote --tags` auf dem Remote-Repo auf
+3. Schreibt `apps.updated.json` mit Vorschlägen für neuere Tags (gleiche Major-Version)
+4. Gibt für `FRAPPE_VERSION` / `ERPNEXT_VERSION` aus `.env` Versions-Vorschläge aus
+5. Führt `docker compose pull` aus (nur Registry-Images; build-only Images werden übersprungen)
+6. Führt `docker compose build --pull` aus
+7. Schreibt `sites/.run-app-upgrade` über einen kurzlebigen Compose-Container in das persistente Sites-Volume
+
+`update` ist der **einzige Step**, der Images explizit aktualisiert. Bleibt danach kein `down,up` aus, liegt die Marker-Datei einfach liegen und wird beim nächsten `up` aufgegriffen.
+
+---
+
+### `down`
+
+```
+scenario.deploy → scenario.sh down → deploy-tools.down → docker compose down
+```
+
+1. Prüft Data-Volumes (mit `nocreate` — legt keine neuen an)
+2. Stoppt alle Container und entfernt sie
+3. **Alle Volumes bleiben erhalten** (extern deklariert in docker-compose.yml)
+
+Daten (DB, Apps, Sites, Redis) sind nach `down` vollständig vorhanden — nur Container-Prozesse weg.
+
+---
+
 ### `up`
 
 ```
@@ -97,19 +127,13 @@ scenario.deploy → scenario.sh up
     → docker compose up -d      (startet alle Container)
 ```
 
-`up` macht bewusst keinen expliziten Pull und keinen `build --pull` mehr. Es verwendet schlicht `docker compose up -d`; wenn das lokale Image noch fehlt, darf Docker Compose es bauen. Wenn das Image bereits existiert, wird es nicht aktiv aktualisiert.
+`up` führt kein explizites `pull` und kein `build --pull` aus. Es verwendet schlicht `docker compose up -d`. Fehlt das lokale Image, darf Docker Compose es bauen; existiert es bereits, wird es nicht aktualisiert.
 
 **Das ERPNext-Image** wird mit folgenden Build-Args gebaut:
-- `FRAPPE_VERSION` aus `.env` → frappe-Basis-Image
-- `ERPNEXT_VERSION` aus `.env` → erpnext wird im Image eingebaut
+- `FRAPPE_VERSION` aus `.env` → frappe-Basisimage
+- `ERPNEXT_VERSION` aus `.env` → ERPNext wird im Image eingebaut
 
-Hinweis zum impliziten Update-Verhalten:
-- `frappe` und `erpnext` werden beim Docker-Build in das Image eingebaut.
-- Ein aktives Aktualisieren passiert im `update`-Step durch `docker compose pull` und `docker compose build --pull`.
-- Ein normales `down,up` aktualisiert weder Container-Images noch App-Repositories.
-- Für reproduzierbare Stände sind Tags/Commit-Hashes in `.env` besser als bewegliche Branch-Namen.
-
-> frappe und erpnext sind **im Docker-Image eingebaut** (nicht in den Apps-Volumes). Sie werden NICHT via `install_upgrade_apps.sh` geupdated.
+> `frappe` und `erpnext` sind **im Docker-Image eingebaut** (nicht in den Apps-Volumes). Sie werden nicht via `install_upgrade_apps.sh` aktualisiert. Für reproduzierbare Stände sind Tags in `.env` besser als bewegliche Branch-Namen.
 
 **`create-site` Container** (startet einmalig, `restart_policy: none`):
 
@@ -126,63 +150,72 @@ Hinweis zum impliziten Update-Verhalten:
 
 ## `install_upgrade_apps.sh` — App-Verwaltung
 
-Wird **bei jedem `up`** ausgeführt (auch wenn Site schon existiert).
+Wird **bei jedem `up`** ausgeführt (auch wenn die Site bereits existiert). Der Modus hängt von der Marker-Datei `sites/.run-app-upgrade` ab:
+
+| Marker-Datei vorhanden | Modus       |
+|------------------------|-------------|
+| Nein                   | `reconcile` |
+| Ja                     | `upgrade`   |
 
 ### Ablauf
 
 ```
-1. JSON lesen: apps.json (oder Legacy-Inline-Format konvertieren)
-2. Modus bestimmen:
-   - sites/.run-app-upgrade vorhanden → upgrade
-   - keine Marker-Datei → reconcile
+1. apps.json lesen (oder Legacy-Inline-Format konvertieren)
+2. Modus bestimmen (Marker-Datei sites/.run-app-upgrade)
 3. apps_installed = [frappe, erpnext]  ← immer behalten
 4. Für jede App in apps.json:
    - active: true  → reconcile_app() oder upgrade_app()
    - active: false → remove_app()
-5. Alle app-Verzeichnisse unter apps/*:
-   - nicht in apps_installed → remove_app()
+5. Alle App-Verzeichnisse unter apps/* die nicht in apps_installed sind → remove_app()
 6. Im reconcile-Modus:
-   - keine Git-Updates
-   - keine Requirements-Updates
-   - Migration/Cache-Clear nur, wenn Installationsstatus geändert wurde
+   - keine Git-Updates, keine Requirements, keine pauschale Migration
+   - Migration/Cache-Clear nur bei Statusänderung (Neuinstallation)
 7. Im upgrade-Modus:
    - Requirements aktualisieren
    - Site migrieren
-   - Developer-Mode/server_script_enabled setzen
    - Cache leeren
    - Marker-Datei nach Erfolg löschen
+   - Schlägt der Upgrade fehl, bleibt die Marker-Datei erhalten → nächster up wiederholt ihn
 ```
 
-### `reconcile_app()` — Installationsstatus abgleichen
+### Modus `reconcile` — Installationsstatus abgleichen
+
+Default bei jedem normalen `up`.
 
 ```bash
-1. Wenn apps/<app> fehlt: bench get-app <app> <repo> --branch <version>
-2. Wenn App auf der Site fehlt: bench install-app <app>
-3. Wenn App bereits vorhanden und installiert ist: nichts am Code ändern
+1. Wenn apps/<app> fehlt:          bench get-app <app> <repo> --branch <version>
+2. Wenn App auf der Site fehlt:    bench install-app <app>
+3. Wenn App bereits installiert:   nichts tun
 ```
 
-Im Reconcile-Modus gibt es kein `git fetch`, kein `git checkout`, kein `git reset --hard`, kein `bench update --requirements` und keine pauschale Migration.
+Nicht ausgeführt im reconcile-Modus:
+`git fetch` · `git checkout` · `git reset --hard` · `bench update --requirements` · `pip install --upgrade` · `bench migrate` (pauschal) · `bench setup requirements --dev`
 
-### `upgrade_app()` — Installieren / Updaten
+### Modus `upgrade` — Installieren / Updaten
+
+Läuft nur, wenn `sites/.run-app-upgrade` existiert.
 
 ```bash
-1. bench get-app <app> <repo> --branch <version>  # nur wenn apps/<app> fehlt
-2. fix-git-refs.sh apps/<app>                      # konfiguriert git-Remotes
-3. pushd apps/<app>
-4. app_remote dynamisch lesen (`git remote | head -n 1`) + loggen
-5. Wenn Remote vorhanden: `git fetch <app_remote> <version>` + `git checkout <version>`
-6. Für Branch-Refs: `git reset --hard <app_remote>/<version>`
-7. Wenn kein Remote vorhanden: Remote-abhängigen Teil überspringen (kein Abbruch)
-8. bench install-app <app>  (wenn noch nicht installiert; retry mit --force)
+1. bench get-app <app> <repo> --branch <version>   # nur wenn apps/<app> fehlt
+2. fix-git-refs.sh apps/<app>                       # konfiguriert git-Remotes
+3. app_remote dynamisch lesen (git remote | head -n 1)
+4. Wenn Remote vorhanden:
+   git fetch <app_remote> <version>
+   git checkout <version>
+   Bei Branch-Refs: git reset --hard <app_remote>/<version>
+5. Wenn kein Remote vorhanden: Remote-Teil überspringen (kein Abbruch)
+6. bench install-app <app>  (wenn noch nicht installiert; retry mit --force)
+7. Requirements aktualisieren, Site migrieren, Cache leeren
+8. Marker-Datei löschen
 ```
 
 **Versionstypen in apps.json:**
 
-| Typ            | Beispiel           | Verhalten                                      |
-|----------------|--------------------|------------------------------------------------|
-| Branch         | `version-15`       | `git reset --hard <app_remote>/version-15` (wenn Remote vorhanden) |
-| Tag            | `v15.42.3`         | `git checkout v15.42.3` → exakt gepinnt        |
-| Commit-Hash    | `abc1234`          | `git checkout abc1234` → exakt gepinnt         |
+| Typ         | Beispiel      | Verhalten                                                      |
+|-------------|---------------|----------------------------------------------------------------|
+| Branch      | `version-15`  | `git reset --hard <remote>/version-15` (wenn Remote vorhanden)|
+| Tag         | `v15.42.3`    | `git checkout v15.42.3` → exakt gepinnt                       |
+| Commit-Hash | `abc1234`     | `git checkout abc1234` → exakt gepinnt                        |
 
 ### `remove_app()` — Deinstallieren
 
@@ -193,7 +226,7 @@ Im Reconcile-Modus gibt es kein `git fetch`, kein `git checkout`, kein `git rese
    a. bench uninstall-app -y <app>
       (Fehler → remove-from-installed-apps als Fallback)
    b. bench remove-app <app>
-      (Fehler nicht-fatal → manuelles Cleanup)
+      (Fehler nicht-fatal → manuelles Cleanup nötig)
    c. grep -v aus sites/apps.txt
    d. rm -rf apps/<app>  +  archived/apps/<app>-*
 3. Wenn nicht installiert → Debug-Log + bench list-apps ausgeben
