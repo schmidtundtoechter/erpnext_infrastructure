@@ -6,7 +6,7 @@
 
 backup_copy_usage() {
   cat <<'EOF'
-Usage: backupctl copy --backup <id> --from <node> --to <node> [options]
+Usage: backupctl backup copy --backup <id> --from <node> --to <node> [options]
 
 Options:
   --backup <id>     Backup id (required)

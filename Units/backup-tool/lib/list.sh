@@ -2,7 +2,7 @@
 
 list_usage() {
   cat <<'EOF'
-Usage: backupctl list [options]
+Usage: backupctl backup list [options]
 
 Options:
   --format text|json        Output format (default: text)

@@ -2,7 +2,7 @@
 
 backup_create_usage() {
   cat <<'EOF'
-Usage: backupctl create --node <id> --site <site> --reason <text> [options]
+Usage: backupctl backup create --node <id> --site <site> --reason <text> [options]
 
 Options:
   --node <id>           Source node id (required)

@@ -2,7 +2,7 @@
 
 scan_usage() {
   cat <<'EOF'
-Usage: backupctl scan [--node <id>] [--live-check]
+Usage: backupctl node scan [--node <id>] [--live-check]
 
 Options:
   --node <id>     Scan only a single configured node

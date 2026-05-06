@@ -38,34 +38,62 @@ Global Options:
   --dry-run        Plan mode: show what would happen, make no changes
   -h, --help       Show this help
 
-Commands:
-  nodes list       List configured nodes
-  scan             Discover backups on configured nodes
-  list             List backups from cache (text/json, with filters)
-  create           Create backup on frappe-node sources.        (to be tested)
-  copy             Copy backup between nodes                    (to be tested)
-  restore          Restore backup to target site                (to be tested)
+Primary Commands:
+  node list        List configured nodes
+  node scan        Discover backups on configured nodes
+  backup list      List backups from cache (text/json, with filters)
+  backup create    Create backup on frappe-node sources
+  backup copy      Copy backup between nodes
+  backup restore   Restore backup to target site
   cache clear      Clear local cache files
   help             Show this help or command help
 
+Compatibility Aliases:
+  nodes list       Alias for node list
+  scan             Alias for node scan
+  list             Alias for backup list
+  create           Alias for backup create
+  copy             Alias for backup copy
+  restore          Alias for backup restore
+
 Examples:
-  backupctl nodes list
-  backupctl --config config/nodes.mkt.json nodes list
-  backupctl scan --node own-prod-01
-  backupctl list --format json --node own-prod-01 --complete true
-  backupctl create --node own-prod-01 --site mysite.example.net --reason "before update"
-  backupctl copy --backup <id> --from own-prod-01 --to archive-share
-  backupctl --dry-run restore --backup <id> --to own-prod-01 --site mysite.example.net
-  backupctl help scan
+  backupctl node list
+  backupctl --config config/nodes.mkt.json node list
+  backupctl node scan --node own-prod-01
+  backupctl backup list --format json --node own-prod-01 --complete true
+  backupctl backup create --node own-prod-01 --site mysite.example.net --reason "before update"
+  backupctl backup copy --backup <id> --from own-prod-01 --to archive-share
+  backupctl --dry-run backup restore --backup <id> --to own-prod-01 --site mysite.example.net
+  backupctl help backup
 EOF
 }
 
-nodes_usage() {
+node_usage() {
   cat <<'EOF'
-Usage: backupctl nodes list
+Usage: backupctl node <list|scan> [options]
 
 Subcommands:
   list             List configured nodes
+  scan             Discover backups on configured nodes
+
+Aliases:
+  nodes            Alias for node (supports nodes list)
+EOF
+}
+
+backup_usage() {
+  cat <<'EOF'
+Usage: backupctl backup <list|create|copy|restore> [options]
+
+Subcommands:
+  list             List backups from cache
+  create           Create backup on frappe-node sources
+  copy             Copy backup between nodes
+  restore          Restore backup to target site
+
+Aliases:
+  backups          Alias for backup
+  list|create|copy|restore as top-level commands are still supported
 EOF
 }
 
@@ -85,8 +113,11 @@ backupctl_command_help() {
     ""|main)
       backupctl_usage
       ;;
-    nodes)
-      nodes_usage
+    node|nodes)
+      node_usage
+      ;;
+    backup|backups)
+      backup_usage
       ;;
     scan)
       scan_usage
@@ -158,21 +189,53 @@ main() {
     help|-h|--help)
       backupctl_command_help "${1:-}"
       ;;
-    nodes)
+    node|nodes)
       if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
-        nodes_usage
+        node_usage
         return
       fi
-      local subcommand="${1:-}"
-      if [[ "${subcommand}" != "list" ]]; then
-        bt_die "Unknown nodes subcommand: ${subcommand:-<empty>}"
-      fi
+      local node_subcommand="${1:-}"
       shift || true
+      case "${node_subcommand}" in
+        list)
+          nodes_list "$@"
+          ;;
+        scan)
+          scan_main "$@"
+          ;;
+        *)
+          bt_die "Unknown node subcommand: ${node_subcommand:-<empty>}"
+          ;;
+      esac
+      ;;
+    backup|backups)
       if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
-        nodes_usage
+        backup_usage
         return
       fi
-      nodes_list "$@"
+      local backup_subcommand="${1:-}"
+      shift || true
+      case "${backup_subcommand}" in
+        list)
+          list_main "$@"
+          ;;
+        create)
+          backup_create_main "$@"
+          ;;
+        copy)
+          backup_copy_main "$@"
+          ;;
+        restore)
+          if [[ "${dry_run_global}" -eq 1 ]]; then
+            backup_restore_main --dry-run "$@"
+          else
+            backup_restore_main "$@"
+          fi
+          ;;
+        *)
+          bt_die "Unknown backup subcommand: ${backup_subcommand:-<empty>}"
+          ;;
+      esac
       ;;
     scan)
       scan_main "$@"
@@ -190,7 +253,7 @@ main() {
       if [[ "${dry_run_global}" -eq 1 ]]; then
         backup_restore_main --dry-run "$@"
       else
-      backup_restore_main "$@"
+        backup_restore_main "$@"
       fi
       ;;
     cache)

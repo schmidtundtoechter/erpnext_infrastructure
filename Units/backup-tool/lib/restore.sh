@@ -4,7 +4,7 @@
 
 backup_restore_usage() {
   cat <<'EOF'
-Usage: backupctl restore --backup <id> --to <node> --site <site> [options]
+Usage: backupctl backup restore --backup <id> --to <node> --site <site> [options]
 
 Options:
   --backup <id>                              Backup id (required)

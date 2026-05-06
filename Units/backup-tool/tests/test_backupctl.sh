@@ -323,6 +323,26 @@ test_global_dry_run_scan() {
   assert_contains "${out}" "Would scan:"
 }
 
+test_primary_resource_commands_work() {
+  local out_scan out_restore
+
+  out_scan="$("${ROOT_DIR}/bin/backupctl" --config "${CONFIG_PATH}" --dry-run node scan --node local-dev 2>&1)"
+  assert_contains "${out_scan}" "Would scan:"
+
+  out_restore="$("${ROOT_DIR}/bin/backupctl" --config "${CONFIG_PATH}" --dry-run backup restore --backup demo_1 --to local-dev --site demo.local 2>&1)"
+  assert_contains "${out_restore}" "DRY-RUN: Would restore"
+}
+
+test_alias_commands_still_work() {
+  local out_scan out_restore
+
+  out_scan="$("${ROOT_DIR}/bin/backupctl" --config "${CONFIG_PATH}" --dry-run scan --node local-dev 2>&1)"
+  assert_contains "${out_scan}" "Would scan:"
+
+  out_restore="$("${ROOT_DIR}/bin/backupctl" --config "${CONFIG_PATH}" --dry-run restore --backup demo_1 --to local-dev --site demo.local 2>&1)"
+  assert_contains "${out_restore}" "DRY-RUN: Would restore"
+}
+
 test_global_dry_run_restore() {
   local out
   out="$("${ROOT_DIR}/bin/backupctl" --config "${CONFIG_PATH}" --dry-run restore --backup demo_1 --to local-dev --site demo.local 2>&1)"
@@ -356,6 +376,8 @@ run_all_tests() {
   test_restore_requires_parameters
   test_restore_config_mode_validation
   test_global_dry_run_scan
+  test_primary_resource_commands_work
+  test_alias_commands_still_work
   test_global_dry_run_restore
   printf 'PASS: all tests successful\n'
 }
