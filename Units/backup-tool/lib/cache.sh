@@ -231,10 +231,6 @@ bt_cache_update_incremental() {
   bt_cache_replace_node_backups "${node_id}" "$(bt_scan_collect_node_backups "${node_id}")"
 }
 
-cache_rebuild_main() {
-  bt_cache_rebuild
-}
-
 cache_clear_main() {
   bt_cache_clear
 }

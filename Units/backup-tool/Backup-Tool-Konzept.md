@@ -165,7 +165,6 @@ Beispiele:
 * `backupctl list`
 * `backupctl copy`
 * `backupctl restore`
-* `backupctl cache rebuild`
 * `backupctl cache clear`
 
 ## 5.2 Knotenkonfiguration
@@ -524,7 +523,7 @@ Beispiel:
 
 ```bash
 backupctl cache clear
-backupctl cache rebuild
+backupctl scan
 backupctl scan --node customer-a-prod
 ```
 
@@ -842,7 +841,7 @@ backupctl create --node customer-a-prod --site erp.customer-a.de --reason "vor U
 backupctl copy --from customer-a-prod --to own-prod-01 --backup <id>
 backupctl restore --node own-prod-01 --site test.customer-a.local --backup <id>
 backupctl cache clear
-backupctl cache rebuild
+backupctl scan
 ```
 
 ---
@@ -973,7 +972,7 @@ Erst danach sollten ergänzt werden:
 * copy
 * restore
 * cache clear
-* cache rebuild
+* scan
 
 Hinweis zu Transfers:
 

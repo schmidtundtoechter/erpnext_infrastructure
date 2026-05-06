@@ -45,7 +45,6 @@ Commands:
   create           Create backup on frappe-node sources.        (to be tested)
   copy             Copy backup between nodes                    (to be tested)
   restore          Restore backup to target site                (to be tested)
-  cache rebuild    Rebuild cache from discovered backups
   cache clear      Clear local cache files
   help             Show this help or command help
 
@@ -72,10 +71,9 @@ EOF
 
 cache_usage() {
   cat <<'EOF'
-Usage: backupctl cache <subcommand>
+Usage: backupctl cache clear
 
 Subcommands:
-  rebuild          Rebuild cache from scan results
   clear            Clear local cache files
 EOF
 }
@@ -202,14 +200,6 @@ main() {
       fi
       local cache_subcommand="${1:-}"
       case "${cache_subcommand}" in
-        rebuild)
-          shift || true
-          if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
-            cache_usage
-            return
-          fi
-          cache_rebuild_main "$@"
-          ;;
         clear)
           shift || true
           if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then

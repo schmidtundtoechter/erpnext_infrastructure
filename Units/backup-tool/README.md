@@ -103,10 +103,8 @@ Hilfe aufrufen:
 - backupctl --dry-run <command> ...
 	- Fuehrt Kommandos im Planungsmodus aus (keine echten Aenderungen, nur geplante Aktionen).
 - backupctl scan [--node <id>]
-	- Liest Backups von einem oder allen konfigurierten Knoten (Single-Pass remote).
+	- Liest Backups von einem einzelnen Knoten oder, ohne `--node`, von allen konfigurierten Knoten (Single-Pass remote).
 	- Ausgabe: `FOUND [<hash>] node=X site=Y kind=Z complete=true|false id=<backup_id>`
-- backupctl cache rebuild
-	- Baut den lokalen Cache vollstaendig neu auf (loescht bestehende Node-Dateien).
 - backupctl cache clear
 	- Loescht alle lokalen Cache-Dateien unter `~/.cache/backupctl/nodes/`.
 - backupctl list [--format text|json] [--node <id>] [--site <site>] [--tag <tag>]
@@ -148,7 +146,7 @@ Nach einem `restore` fuehrt das Tool automatisch folgende Schritte aus:
 ## Typischer Ablauf
 
 1. Konfiguration validieren und Knoten pruefen.
-2. `scan` oder `cache rebuild` ausfuehren.
+2. `scan` ausfuehren.
 3. `list` fuer Auswahl eines Backups nutzen.
 4. Optional `create` fuer neues Backup auf frappe-bench.
 5. `copy` auf Zielknoten (rsync).

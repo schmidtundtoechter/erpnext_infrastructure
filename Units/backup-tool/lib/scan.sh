@@ -6,6 +6,7 @@ Usage: backupctl scan [--node <id>] [--live-check]
 
 Options:
   --node <id>     Scan only a single configured node
+                  (without --node, all configured nodes are scanned)
   --live-check    Reserved for optional real-state verification mode
   -h, --help      Show this help
 EOF

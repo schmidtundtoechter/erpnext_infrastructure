@@ -147,7 +147,7 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 - [x] Cache-Felder festlegen:
   `backup_id`, `source_node`, `source_site`, `reason`, `tags`, `created_at`, `file_count`, `total_size`, `complete`, `last_seen`.
 - [x] `cache clear` implementieren.
-- [x] `cache rebuild` implementieren.
+- [x] Vollscan via `scan` als Cache-Neuaufbau festgelegt.
 - [x] Inkrementelle Aktualisierung implementieren.
 - [x] Live-Abgleich gegen Realzustand als optionalen Modus vorsehen.
 - [x] Klar festlegen:
@@ -291,7 +291,7 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
 ## 17. CLI finalisieren
 
 - [x] Subcommands final festlegen:
-  `nodes list`, `scan`, `list`, `create`, `copy`, `restore`, `cache clear`, `cache rebuild`.
+  `nodes list`, `scan`, `list`, `create`, `copy`, `restore`, `cache clear`.
 - [x] `--config <path>` und `BACKUPCTL_CONFIG_PATH` als Global-Option implementieren.
 - [x] `--dry-run` als Global-Option implementieren.
 - [x] Argumente und Hilfeausgaben definieren.
