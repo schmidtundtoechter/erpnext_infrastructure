@@ -263,6 +263,83 @@ fi"
   done <<<"${scan_rows}"
 }
 
+bt_scan_check_node_availability() {
+  local node_id="$1"
+  local node_json access container bench_path_val
+  local available=0
+
+  node_json="$(bt_get_node_json "${node_id}")"
+  access="$(jq -r '.access' <<<"${node_json}")"
+  container="$(jq -r '.container // empty' <<<"${node_json}")"
+  bench_path_val="$(jq -r '.bench_path // empty' <<<"${node_json}")"
+
+  # 1. SSH / docker-daemon reachability (early exit on failure)
+  case "${access}" in
+    ssh|ssh-docker)
+      local ssh_host ssh_base
+      ssh_host="$(jq -r '.ssh_config' <<<"${node_json}")"
+      ssh_base="$(bt_build_ssh_base_cmd "${node_json}")"
+      if ! eval "${ssh_base} true" >/dev/null 2>&1; then
+        bt_log_warn "Node ${node_id}: SSH host unreachable (${ssh_host})"
+        return 1
+      fi
+      ;;
+    docker)
+      if ! docker ps >/dev/null 2>&1; then
+        bt_log_warn "Node ${node_id}: Docker daemon not reachable"
+        return 1
+      fi
+      ;;
+  esac
+
+  # 2. Container running check (inspected from the host, not exec'd into it)
+  if [[ -n "${container}" ]]; then
+    local container_running
+    case "${access}" in
+      docker)
+        local ctx
+        ctx="$(bt_docker_local_context "${node_json}")"
+        container_running="$(docker --context "${ctx}" inspect --format '{{.State.Running}}' "${container}" 2>/dev/null || echo 'missing')"
+        ;;
+      ssh-docker)
+        local ssh_base check_cmd
+        ssh_base="$(bt_build_ssh_base_cmd "${node_json}")"
+        check_cmd="docker inspect --format '{{.State.Running}}' $(bt_quote "${container}") 2>/dev/null || echo missing"
+        container_running="$(eval "${ssh_base} $(bt_quote "${check_cmd}")" 2>/dev/null || echo 'missing')"
+        ;;
+    esac
+    if [[ "${container_running}" != "true" ]]; then
+      bt_log_warn "Node ${node_id}: Container '${container}' is not running (state: ${container_running:-unknown})"
+      available=1
+    fi
+  fi
+
+  # If container unavailable, path checks inside it will also fail — skip them
+  if [[ "${available}" -ne 0 ]]; then
+    return "${available}"
+  fi
+
+  # 3. backup_paths existence
+  local bp
+  while IFS= read -r bp; do
+    [[ -z "${bp}" ]] && continue
+    if ! run_on_node "${node_id}" "[[ -d $(bt_quote "${bp}") ]]" >/dev/null 2>&1; then
+      bt_log_warn "Node ${node_id}: backup_path not accessible: ${bp}"
+      available=1
+    fi
+  done < <(jq -r '.backup_paths[]' <<<"${node_json}")
+
+  # 4. bench_path existence (if configured)
+  if [[ -n "${bench_path_val}" ]]; then
+    if ! run_on_node "${node_id}" "[[ -d $(bt_quote "${bench_path_val}") ]]" >/dev/null 2>&1; then
+      bt_log_warn "Node ${node_id}: bench_path not accessible: ${bench_path_val}"
+      available=1
+    fi
+  fi
+
+  return "${available}"
+}
+
 bt_scan_collect_node_backups() {
   local node_id="$1"
   local collected_backups='[]'
@@ -308,6 +385,14 @@ scan_main() {
     local nid="$1"
     local found=0
     local collected_backups backup_json
+
+    if [[ "${BT_RUNNER_MODE:-execute}" != "dry-run" ]]; then
+      if ! bt_scan_check_node_availability "${nid}"; then
+        bt_log_warn "Node ${nid}: scan skipped (cache not updated)"
+        printf 'WARN  [------] node=%s unavailable\n' "${nid}"
+        return 0
+      fi
+    fi
 
     collected_backups="$(bt_scan_collect_node_backups "${nid}")"
     found="$(jq 'length' <<<"${collected_backups}")"

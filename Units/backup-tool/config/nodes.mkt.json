@@ -14,6 +14,17 @@
       "enabled": true
     },
     {
+      "id": "sut-backupdir",
+      "node_type": "plain-dir",
+      "access": "ssh",
+      "ssh_config": "sut.netcup",
+      "backup_paths": [
+        "/var/dev/MIMS-Scenarios/_backups"
+      ],
+      "tags": ["archive"],
+      "enabled": true
+    },
+    {
       "id": "erpnext-demo",
       "node_type": "frappe-node",
       "access": "ssh-docker",
@@ -137,17 +148,6 @@
       "container": "erptest_erpnext_frontend_container",
       "tags": ["sut", "prod"],
       "vpn_required": false,
-      "enabled": true
-    },
-    {
-      "id": "sut-backupdir",
-      "node_type": "plain-dir",
-      "access": "ssh",
-      "ssh_config": "sut.netcup",
-      "backup_paths": [
-        "/var/dev/MIMS-Scenarios/_backups"
-      ],
-      "tags": ["archive"],
       "enabled": true
     }
   ]
