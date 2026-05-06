@@ -2,15 +2,31 @@
 
 BT_CONFIG_PATH=""
 
+bt_seed_config_path() {
+  local root_dir
+  root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  printf '%s\n' "${root_dir}/config/nodes.json"
+}
+
 bt_default_config_path() {
   if [[ -n "${BACKUPCTL_CONFIG_PATH:-}" ]]; then
     printf '%s\n' "${BACKUPCTL_CONFIG_PATH}"
     return
   fi
 
-  local root_dir
-  root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-  printf '%s\n' "${root_dir}/config/nodes.json"
+  local default_config_path
+  local seed_config_path
+
+  default_config_path="${HOME}/.erpnext-nodes.json"
+  seed_config_path="$(bt_seed_config_path)"
+
+  if [[ ! -e "${default_config_path}" && ! -L "${default_config_path}" ]]; then
+    [[ -f "${seed_config_path}" ]] || bt_die "Seed config not found: ${seed_config_path}"
+    cp "${seed_config_path}" "${default_config_path}"
+    bt_log_info "Initialized default config at ${default_config_path} from ${seed_config_path}"
+  fi
+
+  printf '%s\n' "${default_config_path}"
 }
 
 bt_validate_config() {

@@ -56,7 +56,8 @@ Optional:
 
 Finales Format: JSON.
 
-- Standardpfad: config/nodes.json
+- Standardpfad: ~/.erpnext-nodes.json
+- Wenn die Datei noch nicht existiert, wird sie beim ersten Laden aus config/nodes.json initialisiert.
 - Root-Feld: nodes (Array)
 - Override moeglich via CLI: backupctl --config <path> ...
 - Override moeglich via Environment: BACKUPCTL_CONFIG_PATH=<path>
