@@ -99,7 +99,7 @@ function install_upgrade_app() {
     popd > /dev/null
 
     # Install app only if it is not already installed on the site
-    if bench --site ${SITE_NAME} list-apps 2>/dev/null | grep -qx "$app"; then
+    if bench --site ${SITE_NAME} list-apps 2>/dev/null | grep -q "^$app"; then
         echo "$app is already installed on site, skipping install-app"
     else
         bench --site ${SITE_NAME} install-app "$app"
@@ -118,7 +118,7 @@ function install_upgrade_app() {
 function remove_app() {
 	app_name=$1
     is_installed_on_site=0
-    if bench --site ${SITE_NAME} list-apps 2>/dev/null | grep -qx "$app_name"; then
+    if bench --site ${SITE_NAME} list-apps 2>/dev/null | grep -q "^$app_name"; then
         is_installed_on_site=1
     fi
 
@@ -129,29 +129,30 @@ function remove_app() {
             echo "--iua- uninstall-app failed for $app_name, trying remove-from-installed-apps"
             bench --site ${SITE_NAME} remove-from-installed-apps "$app_name" || true
         fi
+
+		# Remove app from bench (bench remove-app may fail if bench still thinks app is installed;
+		# we fall through to manual cleanup regardless)
+		echo "Removing $app_name app from apps directory"
+		if [ -d "apps/$app_name" ]; then
+			bench remove-app "$app_name" || echo "--iua- bench remove-app $app_name failed (non-fatal), cleaning up manually"
+		else
+			echo "--iua- app directory apps/$app_name not found, skipping bench remove-app"
+		fi
+
+		# Force-clean sites/apps.txt (use grep -v to avoid sed -i issues on volume filesystems)
+		echo "Removing $app_name from sites/apps.txt"
+		if [ -f sites/apps.txt ]; then
+			grep -v "^${app_name}$" sites/apps.txt > /tmp/apps_clean.txt && mv /tmp/apps_clean.txt sites/apps.txt || true
+		fi
+
+		# Force remove app directory and archived copy
+		echo "Force removing $app_name directory"
+		rm -rf apps/$app_name
+		rm -rf archived/apps/${app_name}-*
     else
         echo "--iua- $app_name not installed on site, skipping uninstall-app"
+		bench --site ${SITE_NAME} list-apps
     fi
-
-	# Remove app from bench (bench remove-app may fail if bench still thinks app is installed;
-	# we fall through to manual cleanup regardless)
-	echo "Removing $app_name app from apps directory"
-	if [ -d "apps/$app_name" ]; then
-		bench remove-app "$app_name" || echo "--iua- bench remove-app $app_name failed (non-fatal), cleaning up manually"
-	else
-		echo "--iua- app directory apps/$app_name not found, skipping bench remove-app"
-	fi
-
-	# Force-clean sites/apps.txt (use grep -v to avoid sed -i issues on volume filesystems)
-	echo "Removing $app_name from sites/apps.txt"
-	if [ -f sites/apps.txt ]; then
-		grep -v "^${app_name}$" sites/apps.txt > /tmp/apps_clean.txt && mv /tmp/apps_clean.txt sites/apps.txt || true
-	fi
-
-	# Force remove app directory and archived copy
-	echo "Force removing $app_name directory"
-	rm -rf apps/$app_name
-	rm -rf archived/apps/${app_name}-*
 }
 
 echo "--iua- Processing apps from: $APPS_JSON"
