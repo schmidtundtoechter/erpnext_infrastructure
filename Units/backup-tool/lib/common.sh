@@ -38,6 +38,56 @@ bt_setup_cleanup_trap() {
   trap bt_cleanup_temp_dirs EXIT
 }
 
+bt_run_with_timeout() {
+  local timeout_seconds="$1"
+  shift
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    "$@"
+    return
+  fi
+
+  python3 - "$timeout_seconds" "$@" <<'PY'
+import subprocess
+import sys
+
+timeout_seconds = float(sys.argv[1])
+cmd = sys.argv[2:]
+
+try:
+    result = subprocess.run(cmd, timeout=timeout_seconds)
+    sys.exit(result.returncode)
+except subprocess.TimeoutExpired:
+    print(f"ERROR: command timed out after {timeout_seconds:g}s: {' '.join(cmd)}", file=sys.stderr)
+    sys.exit(124)
+PY
+}
+
+bt_eval_with_timeout() {
+  local timeout_seconds="$1"
+  local command_string="$2"
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    bash -lc "${command_string}"
+    return
+  fi
+
+  python3 - "$timeout_seconds" "$command_string" <<'PY'
+import subprocess
+import sys
+
+timeout_seconds = float(sys.argv[1])
+command_string = sys.argv[2]
+
+try:
+    result = subprocess.run(["bash", "-lc", command_string], timeout=timeout_seconds)
+    sys.exit(result.returncode)
+except subprocess.TimeoutExpired:
+    print(f"ERROR: command timed out after {timeout_seconds:g}s", file=sys.stderr)
+    sys.exit(124)
+PY
+}
+
 bt_confirm_or_force() {
   local force_flag="$1"
   local prompt_message="$2"

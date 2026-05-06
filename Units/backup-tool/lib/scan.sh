@@ -295,7 +295,7 @@ bt_scan_check_node_availability() {
       fi
       ;;
     docker)
-      if ! docker ps >/dev/null 2>&1; then
+      if ! bt_run_with_timeout "${BT_DOCKER_TIMEOUT_SEC:-10}" docker ps >/dev/null 2>&1; then
         bt_log_warn "Node ${node_id}: Docker daemon not reachable"
         return 1
       fi
@@ -309,7 +309,7 @@ bt_scan_check_node_availability() {
       docker)
         local ctx
         ctx="$(bt_docker_local_context "${node_json}")"
-        container_running="$(docker --context "${ctx}" inspect --format '{{.State.Running}}' "${container}" 2>/dev/null || echo 'missing')"
+        container_running="$(bt_run_with_timeout "${BT_DOCKER_TIMEOUT_SEC:-10}" docker --context "${ctx}" inspect --format '{{.State.Running}}' "${container}" 2>/dev/null || echo 'missing')"
         ;;
       ssh-docker)
         local ssh_base check_cmd

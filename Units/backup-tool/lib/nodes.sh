@@ -38,9 +38,9 @@ bt_ensure_local_docker_context() {
   command -v docker >/dev/null 2>&1 || bt_die "docker not found for docker node"
 
   expected="$(bt_docker_local_context "${node_json}")"
-  current="$(docker context show 2>/dev/null || true)"
+  current="$(bt_run_with_timeout "${BT_DOCKER_TIMEOUT_SEC:-10}" docker context show 2>/dev/null || true)"
 
-  [[ -n "${current}" ]] || bt_die "Could not detect current docker context"
+  [[ -n "${current}" ]] || bt_die "Could not detect current docker context within ${BT_DOCKER_TIMEOUT_SEC:-10}s"
 
   if [[ "${current}" != "${expected}" ]]; then
     bt_die "Docker context mismatch: expected '${expected}', current '${current}'. Set correct context or configure node.docker_context."
@@ -151,6 +151,8 @@ run_on_node() {
   access="$(jq -r '.access' <<<"${node_json}")"
   if [[ "${access}" == "docker" ]]; then
     bt_ensure_local_docker_context "${node_json}"
+    bt_eval_with_timeout "${BT_DOCKER_TIMEOUT_SEC:-10}" "${runner_cmd}"
+    return
   fi
 
   eval "${runner_cmd}"
@@ -173,7 +175,7 @@ bt_check_node_reachability() {
       ;;
     docker)
       bt_ensure_local_docker_context "${node_json}"
-      docker ps >/dev/null 2>&1
+      bt_run_with_timeout "${BT_DOCKER_TIMEOUT_SEC:-10}" docker ps >/dev/null 2>&1
       ;;
     ssh|ssh-docker)
       ssh_base="$(bt_build_ssh_base_cmd "${node_json}")"
