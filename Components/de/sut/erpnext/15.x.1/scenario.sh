@@ -48,7 +48,10 @@ function up() {
   # deploy-tools.up re-runs deploy-tools.setEnvironment internally and would overwrite
   # the COMPOSE_FILE_ARGUMENTS extension (e.g. docker-compose.ports.yml) added here.
   setEnvironment
-  docker compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS build
+  banner "Pull Docker images"
+  docker compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS pull
+  banner "Build Docker images"
+  docker compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS build --pull
   banner "Create and run container"
   docker compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS up -d
 }

@@ -42,6 +42,7 @@ scenario.deploy → scenario.sh update
 3. Schreibt `apps.updated.json` mit Vorschlägen für neuere Tags (gleiche Major-Version)
 4. Gibt für `FRAPPE_VERSION` / `ERPNEXT_VERSION` aus `.env` ebenfalls Vorschläge aus
 5. **Ändert nichts** — weder Dateien noch Container
+6. **Kein `docker pull`, kein `docker compose build`, kein Image-Update**
 
 → Zum Übernehmen: `apps.updated.json` prüfen und manuell in `apps.json` / `.env` eintragen.
 
@@ -92,13 +93,20 @@ scenario.deploy init
 ```
 scenario.deploy → scenario.sh up
     → checkAndCreateDataVolume  (legt Volumes an, falls nicht vorhanden)
-    → docker compose build      (baut Docker-Image)
+   → docker compose pull       (zieht aktuelle Images)
+   → docker compose build --pull (baut Docker-Image + aktualisiert Base-Images)
     → docker compose up -d      (startet alle Container)
 ```
 
 **`docker compose build`** baut das ERPNext-Image mit:
 - `FRAPPE_VERSION` aus `.env` → frappe-Basis-Image
 - `ERPNEXT_VERSION` aus `.env` → erpnext wird im Image eingebaut
+
+Hinweis zum impliziten Update-Verhalten:
+- `frappe` und `erpnext` werden **nicht** im `update`-Step aktualisiert.
+- Ein implizites Aktualisieren passiert nur beim `up`-Step während `docker compose build`, weil im Dockerfile `bench init --frappe-branch=${FRAPPE_VERSION}` und `bench get-app --branch=${ERPNEXT_VERSION}` laufen.
+- Im aktuellen Prozess wird vor dem Start zusätzlich `docker compose pull` und danach `docker compose build --pull` ausgeführt, damit Images und Base-Images aktiv aktualisiert werden.
+- Für reproduzierbare Stände sind Tags/Commit-Hashes in `.env` besser als bewegliche Branch-Namen.
 
 > frappe und erpnext sind **im Docker-Image eingebaut** (nicht in den Apps-Volumes). Sie werden NICHT via `install_upgrade_apps.sh` geupdated.
 
@@ -141,11 +149,10 @@ Wird **bei jedem `up`** ausgeführt (auch wenn Site schon existiert).
 1. bench get-app <app> <repo> --branch <version>  # nur wenn apps/<app> fehlt
 2. fix-git-refs.sh apps/<app>                      # konfiguriert git-Remotes
 3. pushd apps/<app>
-4. upstream-Remote sicherstellen (add falls fehlt)  # ← Fix: bench get-app klont als 'origin'
-5. git fetch upstream <version>                     # Fehler → exit 1
-6. git checkout <version>                           # Fehler → exit 1
-7. git reset --hard upstream/<version>             # ← Fix: echtes Update der Working Copy
-   (nur für Branch-Refs; Tags/Hashes brauchen das nicht)
+4. app_remote dynamisch lesen (`git remote | head -n 1`) + loggen
+5. Wenn Remote vorhanden: `git fetch <app_remote> <version>` + `git checkout <version>`
+6. Für Branch-Refs: `git reset --hard <app_remote>/<version>`
+7. Wenn kein Remote vorhanden: Remote-abhängigen Teil überspringen (kein Abbruch)
 8. bench install-app <app>  (wenn noch nicht installiert; retry mit --force)
 ```
 
@@ -153,7 +160,7 @@ Wird **bei jedem `up`** ausgeführt (auch wenn Site schon existiert).
 
 | Typ            | Beispiel           | Verhalten                                      |
 |----------------|--------------------|------------------------------------------------|
-| Branch         | `version-15`       | `git reset --hard upstream/version-15` → immer auf aktuellem Tip |
+| Branch         | `version-15`       | `git reset --hard <app_remote>/version-15` (wenn Remote vorhanden) |
 | Tag            | `v15.42.3`         | `git checkout v15.42.3` → exakt gepinnt        |
 | Commit-Hash    | `abc1234`          | `git checkout abc1234` → exakt gepinnt         |
 
@@ -183,6 +190,8 @@ Wird **bei jedem `up`** ausgeführt (auch wenn Site schon existiert).
 | Zusatz-Apps    | `apps.json` → `version`  | `install_upgrade_apps.sh` bei jedem `up`       |
 
 **Wichtig**: `update` (scenario.sh) ändert nur `apps.updated.json` — es deployed nichts. Die `.env`-Versionen für frappe/erpnext müssen manuell angepasst werden und dann braucht es ein vollständiges `init,down,up`.
+
+Zusatz: Ein `init,down,up` triggert `docker compose pull` sowie `docker compose build --pull`. Für harte Reproduzierbarkeit sollten trotzdem Tags oder Commit-Hashes statt beweglicher Branch-Namen verwendet werden.
 
 ---
 
