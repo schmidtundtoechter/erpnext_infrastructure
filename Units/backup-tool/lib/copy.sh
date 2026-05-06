@@ -12,13 +12,14 @@ Options:
   --backup <id>     Backup id (required)
   --from <node>     Source node id (required)
   --to <node>       Target node id (required)
+  -f, --force       Skip overwrite confirmation if target backup exists
   --no-validate     Skip transfer validation step
   -h, --help        Show this help
 EOF
 }
 
 backup_copy_main() {
-  local backup_id="" from_node="" to_node="" no_validate=""
+  local backup_id="" from_node="" to_node="" force="" no_validate=""
   
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -38,6 +39,10 @@ backup_copy_main() {
         to_node="$2"
         shift 2
         ;;
+      -f|--force)
+        force="1"
+        shift
+        ;;
       --no-validate)
         no_validate="1"
         shift
@@ -54,14 +59,15 @@ backup_copy_main() {
   
   bt_require_loaded_config
   
-  copy_backup_between_nodes "${backup_id}" "${from_node}" "${to_node}" "${no_validate}"
+  copy_backup_between_nodes "${backup_id}" "${from_node}" "${to_node}" "${force}" "${no_validate}"
 }
 
 copy_backup_between_nodes() {
   local backup_id="$1"
   local from_node="$2"
   local to_node="$3"
-  local no_validate="${4:-}"
+  local force="${4:-}"
+  local no_validate="${5:-}"
   
   bt_log_info "Copying backup: backup_id=${backup_id} from=${from_node} to=${to_node}"
   
@@ -81,6 +87,11 @@ copy_backup_between_nodes() {
   
   # Zielpath konstruieren
   target_path="$(bt_get_target_backup_path_for_node "${to_node}" "${backup_id}")"
+
+  # Wenn bereits ein gleichnamiges Backup existiert: Force oder bestaetigen.
+  if run_on_node "${to_node}" "[[ -e $(bt_quote "${target_path}") ]]" >/dev/null 2>&1; then
+    bt_confirm_or_force "${force}" "Backup ${backup_id} exists on target node ${to_node} and may be overwritten. Continue?"
+  fi
   
   # Transferiere das Backup
   local transfer_cmd transfer_result

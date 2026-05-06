@@ -38,6 +38,32 @@ bt_setup_cleanup_trap() {
   trap bt_cleanup_temp_dirs EXIT
 }
 
+bt_confirm_or_force() {
+  local force_flag="$1"
+  local prompt_message="$2"
+  local answer
+
+  if [[ -n "${force_flag}" ]]; then
+    return 0
+  fi
+
+  if [[ ! -t 0 ]]; then
+    bt_die "${prompt_message} Use -f or --force to proceed in non-interactive mode."
+  fi
+
+  printf '%s [y/N]: ' "${prompt_message}" >&2
+  read -r answer
+
+  case "${answer}" in
+    y|Y|yes|YES)
+      return 0
+      ;;
+    *)
+      bt_die "Operation aborted by user"
+      ;;
+  esac
+}
+
 bt_json_get() {
   local json_file="$1"
   local jq_filter="$2"

@@ -13,7 +13,7 @@ Options:
   --config-mode use-source-config|merge-config|keep-target-config
                                              site_config handling mode (default: merge-config)
   --dry-run                                  Simulate restore without changes
-  --force                                    Reserved for strict destructive confirmations
+  -f, --force                                Skip overwrite confirmation
   --no-checks                                Skip pre-check validations
   -h, --help                                 Show this help
 EOF
@@ -49,7 +49,7 @@ backup_restore_main() {
         dry_run="1"
         shift
         ;;
-      --force)
+      -f|--force)
         force="1"
         shift
         ;;
@@ -97,6 +97,8 @@ restore_backup_to_node() {
     bt_log_info "DRY-RUN: Would restore ${backup_id} to ${target_node}/${target_site}"
     return
   fi
+
+  bt_confirm_or_force "${force}" "Restore will overwrite data for site ${target_site} on node ${target_node}. Continue?"
   
   # Vorpruefungen
   if [[ -z "${no_checks}" ]]; then
