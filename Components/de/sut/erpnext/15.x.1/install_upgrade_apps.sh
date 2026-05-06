@@ -83,19 +83,43 @@ function install_upgrade_app() {
 	# TODO: Check /var/run/docker.sock permissions if docker commands fail
 	# TODO: Wenn die python version wechselt, müssen die envs neu gebaut werden!
 
-    # Check ref already available in remotes or tags
-    if git show-ref --verify --quiet refs/remotes/upstream/$version; then
-        echo "Ref $version already exists in remotes/upstream"
-    elif git show-ref --verify --quiet refs/tags/$version; then
-        echo "Ref $version already exists in tags"
+    # Resolve the app remote dynamically (usually origin) and reuse it consistently.
+    app_remote=$(git remote | head -n 1)
+    if [ -z "$app_remote" ]; then
+        echo "--iua- No git remote configured for $app; skipping remote-based fetch/reset"
+        if ! git checkout "$version"; then
+            echo "--iua- Could not checkout $version for $app without remote, continuing without checkout"
+        fi
     else
-        echo "Adding refs"
-        git config --add remote.upstream.fetch "+refs/heads/$version:refs/remotes/upstream/$version"
-        git config --add remote.upstream.fetch "+refs/tags/$version:refs/tags/$version"
+        app_remote_url=$(git remote get-url "$app_remote" 2>/dev/null || echo "<unknown>")
+        echo "--iua- Using git remote '$app_remote' ($app_remote_url) for $app"
+
+        # Check ref already available in remotes or tags
+        if git show-ref --verify --quiet refs/remotes/$app_remote/$version; then
+            echo "Ref $version already exists in remotes/$app_remote"
+        elif git show-ref --verify --quiet refs/tags/$version; then
+            echo "Ref $version already exists in tags"
+        else
+            echo "Adding refs"
+            git config --add remote.$app_remote.fetch "+refs/heads/$version:refs/remotes/$app_remote/$version"
+            git config --add remote.$app_remote.fetch "+refs/tags/$version:refs/tags/$version"
+        fi
+        if git fetch "$app_remote" "$version"; then
+            if ! git checkout "$version"; then
+                echo "--iua- git checkout $version failed for $app after successful fetch, continuing"
+            fi
+            # For branch refs: reset working copy to the fetched remote HEAD so we actually update.
+            # Tags and commit hashes are already pinned by checkout and do not need a reset.
+            if git show-ref --verify --quiet refs/remotes/$app_remote/$version; then
+                git reset --hard "$app_remote/$version"
+                echo "--iua- Reset $app to $app_remote/$version (latest fetched commit)"
+            else
+                echo "--iua- $version is a tag or pinned ref — checkout is sufficient, no reset needed"
+            fi
+        else
+            echo "--iua- git fetch $app_remote $version failed for $app; skipping remote-based update"
+        fi
     fi
-    git fetch upstream $version
-    git checkout $version
-    echo "Using pinned ref $version for $app without git pull"
     popd > /dev/null
 
     # Install app only if it is not already installed on the site
@@ -178,7 +202,7 @@ echo "--iua- Removing other apps that are not in active apps JSON"
 for app in apps/*/; do
 	app_name=$(basename "$app")
 	if [[ ! " ${apps_installed[@]} " =~ " ${app_name} " ]]; then
-		remove_app $app_name
+		remove_app "$app_name"
 	else
 		echo "Keeping $app_name app"
 	fi
