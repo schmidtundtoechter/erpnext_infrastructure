@@ -27,6 +27,65 @@ bt_scan_print_human() {
     "${backup_hash}" "${node}" "${site}" "${node_type}" "${complete}" "${backup_id}"
 }
 
+bt_scan_epoch_to_iso8601() {
+  local epoch="$1"
+
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "${epoch}" <<'PY'
+from datetime import datetime, timezone
+import sys
+
+print(datetime.fromtimestamp(int(sys.argv[1]), timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))
+PY
+    return
+  fi
+
+  date -u -r "${epoch}" +"%Y-%m-%dT%H:%M:%SZ"
+}
+
+bt_scan_local_file_mtime_iso8601() {
+  local file_path="$1"
+  local epoch
+
+  if epoch="$(stat -f '%m' "${file_path}" 2>/dev/null)"; then
+    bt_scan_epoch_to_iso8601 "${epoch}"
+    return
+  fi
+
+  if epoch="$(stat -c '%Y' "${file_path}" 2>/dev/null)"; then
+    bt_scan_epoch_to_iso8601 "${epoch}"
+    return
+  fi
+
+  printf '%s\n' "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+}
+
+bt_scan_remote_file_mtime_iso8601() {
+  local node_id="$1"
+  local file_path="$2"
+  local epoch
+
+  epoch="$(run_on_node "${node_id}" "python3 -c $(bt_quote "import os, sys; print(int(os.path.getmtime(sys.argv[1])))") $(bt_quote "${file_path}")" 2>/dev/null || true)"
+  if [[ -n "${epoch}" ]]; then
+    bt_scan_epoch_to_iso8601 "${epoch}"
+    return
+  fi
+
+  epoch="$(run_on_node "${node_id}" "stat -c %Y $(bt_quote "${file_path}")" 2>/dev/null || true)"
+  if [[ -n "${epoch}" ]]; then
+    bt_scan_epoch_to_iso8601 "${epoch}"
+    return
+  fi
+
+  epoch="$(run_on_node "${node_id}" "stat -f %m $(bt_quote "${file_path}")" 2>/dev/null || true)"
+  if [[ -n "${epoch}" ]]; then
+    bt_scan_epoch_to_iso8601 "${epoch}"
+    return
+  fi
+
+  printf '%s\n' "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+}
+
 bt_scan_frappe_backup_dir() {
   local node_id="$1"
   local backup_root="$2"
@@ -52,7 +111,7 @@ bt_scan_site_backups() {
   
   [[ -d "${backup_dir}" ]] || return 0
   
-  local manifest_file db_file public_file private_file config_file backup_id id_suffix
+  local manifest_file db_file public_file private_file config_file backup_id id_suffix created_at
   
   for manifest_file in "${backup_dir}"/manifest.json; do
     [[ -f "${manifest_file}" ]] || continue
@@ -89,7 +148,9 @@ bt_scan_site_backups() {
       artifacts_obj="$(jq -c '. + {"site_config": "site_config.json"}' <<<"${artifacts_obj}")"
     fi
     
-    bt_generate_manifest_json "${backup_id}" "${node_id}" "${site}" "standard frappe backup" "${artifacts_obj}" | \
+    created_at="$(bt_scan_local_file_mtime_iso8601 "${db_dump}")"
+
+    bt_generate_manifest_json "${backup_id}" "${node_id}" "${site}" "standard frappe backup" "${artifacts_obj}" '[]' "${created_at}" | \
       jq -c '. + {"source_node": "'${node_id}'", "source_site": "'${site}'", "node_type": "'${node_type}'"}'
   fi
 }
@@ -154,7 +215,7 @@ bt_scan_remote_frappe_without_manifest() {
       continue
     fi
 
-    local db_file public_file private_file site_config_file artifacts_obj backup_id manifest_json
+    local db_file public_file private_file site_config_file artifacts_obj backup_id manifest_json created_at
     db_file="$(basename "${db_path}")"
     public_file="${db_file/-database.sql.gz/-files.tar}"
     public_file="${public_file/-database.sql/-files.tar}"
@@ -179,7 +240,8 @@ bt_scan_remote_frappe_without_manifest() {
     id_suffix="${db_file%-database.sql.gz}"
     id_suffix="${id_suffix%-database.sql}"
     backup_id="${node_id}_${site}_${id_suffix}"
-    manifest_json="$(bt_generate_manifest_json "${backup_id}" "${node_id}" "${site}" "remote frappe backup (without manifest)" "${artifacts_obj}")"
+    created_at="$(bt_scan_remote_file_mtime_iso8601 "${node_id}" "${db_path}")"
+    manifest_json="$(bt_generate_manifest_json "${backup_id}" "${node_id}" "${site}" "remote frappe backup (without manifest)" "${artifacts_obj}" '[]' "${created_at}")"
 
     if ! jq -e '.artifacts | has("site_config")' >/dev/null 2>&1 <<<"${manifest_json}"; then
       manifest_json="$(jq -c '.complete = false' <<<"${manifest_json}")"
@@ -250,7 +312,7 @@ fi"
   while IFS=$'\t' read -r rel_dir site_config_name db_file public_file private_file; do
     [[ -n "${db_file}" ]] || continue
 
-    local artifacts_obj backup_id source_site logical_site manifest_json
+    local artifacts_obj backup_id source_site logical_site manifest_json created_at
 
     artifacts_obj="{\"db_dump\":\"${db_file}\",\"site_config\":\"${site_config_name}\"}"
     if [[ -n "${public_file}" ]]; then
@@ -267,7 +329,8 @@ fi"
     source_site="${rel_dir}/${db_file}"
     logical_site="$(sed 's/[^a-zA-Z0-9._-]/_/g' <<<"${rel_dir}")"
     backup_id="${node_id}_${logical_site}_${id_suffix}"
-    manifest_json="$(bt_generate_manifest_json "${backup_id}" "${node_id}" "${source_site}" "remote plain backup (without manifest; inferred from site_config+db)" "${artifacts_obj}")"
+    created_at="$(bt_scan_remote_file_mtime_iso8601 "${node_id}" "${backup_root}/${rel_dir}/${db_file}")"
+    manifest_json="$(bt_generate_manifest_json "${backup_id}" "${node_id}" "${source_site}" "remote plain backup (without manifest; inferred from site_config+db)" "${artifacts_obj}" '[]' "${created_at}")"
 
     printf '%s\n' "${manifest_json}" | jq -c --arg rel_dir "${rel_dir}" '. + {source_node: .source_node, source_site: .source_site, node_type: "plain-dir", source_rel_dir: $rel_dir}'
   done <<<"${scan_rows}"

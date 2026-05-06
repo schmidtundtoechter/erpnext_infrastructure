@@ -103,10 +103,11 @@ bt_generate_manifest_json() {
   local reason="$4"
   local artifacts_json="$5"
   local tags_json="${6:-}"
+  local created_at_override="${7:-}"
   local created_at
   local backup_hash
   
-  created_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  created_at="${created_at_override:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}"
   backup_hash="$(bt_backup_hash_from_id "${backup_id}")"
   
   jq -n \
