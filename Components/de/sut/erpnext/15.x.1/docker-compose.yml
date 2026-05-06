@@ -108,7 +108,7 @@ services:
           fi
         done;
         echo "sites/common_site_config.json found";
-        SITE_NAME="${SCENARIO_SERVER_NAME}";
+        SITE_NAME="${SCENARIO_TRAEFIK_URL}";
         EXISTING_DEFAULT=$$(grep -oP '"default_site":\s*"\K[^"]+' sites/common_site_config.json 2>/dev/null || echo "");
         if [ -n "$$EXISTING_DEFAULT" ]; then echo "Using existing default site: $$EXISTING_DEFAULT"; SITE_NAME="$$EXISTING_DEFAULT"; fi;
         if [ ! -f sites/$$SITE_NAME/site_config.json ]; then
@@ -166,7 +166,7 @@ services:
       - FRAPPE_WEBSERVER_ROOT=${SCENARIO_TRAEFIK_ROUTE}
       - BACKEND=backend:8000
       - FRONTEND_PORT=8080
-      - FRAPPE_SITE_NAME_HEADER=${SCENARIO_SERVER_NAME}
+      - FRAPPE_SITE_NAME_HEADER=${SCENARIO_TRAEFIK_URL}
       - SOCKETIO=websocket:9000
       - UPSTREAM_REAL_IP_ADDRESS=127.0.0.1
       - UPSTREAM_REAL_IP_HEADER=X-Forwarded-For

@@ -129,10 +129,10 @@ function backup() {
   # Run bench backup in create-site container
   banner "Run bench backup in create-site container"
   docker compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS run --rm create-site "bash -c \"cd /home/frappe/frappe-bench && \
-     bench --site ${SCENARIO_SERVER_NAME} backup --with-files && \
+     bench --site ${SCENARIO_TRAEFIK_URL} backup --with-files && \
      mkdir -p backups/${SCENARIO_NAME} && \
-     mv sites/${SCENARIO_SERVER_NAME}/private/backups/* backups/${SCENARIO_NAME}/ && \
-     ls -l sites/${SCENARIO_SERVER_NAME}/private/backups backups/${SCENARIO_NAME}/\""
+     mv sites/${SCENARIO_TRAEFIK_URL}/private/backups/* backups/${SCENARIO_NAME}/ && \
+     ls -l sites/${SCENARIO_TRAEFIK_URL}/private/backups backups/${SCENARIO_NAME}/\""
 }
 
 function restore() {
