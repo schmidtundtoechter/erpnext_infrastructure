@@ -64,6 +64,7 @@ run_libs() {
     source '${ROOT_DIR}/lib/backup.sh'; \
     source '${ROOT_DIR}/lib/copy.sh'; \
     source '${ROOT_DIR}/lib/restore.sh'; \
+    source '${ROOT_DIR}/lib/remove.sh'; \
     source '${ROOT_DIR}/lib/cache.sh'; \
     source '${ROOT_DIR}/lib/list.sh'; \
     ${snippet}"
@@ -78,6 +79,7 @@ test_structure_files_exist() {
   assert_file_exists "${ROOT_DIR}/lib/backup.sh"
   assert_file_exists "${ROOT_DIR}/lib/copy.sh"
   assert_file_exists "${ROOT_DIR}/lib/restore.sh"
+  assert_file_exists "${ROOT_DIR}/lib/remove.sh"
   assert_file_exists "${ROOT_DIR}/lib/cache.sh"
   assert_file_exists "${ROOT_DIR}/lib/list.sh"
   assert_file_exists "${ROOT_DIR}/lib/log.sh"
@@ -295,6 +297,12 @@ test_restore_library_exists() {
   assert_file_contains "${ROOT_DIR}/lib/restore.sh" "bt_execute_post_restore_tasks"
 }
 
+test_remove_library_exists() {
+  assert_file_exists "${ROOT_DIR}/lib/remove.sh"
+  assert_file_contains "${ROOT_DIR}/lib/remove.sh" "backup_remove_main"
+  assert_file_contains "${ROOT_DIR}/lib/remove.sh" "remove_backup_by_id"
+}
+
 test_copy_requires_parameters() {
   # Should die when --backup is missing
   if run_libs "bt_load_config '${CONFIG_PATH}'; backup_copy_main --from local-dev --to own-prod-01" >/dev/null 2>&1; then
@@ -334,6 +342,30 @@ test_restore_config_mode_validation() {
   if run_libs "bt_load_config '${CONFIG_PATH}'; backup_restore_main --backup test --to local-dev --site test --config-mode invalid-mode" >/dev/null 2>&1; then
     fail "restore should validate config-mode values"
   fi
+}
+
+test_remove_requires_parameters() {
+  if run_libs "bt_load_config '${CONFIG_PATH}'; backup_remove_main --force" >/dev/null 2>&1; then
+    fail "remove should require --backup parameter"
+  fi
+}
+
+test_remove_requires_force_in_non_interactive_mode() {
+  local tmp_cache_dir
+
+  tmp_cache_dir="$(mktemp -d)"
+  if run_libs "exec </dev/null; BT_CACHE_DIR='${tmp_cache_dir}'; BT_CACHE_NODES_DIR='${tmp_cache_dir}/nodes'; BT_CACHE_LEGACY_PATH='${tmp_cache_dir}/cache.jsonl'; bt_load_config '${CONFIG_PATH}'; bt_cache_upsert_entry '{\"backup_id\":\"demo_remove_1\",\"source_node\":\"local-dev\",\"node_type\":\"frappe-node\",\"source_site\":\"demo.local\",\"reason\":\"demo\",\"created_at\":\"2026-01-01T00:00:00Z\",\"complete\":true,\"artifacts\":{\"db_dump\":\"a-database.sql.gz\",\"site_config\":\"site_config.json\",\"manifest\":\"a-manifest.json\"}}'; backup_remove_main --backup demo_remove_1" >/dev/null 2>&1; then
+    fail "remove should require --force in non-interactive mode"
+  fi
+}
+
+test_remove_cache_only_with_force_removes_entry() {
+  local tmp_cache_dir out
+
+  tmp_cache_dir="$(mktemp -d)"
+  out="$(run_libs "BT_CACHE_DIR='${tmp_cache_dir}'; BT_CACHE_NODES_DIR='${tmp_cache_dir}/nodes'; BT_CACHE_LEGACY_PATH='${tmp_cache_dir}/cache.jsonl'; bt_load_config '${CONFIG_PATH}'; bt_cache_upsert_entry '{\"backup_id\":\"demo_remove_2\",\"source_node\":\"local-dev\",\"node_type\":\"frappe-node\",\"source_site\":\"demo.local\",\"reason\":\"demo\",\"created_at\":\"2026-01-01T00:00:00Z\",\"complete\":true,\"artifacts\":{\"db_dump\":\"a-database.sql.gz\",\"site_config\":\"site_config.json\",\"manifest\":\"a-manifest.json\"}}'; backup_remove_main --backup demo_remove_2 --cache-only --force >/dev/null; printf 'COUNT=%s\n' \"\$(bt_cache_list_all | jq 'length')\"")"
+
+  assert_contains "${out}" "COUNT=0"
 }
 
 test_global_dry_run_scan() {
@@ -393,9 +425,13 @@ run_all_tests() {
   test_list_library_exists
   test_copy_library_exists
   test_restore_library_exists
+  test_remove_library_exists
   test_copy_requires_parameters
   test_restore_requires_parameters
   test_restore_config_mode_validation
+  test_remove_requires_parameters
+  test_remove_requires_force_in_non_interactive_mode
+  test_remove_cache_only_with_force_removes_entry
   test_global_dry_run_scan
   test_primary_resource_commands_work
   test_alias_commands_still_work

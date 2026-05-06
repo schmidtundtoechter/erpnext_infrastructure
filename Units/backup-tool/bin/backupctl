@@ -22,6 +22,8 @@ source "${ROOT_DIR}/lib/backup.sh"
 source "${ROOT_DIR}/lib/copy.sh"
 # shellcheck source=../lib/restore.sh
 source "${ROOT_DIR}/lib/restore.sh"
+# shellcheck source=../lib/remove.sh
+source "${ROOT_DIR}/lib/remove.sh"
 # shellcheck source=../lib/cache.sh
 source "${ROOT_DIR}/lib/cache.sh"
 # shellcheck source=../lib/list.sh
@@ -45,6 +47,7 @@ Primary Commands:
   backup create    Create backup on frappe-node sources
   backup copy      Copy backup between nodes
   backup restore   Restore backup to target site
+  backup remove    Remove backup files and cache entry
   cache clear      Clear local cache files
   help             Show this help or command help
 
@@ -55,6 +58,7 @@ Compatibility Aliases:
   create           Alias for backup create
   copy             Alias for backup copy
   restore          Alias for backup restore
+  remove           Alias for backup remove
 
 Examples:
   backupctl node list
@@ -83,17 +87,18 @@ EOF
 
 backup_usage() {
   cat <<'EOF'
-Usage: backupctl backup <list|create|copy|restore> [options]
+Usage: backupctl backup <list|create|copy|restore|remove> [options]
 
 Subcommands:
   list             Alias for backup list (cache only, no scan)
   create           Create backup on frappe-node sources
   copy             Copy backup between nodes
   restore          Restore backup to target site
+  remove           Remove backup files and cache entry
 
 Aliases:
   backups          Alias for backup
-  list|create|copy|restore as top-level commands are still supported
+  list|create|copy|restore|remove as top-level commands are still supported
 EOF
 }
 
@@ -133,6 +138,9 @@ backupctl_command_help() {
       ;;
     restore)
       backup_restore_usage
+      ;;
+    remove)
+      backup_remove_usage
       ;;
     cache)
       cache_usage
@@ -232,6 +240,9 @@ main() {
             backup_restore_main "$@"
           fi
           ;;
+        remove)
+          backup_remove_main "$@"
+          ;;
         *)
           bt_die "Unknown backup subcommand: ${backup_subcommand:-<empty>}"
           ;;
@@ -255,6 +266,9 @@ main() {
       else
         backup_restore_main "$@"
       fi
+      ;;
+    remove)
+      backup_remove_main "$@"
       ;;
     cache)
       if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
