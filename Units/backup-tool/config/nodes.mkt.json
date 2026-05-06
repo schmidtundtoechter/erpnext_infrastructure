@@ -2,8 +2,8 @@
   "nodes": [
     {
       "id": "my-docker",
-      "source_kind": "frappe-backup-dir",
-      "access_type": "local-docker",
+      "node_type": "frappe-node",
+      "access": "docker",
       "bench_path": "/workspace/development/frappe-bench",
       "backup_paths": [
         "/workspace/development/frappe-bench/sites"
@@ -15,8 +15,8 @@
     },
     {
       "id": "erpnext-demo",
-      "source_kind": "frappe-backup-dir",
-      "access_type": "ssh-docker",
+      "node_type": "frappe-node",
+      "access": "ssh-docker",
       "host": "test.schmidtundtoechter.com",
       "port": 22,
       "user": "root",
@@ -31,8 +31,8 @@
     },
     {
       "id": "sut-backupdir",
-      "source_kind": "plain-backup-dir",
-      "access_type": "ssh-host",
+      "node_type": "plain-dir",
+      "access": "ssh",
       "host": "test.schmidtundtoechter.com",
       "port": 22,
       "user": "root",

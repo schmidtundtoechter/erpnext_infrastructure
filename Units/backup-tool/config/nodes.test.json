@@ -2,8 +2,8 @@
   "nodes": [
     {
       "id": "local-dev",
-      "source_kind": "frappe-backup-dir",
-      "access_type": "local-docker",
+      "node_type": "frappe-node",
+      "access": "docker",
       "bench_path": "/Users/matthias/projects/frappe-bench",
       "backup_paths": [
         "/Users/matthias/projects/frappe-bench/sites/*/private/backups"
@@ -15,8 +15,8 @@
     },
     {
       "id": "own-prod-01",
-      "source_kind": "frappe-backup-dir",
-      "access_type": "ssh-host",
+      "node_type": "frappe-node",
+      "access": "ssh",
       "host": "own-prod-01.example.net",
       "port": 22,
       "user": "ops",
@@ -30,8 +30,8 @@
     },
     {
       "id": "customer-a-prod",
-      "source_kind": "frappe-backup-dir",
-      "access_type": "ssh-docker",
+      "node_type": "frappe-node",
+      "access": "ssh-docker",
       "host": "customer-a.example.net",
       "port": 22,
       "user": "frappe",
@@ -46,8 +46,8 @@
     },
     {
       "id": "archive-share",
-      "source_kind": "plain-backup-dir",
-      "access_type": "ssh-host",
+      "node_type": "plain-dir",
+      "access": "ssh",
       "host": "archive.example.net",
       "port": 22,
       "user": "backup",

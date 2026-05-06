@@ -55,12 +55,12 @@ backup_create_main() {
   
   bt_require_loaded_config
   
-  local node_json source_kind
+  local node_json node_type
   node_json="$(bt_get_node_json "${node_id}")"
-  source_kind="$(jq -r '.source_kind' <<<"${node_json}")"
+  node_type="$(jq -r '.node_type' <<<"${node_json}")"
   
-  [[ "${source_kind}" == "frappe-backup-dir" ]] || \
-    bt_die "create: only frappe-backup-dir sources support backup creation"
+  [[ "${node_type}" == "frappe-node" ]] || \
+    bt_die "create: only frappe-node sources support backup creation"
   
   create_backup_on_node "${node_id}" "${site}" "${reason}" "${tags_list}" "${backup_type}"
 }

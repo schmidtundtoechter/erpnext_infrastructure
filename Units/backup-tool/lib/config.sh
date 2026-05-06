@@ -8,6 +8,28 @@ bt_seed_config_path() {
   printf '%s\n' "${root_dir}/config/nodes.json"
 }
 
+bt_normalize_node_json() {
+  local node_json="$1"
+
+  jq -c '
+    def normalize_node_type:
+      if . == "frappe-backup-dir" then "frappe-node"
+      elif . == "plain-backup-dir" then "plain-dir"
+      else .
+      end;
+    def normalize_access:
+      if . == "local-docker" then "docker"
+      elif . == "ssh-host" then "ssh"
+      else .
+      end;
+    . as $node
+    | $node
+    | .node_type = (($node.node_type // $node.source_kind // empty) | normalize_node_type)
+    | .access = (($node.access // $node.access_type // empty) | normalize_access)
+    | del(.source_kind, .access_type)
+  ' <<<"${node_json}"
+}
+
 bt_default_config_path() {
   if [[ -n "${BACKUPCTL_CONFIG_PATH:-}" ]]; then
     printf '%s\n' "${BACKUPCTL_CONFIG_PATH}"
@@ -41,29 +63,62 @@ bt_validate_config() {
     || bt_die "Config must contain a non-empty nodes array"
 
   jq -e '
+    def normalize_node_type:
+      if . == "frappe-backup-dir" then "frappe-node"
+      elif . == "plain-backup-dir" then "plain-dir"
+      else .
+      end;
+    def normalize_access:
+      if . == "local-docker" then "docker"
+      elif . == "ssh-host" then "ssh"
+      else .
+      end;
+    def normalized_node:
+      . as $node
+      | $node
+      | .node_type = (($node.node_type // $node.source_kind // empty) | normalize_node_type)
+      | .access = (($node.access // $node.access_type // empty) | normalize_access);
     .nodes
     | all(.[];
-      (.id | type == "string" and length > 0)
-      and ((.source_kind == "frappe-backup-dir") or (.source_kind == "plain-backup-dir"))
-      and ((.access_type == "local") or (.access_type == "local-docker") or (.access_type == "ssh-host") or (.access_type == "ssh-docker"))
-      and (.backup_paths | type == "array" and length > 0 and all(.[]; type == "string" and length > 0))
+      (normalized_node | (.id | type == "string" and length > 0)
+      and ((.node_type == "frappe-node") or (.node_type == "plain-dir"))
+      and ((.access == "local") or (.access == "docker") or (.access == "ssh") or (.access == "ssh-docker"))
+      and (.backup_paths | type == "array" and length > 0 and all(.[]; type == "string" and length > 0)))
     )
   ' "${config_path}" >/dev/null || bt_die "Config validation failed: invalid required node fields"
 
   jq -e '
+    def normalize_node_type:
+      if . == "frappe-backup-dir" then "frappe-node"
+      elif . == "plain-backup-dir" then "plain-dir"
+      else .
+      end;
+    def normalized_node:
+      . as $node
+      | $node
+      | .node_type = (($node.node_type // $node.source_kind // empty) | normalize_node_type);
     .nodes
     | all(.[];
-      if .source_kind == "frappe-backup-dir"
+      if (normalized_node | .node_type) == "frappe-node"
       then (.bench_path | type == "string" and length > 0)
       else true
       end
     )
-  ' "${config_path}" >/dev/null || bt_die "Config validation failed: bench_path is required for source_kind=frappe-backup-dir"
+  ' "${config_path}" >/dev/null || bt_die "Config validation failed: bench_path is required for node_type=frappe-node"
 
   jq -e '
+    def normalize_access:
+      if . == "local-docker" then "docker"
+      elif . == "ssh-host" then "ssh"
+      else .
+      end;
+    def normalized_node:
+      . as $node
+      | $node
+      | .access = (($node.access // $node.access_type // empty) | normalize_access);
     .nodes
     | all(.[];
-      if (.access_type == "ssh-host" or .access_type == "ssh-docker")
+      if ((normalized_node | .access) == "ssh" or (normalized_node | .access) == "ssh-docker")
       then ((.host | type == "string" and length > 0) and (.user | type == "string" and length > 0) and ((.port == null) or ((.port | type) == "number" and .port >= 1 and .port <= 65535)))
       else true
       end
@@ -71,9 +126,18 @@ bt_validate_config() {
   ' "${config_path}" >/dev/null || bt_die "Config validation failed: host/user are required for ssh access and port must be 1..65535 when set"
 
   jq -e '
+    def normalize_access:
+      if . == "local-docker" then "docker"
+      elif . == "ssh-host" then "ssh"
+      else .
+      end;
+    def normalized_node:
+      . as $node
+      | $node
+      | .access = (($node.access // $node.access_type // empty) | normalize_access);
     .nodes
     | all(.[];
-      if (.access_type == "local-docker" or .access_type == "ssh-docker")
+      if ((normalized_node | .access) == "docker" or (normalized_node | .access) == "ssh-docker")
       then ((.container | type == "string" and length > 0) or (.compose_service | type == "string" and length > 0))
       else true
       end
@@ -111,16 +175,28 @@ bt_list_node_ids() {
 
 bt_get_node_json() {
   local node_id="$1"
+  local node_json
 
   bt_require_loaded_config
 
-  jq -cer --arg id "${node_id}" '.nodes[] | select(.id == $id)' "${BT_CONFIG_PATH}" \
+  node_json="$(jq -cer --arg id "${node_id}" '.nodes[] | select(.id == $id)' "${BT_CONFIG_PATH}")" \
     || bt_die "Unknown node id: ${node_id}"
+
+  bt_normalize_node_json "${node_json}"
 }
 
 bt_get_node_field() {
   local node_id="$1"
   local field="$2"
+
+  case "${field}" in
+    source_kind)
+      field="node_type"
+      ;;
+    access_type)
+      field="access"
+      ;;
+  esac
 
   bt_get_node_json "${node_id}" | jq -r --arg field "${field}" '.[$field] // empty'
 }

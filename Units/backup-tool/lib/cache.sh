@@ -99,7 +99,7 @@ Cache Entry (per-node pretty JSON arrays):
   {
     "backup_id": "string (required)",
     "source_node": "string (required)",
-    "source_kind": "string (required)",
+    "node_type": "string (required)",
     "source_site": "string (required)",
     "reason": "string (required)",
     "tags": "array (optional)",

@@ -13,17 +13,17 @@ EOF
 
 bt_scan_print_human() {
   local backup_json="$1"
-  local backup_hash backup_id node site source_kind complete
+  local backup_hash backup_id node site node_type complete
 
   backup_hash="$(jq -r '.backup_hash // "------"' <<<"${backup_json}")"
   backup_id="$(jq -r '.backup_id // "?"' <<<"${backup_json}")"
   node="$(jq -r '.source_node // "?"' <<<"${backup_json}")"
   site="$(jq -r '.source_site // "?"' <<<"${backup_json}")"
-  source_kind="$(jq -r '.source_kind // "?"' <<<"${backup_json}")"
+  node_type="$(jq -r '.node_type // .source_kind // "?"' <<<"${backup_json}")"
   complete="$(jq -r '.complete' <<<"${backup_json}")"
 
   printf 'FOUND [%s] node=%s site=%s kind=%s complete=%s id=%s\n' \
-    "${backup_hash}" "${node}" "${site}" "${source_kind}" "${complete}" "${backup_id}"
+    "${backup_hash}" "${node}" "${site}" "${node_type}" "${complete}" "${backup_id}"
 }
 
 bt_scan_frappe_backup_dir() {
@@ -39,7 +39,7 @@ bt_scan_frappe_backup_dir() {
     local site
     site="$(basename "${site_backup_dir}")"
     
-    bt_scan_site_backups "${node_id}" "${site}" "${site_backup_dir}" "frappe-backup-dir"
+    bt_scan_site_backups "${node_id}" "${site}" "${site_backup_dir}" "frappe-node"
   done
 }
 
@@ -47,7 +47,7 @@ bt_scan_site_backups() {
   local node_id="$1"
   local site="$2"
   local backup_dir="$3"
-  local source_kind="$4"
+  local node_type="$4"
   
   [[ -d "${backup_dir}" ]] || return 0
   
@@ -58,7 +58,7 @@ bt_scan_site_backups() {
     
     if jq -e . "${manifest_file}" >/dev/null 2>&1; then
       backup_id="$(jq -r '.backup_id' "${manifest_file}")"
-      printf '%s\n' "$(jq -c '. + {"source_node": "'${node_id}'", "source_site": "'${site}'", "source_kind": "'${source_kind}'"}' "${manifest_file}")"
+      printf '%s\n' "$(jq -c '. + {"source_node": "'${node_id}'", "source_site": "'${site}'", "node_type": "'${node_type}'"}' "${manifest_file}")"
       return
     fi
   done
@@ -86,7 +86,7 @@ bt_scan_site_backups() {
     fi
     
     bt_generate_manifest_json "${backup_id}" "${node_id}" "${site}" "standard frappe backup" "${artifacts_obj}" | \
-      jq -c '. + {"source_node": "'${node_id}'", "source_site": "'${site}'", "source_kind": "'${source_kind}'"}'
+      jq -c '. + {"source_node": "'${node_id}'", "source_site": "'${site}'", "node_type": "'${node_type}'"}'
   fi
 }
 
@@ -101,14 +101,14 @@ bt_scan_plain_backup_dir() {
     [[ -f "${manifest_file}" ]] || continue
     
     if jq -e . "${manifest_file}" >/dev/null 2>&1; then
-      printf '%s\n' "$(jq -c '. + {"source_node": "'${node_id}'", "source_kind": "plain-backup-dir"}' "${manifest_file}")"
+      printf '%s\n' "$(jq -c '. + {"source_node": "'${node_id}'", "node_type": "plain-dir"}' "${manifest_file}")"
     fi
   done
 }
 
 bt_scan_remote_manifests() {
   local node_id="$1"
-  local source_kind="$2"
+  local node_type="$2"
   local backup_root="$3"
 
   local remote_cmd manifest_paths manifest_path manifest_json
@@ -122,8 +122,8 @@ bt_scan_remote_manifests() {
     [[ -n "${manifest_json}" ]] || continue
 
     if jq -e . >/dev/null 2>&1 <<<"${manifest_json}"; then
-      jq -c --arg node "${node_id}" --arg sk "${source_kind}" \
-        '. + {source_node: $node, source_kind: $sk}' <<<"${manifest_json}"
+      jq -c --arg node "${node_id}" --arg nt "${node_type}" \
+        '. + {source_node: $node, node_type: $nt}' <<<"${manifest_json}"
     fi
   done <<<"${manifest_paths}"
 }
@@ -178,7 +178,7 @@ bt_scan_remote_frappe_without_manifest() {
       manifest_json="$(jq -c '.complete = false' <<<"${manifest_json}")"
     fi
 
-    printf '%s\n' "${manifest_json}" | jq -c '. + {source_node: .source_node, source_site: .source_site, source_kind: "frappe-backup-dir"}'
+    printf '%s\n' "${manifest_json}" | jq -c '. + {source_node: .source_node, source_site: .source_site, node_type: "frappe-node"}'
   done <<<"${db_paths}"
 }
 
@@ -258,7 +258,7 @@ fi"
     backup_id="${node_id}_${logical_site}"
     manifest_json="$(bt_generate_manifest_json "${backup_id}" "${node_id}" "${source_site}" "remote plain backup (without manifest; inferred from site_config+db)" "${artifacts_obj}")"
 
-    printf '%s\n' "${manifest_json}" | jq -c --arg rel_dir "${rel_dir}" '. + {source_node: .source_node, source_site: .source_site, source_kind: "plain-backup-dir", source_rel_dir: $rel_dir}'
+    printf '%s\n' "${manifest_json}" | jq -c --arg rel_dir "${rel_dir}" '. + {source_node: .source_node, source_site: .source_site, node_type: "plain-dir", source_rel_dir: $rel_dir}'
   done <<<"${scan_rows}"
 }
 
@@ -338,11 +338,11 @@ scan_main() {
 scan_node() {
   local node_id="$1"
   local node_json
-  local source_kind access_type backup_paths
+  local node_type access backup_paths
   
   node_json="$(bt_get_node_json "${node_id}")"
-  source_kind="$(jq -r '.source_kind' <<<"${node_json}")"
-  access_type="$(jq -r '.access_type' <<<"${node_json}")"
+  node_type="$(jq -r '.node_type' <<<"${node_json}")"
+  access="$(jq -r '.access' <<<"${node_json}")"
   backup_paths="$(jq -r '.backup_paths[]' <<<"${node_json}")"
   
   local path
@@ -350,37 +350,37 @@ scan_node() {
     [[ -z "${path}" ]] && continue
     
     if [[ "${BT_RUNNER_MODE:-execute}" == "dry-run" ]]; then
-      bt_log_info "Would scan: ${node_id} ${path} (${source_kind})"
+      bt_log_info "Would scan: ${node_id} ${path} (${node_type})"
       continue
     fi
 
-    case "${access_type}" in
-      ssh-host|ssh-docker|local-docker)
-        bt_scan_remote_manifests "${node_id}" "${source_kind}" "${path}"
-        case "${source_kind}" in
-          frappe-backup-dir)
+    case "${access}" in
+      ssh|ssh-docker|docker)
+        bt_scan_remote_manifests "${node_id}" "${node_type}" "${path}"
+        case "${node_type}" in
+          frappe-node)
             bt_scan_remote_frappe_without_manifest "${node_id}" "${path}"
             ;;
-          plain-backup-dir)
+          plain-dir)
             bt_scan_remote_plain_without_manifest "${node_id}" "${path}"
             ;;
         esac
         ;;
       local)
-        case "${source_kind}" in
-          frappe-backup-dir)
+        case "${node_type}" in
+          frappe-node)
             bt_scan_frappe_backup_dir "${node_id}" "${path}"
             ;;
-          plain-backup-dir)
+          plain-dir)
             bt_scan_plain_backup_dir "${node_id}" "${path}"
             ;;
           *)
-            bt_die "Unsupported source_kind: ${source_kind}"
+            bt_die "Unsupported node_type: ${node_type}"
             ;;
         esac
         ;;
       *)
-        bt_die "Unsupported access_type for scan: ${access_type}"
+        bt_die "Unsupported access for scan: ${access}"
         ;;
     esac
   done <<<"${backup_paths}"

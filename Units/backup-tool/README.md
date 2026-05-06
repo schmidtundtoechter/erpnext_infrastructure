@@ -5,19 +5,19 @@ Das Tool verwaltet ERPNext/Frappe-Backups ueber mehrere Systeme (lokal, SSH, Doc
 
 ## Was bedeutet was?
 
-- source_kind: Fachliche Art der Backup-Quelle.
-	- frappe-backup-dir: Frappe/Bench-typische Backup-Struktur (DB, Files, site_config).
-	- plain-backup-dir: Allgemeines Verzeichnis mit Backup-Dateien ohne Bench-spezifische Struktur.
-- access_type: Technischer Zugriffsweg auf den Knoten.
+- node_type: Fachliche Art der Backup-Quelle.
+	- frappe-node: Frappe/Bench-typische Backup-Struktur (DB, Files, site_config).
+	- plain-dir: Allgemeines Verzeichnis mit Backup-Dateien ohne Bench-spezifische Struktur.
+- access: Technischer Zugriffsweg auf den Knoten.
 	- local: Direkte Ausfuehrung auf dem lokalen Host.
-	- local-docker: Ausfuehrung lokal im Container.
-	- ssh-host: Ausfuehrung auf Remote-Host via SSH.
+	- docker: Ausfuehrung lokal im Container.
+	- ssh: Ausfuehrung auf Remote-Host via SSH.
 	- ssh-docker: Ausfuehrung via SSH im Remote-Container.
 - Cache: Lokaler, regenerierbarer Index fuer schnelle Suche und Filterung. Liegt unter `~/.cache/backupctl/nodes/<node-id>.json` (eine JSON-Array-Datei pro Knoten). Der Cache ist nie die Wahrheit.
 - backup_id: Eindeutige technische Kennung eines logischen Backups. Format: `<node>_<site>_<timestamp>`.
 - backup_hash: Kurzform der backup_id (6 Zeichen SHA256). Wird in der Scan-Ausgabe als `[abc123]` angezeigt.
 - display_name: Nutzerfreundliche Anzeige. Fallback-Reihenfolge: display_name -> reason -> backup_id.
-- source_rel_dir: Relativer Pfad des Backup-Verzeichnisses unterhalb von backup_root (relevant fuer plain-backup-dir mit Unterverzeichnissen).
+- source_rel_dir: Relativer Pfad des Backup-Verzeichnisses unterhalb von backup_root (relevant fuer plain-dir mit Unterverzeichnissen).
 
 ## Verzeichnisstruktur
 
@@ -30,9 +30,9 @@ Das Tool verwaltet ERPNext/Frappe-Backups ueber mehrere Systeme (lokal, SSH, Doc
 - lib/config.sh: Konfiguration laden und validieren (inkl. vollstaendiger Schema-Validierung).
 - lib/nodes.sh: Knotenmodell, Runner, SSH/Docker-Ausfuehrung, Transfer-Helfer, nodes list.
 - lib/backup-model.sh: Backup-Datenmodell, Manifest-Schema, backup_id/backup_hash-Generierung.
-- lib/scan.sh: Discovery fuer frappe-backup-dir und plain-backup-dir (lokal und remote, Single-Pass).
+- lib/scan.sh: Discovery fuer frappe-node und plain-dir (lokal und remote, Single-Pass).
 - lib/cache.sh: Cache-Management (per-Node JSON-Arrays, rebuild, clear, upsert, aggregierte Abfrage).
-- lib/backup.sh: Backup-Erzeugung (create, nur fuer frappe-backup-dir).
+- lib/backup.sh: Backup-Erzeugung (create, nur fuer frappe-node).
 - lib/copy.sh: Transferlogik (rsync als Standard, Validierung, Cache-Update).
 - lib/restore.sh: Restore, site_config-Modi, Post-Restore-Aufgaben.
 - lib/list.sh: Listen- und Filterausgabe (Text/JSON).
@@ -50,7 +50,7 @@ Pflicht:
 Optional:
 
 - scp (Fallback fuer Transfers)
-- docker (fuer local-docker und ssh-docker)
+- docker (fuer docker und ssh-docker)
 
 ## Konfiguration nodes.json erklaert
 
@@ -65,15 +65,15 @@ Finales Format: JSON.
 Pflichtfelder je Node:
 
 - id: Eindeutiger Knotenname.
-- source_kind: Fachliche Quellart.
-- access_type: Technischer Zugriffstyp.
+- node_type: Fachliche Quellart.
+- access: Technischer Zugriffstyp.
 - backup_paths: Liste von Verzeichnissen/Patterns fuer Backup-Suche.
 
 Zusaetzliche Pflicht je nach Typ:
 
-- bei source_kind=frappe-backup-dir:
+- bei node_type=frappe-node:
 	- bench_path: Pfad zum Bench-Kontext.
-- bei access_type=ssh-host oder ssh-docker:
+- bei access=ssh oder ssh-docker:
 	- host
 	- user
 	- port optional (Default 22)
@@ -86,7 +86,7 @@ Optionale Felder:
 - enabled: Knoten aktiv/inaktiv.
 - container: Containername fuer docker exec.
 - compose_service: Service fuer docker compose exec.
-- docker_context: Erwarteter lokaler Docker-Context (Default: default) fuer local-docker.
+- docker_context: Erwarteter lokaler Docker-Context (Default: default) fuer docker.
 
 ## CLI-Kommandos und Bedeutung
 
@@ -97,7 +97,7 @@ Hilfe aufrufen:
 - backupctl <command> --help
 
 - backupctl nodes list
-	- Zeigt konfigurierte Knoten mit source_kind/access_type.
+	- Zeigt konfigurierte Knoten mit node_type/access.
 - backupctl --config config/nodes.test.json nodes list
 	- Nutzt explizit eine alternative Konfiguration (z. B. fuer Tests).
 - backupctl --dry-run <command> ...
@@ -114,7 +114,7 @@ Hilfe aufrufen:
                [--from <iso8601>] [--to <iso8601>]
 	- Listet Cache-Eintraege mit optionalen Filtern.
 - backupctl create --node <id> --site <site> --reason <text> [--tag <tag>] [--backup-type <type>]
-	- Erzeugt auf frappe-backup-dir ein neues Backup inkl. Manifest (nur frappe-backup-dir).
+	- Erzeugt auf frappe-node ein neues Backup inkl. Manifest (nur frappe-node).
 - backupctl copy --backup <id> --from <source-node> --to <target-node> [--no-validate]
 	- Uebertraegt ein Backup zwischen Knoten (rsync, mit optionaler Validierung).
 - backupctl restore --backup <id> --to <target-node> --site <target-site>
@@ -160,7 +160,7 @@ Nach einem `restore` fuehrt das Tool automatisch folgende Schritte aus:
 - `create`: Keine Erzeugung von `apps.json` und `checksums.sha256`.
 - `restore`: Kein automatischer Neustart von Containern/Diensten nach Restore.
 - `restore`: Keine explizite Produktiv-Schutzflag (--force ist reserviert).
-- `copy`/`restore`: Pfadrekonstruktion fuer `source_rel_dir` bei verschachtelten plain-backup-dir Backups noch nicht vollstaendig implementiert.
+- `copy`/`restore`: Pfadrekonstruktion fuer `source_rel_dir` bei verschachtelten plain-dir Backups noch nicht vollstaendig implementiert.
 - Keine Migration von altem globalen `cache.jsonl` auf neue per-Node-Struktur.
 
 ## Schnelltest

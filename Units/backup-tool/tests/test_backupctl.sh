@@ -101,9 +101,9 @@ test_config_model_fields_are_present() {
   run_libs "bt_load_config '${CONFIG_PATH}'; bt_get_node_json local-dev >/dev/null"
   run_libs "bt_load_config '${CONFIG_PATH}'; bt_get_node_json own-prod-01 >/dev/null"
 
-  local source_kind
-  source_kind="$(run_libs "bt_load_config '${CONFIG_PATH}'; bt_get_node_field local-dev source_kind")"
-  [[ "${source_kind}" == "frappe-backup-dir" ]] || fail "unexpected source_kind: ${source_kind}"
+  local node_type
+  node_type="$(run_libs "bt_load_config '${CONFIG_PATH}'; bt_get_node_field local-dev node_type")"
+  [[ "${node_type}" == "frappe-node" ]] || fail "unexpected node_type: ${node_type}"
 }
 
 test_runner_builds_commands_for_all_access_types() {
@@ -140,7 +140,7 @@ test_backup_model_definition_exists() {
   model_text="$(run_libs "bt_backup_model_definition")"
   assert_contains "${model_text}" "backup_id"
   assert_contains "${model_text}" "source_node"
-  assert_contains "${model_text}" "source_kind"
+  assert_contains "${model_text}" "node_type"
   assert_contains "${model_text}" "source_site"
   assert_contains "${model_text}" "created_at"
   assert_contains "${model_text}" "reason"

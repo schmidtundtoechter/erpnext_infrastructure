@@ -110,20 +110,20 @@ copy_backup_between_nodes() {
 bt_get_backup_path_for_node() {
   local node_id="$1"
   local backup_id="$2"
-  local node_json source_kind site backup_root
+  local node_json node_type site backup_root
   
   node_json="$(bt_get_node_json "${node_id}")"
-  source_kind="$(jq -r '.source_kind' <<<"${node_json}")"
+  node_type="$(jq -r '.node_type' <<<"${node_json}")"
   
   # Extrahiere Site aus backup_id (Format: node_site_timestamp)
   site="$(echo "${backup_id}" | cut -d_ -f2)"
   
-  case "${source_kind}" in
-    frappe-backup-dir)
+  case "${node_type}" in
+    frappe-node)
       backup_root="$(jq -r '.backup_paths[0]' <<<"${node_json}" | xargs dirname)"
       printf '%s/%s' "${backup_root}" "${backup_id}"
       ;;
-    plain-backup-dir)
+    plain-dir)
       backup_root="$(jq -r '.backup_paths[0]' <<<"${node_json}")"
       printf '%s/%s' "${backup_root}" "${backup_id}"
       ;;
@@ -136,20 +136,20 @@ bt_get_backup_path_for_node() {
 bt_get_target_backup_path_for_node() {
   local node_id="$1"
   local backup_id="$2"
-  local node_json source_kind site backup_root
+  local node_json node_type site backup_root
   
   node_json="$(bt_get_node_json "${node_id}")"
-  source_kind="$(jq -r '.source_kind' <<<"${node_json}")"
+  node_type="$(jq -r '.node_type' <<<"${node_json}")"
   
   site="$(echo "${backup_id}" | cut -d_ -f2)"
   
-  case "${source_kind}" in
-    frappe-backup-dir)
+  case "${node_type}" in
+    frappe-node)
       backup_root="$(jq -r '.backup_paths[0]' <<<"${node_json}" | xargs dirname)"
       mkdir -p "${backup_root}" || true
       printf '%s/%s' "${backup_root}" "${backup_id}"
       ;;
-    plain-backup-dir)
+    plain-dir)
       backup_root="$(jq -r '.backup_paths[0]' <<<"${node_json}")"
       mkdir -p "${backup_root}" || true
       printf '%s/%s' "${backup_root}" "${backup_id}"

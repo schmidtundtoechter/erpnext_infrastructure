@@ -42,7 +42,7 @@ Commands:
   nodes list       List configured nodes
   scan             Discover backups on configured nodes
   list             List backups from cache (text/json, with filters)
-  create           Create backup on frappe-backup-dir sources.  (to be tested)
+  create           Create backup on frappe-node sources.        (to be tested)
   copy             Copy backup between nodes                    (to be tested)
   restore          Restore backup to target site                (to be tested)
   cache rebuild    Rebuild cache from discovered backups

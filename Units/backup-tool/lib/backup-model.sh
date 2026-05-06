@@ -5,7 +5,7 @@ bt_backup_model_definition() {
 Backup Object:
   backup_id: string (unique identifier)
   source_node: string (node id from config)
-  source_kind: string (frappe-backup-dir | plain-backup-dir)
+  node_type: string (frappe-node | plain-dir)
   source_site: string (site name, e.g. erp.customer-a.de)
   created_at: string (ISO 8601 timestamp)
   reason: string (fachlicher Grund des Backups)
