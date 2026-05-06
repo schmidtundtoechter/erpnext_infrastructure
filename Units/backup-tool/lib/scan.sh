@@ -56,12 +56,14 @@ bt_scan_local_file_mtime_iso8601() {
     bt_scan_epoch_to_iso8601 "${epoch}"
     return
   fi
-
+      printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
   printf '%s\n' "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 }
 
 bt_scan_remote_file_mtime_iso8601() {
   local node_id="$1"
+        db_epoch=''
+        db_epoch="$(python3 -c 'import os,sys; print(int(os.path.getmtime(sys.argv[1])))' "${db_path}" 2>/dev/null || stat -c %Y "${db_path}" 2>/dev/null || stat -f %m "${db_path}" 2>/dev/null || true)"
   local file_path="$2"
   local epoch
 
@@ -85,7 +87,6 @@ bt_scan_remote_file_mtime_iso8601() {
 
   printf '%s\n' "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 }
-
 bt_scan_frappe_backup_dir() {
   local node_id="$1"
   local backup_root="$2"
@@ -177,7 +178,7 @@ bt_scan_remote_manifests() {
   local backup_root="$3"
 
   local remote_cmd manifest_paths manifest_path manifest_json
-  remote_cmd="if [[ -d $(bt_quote "${backup_root}") ]]; then find $(bt_quote "${backup_root}") -type f -name manifest.json; fi"
+  remote_cmd="if [[ -d $(bt_quote "${backup_root}") ]]; then find $(bt_quote "${backup_root}") -type f \( -name 'manifest.json' -o -name '*-manifest.json' \); fi"
   manifest_paths="$(run_on_node "${node_id}" "${remote_cmd}" 2>/dev/null || true)"
 
   while IFS= read -r manifest_path; do
@@ -204,19 +205,22 @@ bt_scan_remote_frappe_without_manifest() {
   while IFS= read -r db_path; do
     [[ -n "${db_path}" ]] || continue
 
-    local backup_dir site_dir site manifest_in_dir
+    local backup_dir site_dir site db_file id_suffix manifest_in_dir
     backup_dir="$(dirname "${db_path}")"
     site_dir="$(dirname "$(dirname "${backup_dir}")")"
     site="$(basename "${site_dir}")"
-    manifest_in_dir="${backup_dir}/manifest.json"
+    db_file="$(basename "${db_path}")"
+    id_suffix="${db_file%-database.sql.gz}"
+    id_suffix="${id_suffix%-database.sql}"
+    manifest_in_dir="${backup_dir}/${id_suffix}-manifest.json"
 
-    # If manifest exists, the manifest scan already indexes this backup.
+    # If a per-backup manifest exists, bt_scan_remote_manifests already indexes this backup.
     if run_on_node "${node_id}" "[[ -f $(bt_quote "${manifest_in_dir}") ]]" >/dev/null 2>&1; then
       continue
     fi
 
-    local db_file public_file private_file site_config_file artifacts_obj backup_id manifest_json created_at
-    db_file="$(basename "${db_path}")"
+    local public_file private_file site_config_file artifacts_obj backup_id manifest_json created_at
+    # db_file and id_suffix already derived above (before manifest skip check)
     public_file="${db_file/-database.sql.gz/-files.tar}"
     public_file="${public_file/-database.sql/-files.tar}"
     private_file="${db_file/-database.sql.gz/-private-files.tar}"
@@ -236,9 +240,6 @@ bt_scan_remote_frappe_without_manifest() {
     fi
 
     # Stable ID: node + site + db stem (without -database.sql(.gz) suffix)
-    local id_suffix
-    id_suffix="${db_file%-database.sql.gz}"
-    id_suffix="${id_suffix%-database.sql}"
     backup_id="${node_id}_${site}_${id_suffix}"
     created_at="$(bt_scan_remote_file_mtime_iso8601 "${node_id}" "${db_path}")"
     manifest_json="$(bt_generate_manifest_json "${backup_id}" "${node_id}" "${site}" "remote frappe backup (without manifest)" "${artifacts_obj}" '[]' "${created_at}")"
@@ -256,7 +257,7 @@ bt_scan_remote_plain_without_manifest() {
   local backup_root="$2"
 
   # Discover backup groups in a single remote pass to avoid one SSH roundtrip per artifact probe.
-  local remote_cmd scan_rows scan_row
+  local remote_cmd scan_rows
   remote_cmd="if [[ -d $(bt_quote "${backup_root}") ]]; then
 find $(bt_quote "${backup_root}") -type f \\( -name '*site_config_backup.json' -o -name '*site_config.json' \\) -print0 |
 while IFS= read -r -d '' site_config_path; do
@@ -299,17 +300,21 @@ while IFS= read -r -d '' site_config_path; do
   [[ -f \"\${backup_dir}/\${public_file}\" ]] && public_present=\"\${public_file}\"
   [[ -f \"\${backup_dir}/\${private_file}\" ]] && private_present=\"\${private_file}\"
 
-  printf '%s\t%s\t%s\t%s\t%s\n' \
+  db_epoch=''
+  db_epoch=\"\$(python3 -c 'import os,sys; print(int(os.path.getmtime(sys.argv[1])))' \"\${db_path}\" 2>/dev/null || stat -c %Y \"\${db_path}\" 2>/dev/null || stat -f %m \"\${db_path}\" 2>/dev/null || true)\"
+
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
     \"\${rel_dir}\" \
     \"\${site_config_name}\" \
     \"\${db_file}\" \
     \"\${public_present}\" \
-    \"\${private_present}\"
+    \"\${private_present}\" \
+    \"\${db_epoch}\"
 done
 fi"
   scan_rows="$(run_on_node "${node_id}" "${remote_cmd}" 2>/dev/null || true)"
 
-  while IFS=$'\t' read -r rel_dir site_config_name db_file public_file private_file; do
+  while IFS=$'\t' read -r rel_dir site_config_name db_file public_file private_file db_epoch; do
     [[ -n "${db_file}" ]] || continue
 
     local artifacts_obj backup_id source_site logical_site manifest_json created_at
@@ -329,7 +334,11 @@ fi"
     source_site="${rel_dir}/${db_file}"
     logical_site="$(sed 's/[^a-zA-Z0-9._-]/_/g' <<<"${rel_dir}")"
     backup_id="${node_id}_${logical_site}_${id_suffix}"
-    created_at="$(bt_scan_remote_file_mtime_iso8601 "${node_id}" "${backup_root}/${rel_dir}/${db_file}")"
+    if [[ -n "${db_epoch}" ]]; then
+      created_at="$(bt_scan_epoch_to_iso8601 "${db_epoch}")"
+    else
+      created_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+    fi
     manifest_json="$(bt_generate_manifest_json "${backup_id}" "${node_id}" "${source_site}" "remote plain backup (without manifest; inferred from site_config+db)" "${artifacts_obj}" '[]' "${created_at}")"
 
     printf '%s\n' "${manifest_json}" | jq -c --arg rel_dir "${rel_dir}" '. + {source_node: .source_node, source_site: .source_site, node_type: "plain-dir", source_rel_dir: $rel_dir}'

@@ -81,7 +81,7 @@ bt_build_ssh_base_cmd() {
 
   ssh_config="$(jq -r '.ssh_config' <<<"${node_json}")"
 
-  printf 'ssh -o BatchMode=yes -o ConnectTimeout=10 %s' "$(bt_quote "${ssh_config}")"
+  printf 'ssh -n -o BatchMode=yes -o ConnectTimeout=10 %s' "$(bt_quote "${ssh_config}")"
 }
 
 bt_wrap_docker_exec_command() {

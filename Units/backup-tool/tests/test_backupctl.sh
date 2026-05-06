@@ -110,7 +110,7 @@ test_runner_builds_commands_for_all_access_types() {
   local cmd_local cmd_local_docker cmd_ssh_host cmd_ssh_docker
 
   cmd_local="$(run_libs "bt_load_config '${CONFIG_PATH}'; BT_RUNNER_MODE=dry-run run_on_node own-prod-01 'echo ok'" 2>/dev/null)"
-  assert_contains "${cmd_local}" "ssh -o BatchMode=yes"
+  assert_contains "${cmd_local}" "ssh -n -o BatchMode=yes"
   assert_contains "${cmd_local}" "own-prod-01"
 
   cmd_local_docker="$(run_libs "bt_load_config '${CONFIG_PATH}'; BT_RUNNER_MODE=dry-run run_on_node local-dev 'echo ok'" 2>/dev/null)"
@@ -253,6 +253,25 @@ test_backup_library_exists() {
   assert_file_contains "${ROOT_DIR}/lib/backup.sh" "create_backup_on_node"
 }
 
+test_backup_create_can_infer_single_site_from_cache_and_default_reason() {
+  local tmp_cache_dir out
+
+  tmp_cache_dir="$(mktemp -d)"
+  out="$(run_libs "BT_CACHE_DIR='${tmp_cache_dir}'; BT_CACHE_NODES_DIR='${tmp_cache_dir}/nodes'; BT_CACHE_LEGACY_PATH='${tmp_cache_dir}/cache.jsonl'; bt_load_config '${CONFIG_PATH}'; bt_cache_upsert_entry '{\"backup_id\":\"demo_existing\",\"source_node\":\"local-dev\",\"source_site\":\"demo.local\",\"reason\":\"demo\",\"created_at\":\"2026-01-01T00:00:00Z\",\"complete\":true,\"artifacts\":{\"db_dump\":\"a.sql.gz\",\"site_config\":\"site_config.json\"}}'; BT_RUNNER_MODE=dry-run backup_create_main --node local-dev 2>&1")"
+
+  assert_contains "${out}" "Creating backup: node=local-dev site=demo.local reason=manual backup create"
+  assert_contains "${out}" "Would create backup on local-dev for site demo.local"
+}
+
+test_backup_create_requires_site_when_multiple_sites_are_known() {
+  local tmp_cache_dir
+
+  tmp_cache_dir="$(mktemp -d)"
+  if run_libs "BT_CACHE_DIR='${tmp_cache_dir}'; BT_CACHE_NODES_DIR='${tmp_cache_dir}/nodes'; BT_CACHE_LEGACY_PATH='${tmp_cache_dir}/cache.jsonl'; bt_load_config '${CONFIG_PATH}'; bt_cache_upsert_entry '{\"backup_id\":\"demo_a\",\"source_node\":\"local-dev\",\"source_site\":\"a.local\",\"reason\":\"demo\",\"created_at\":\"2026-01-01T00:00:00Z\",\"complete\":true,\"artifacts\":{\"db_dump\":\"a.sql.gz\",\"site_config\":\"site_config.json\"}}'; bt_cache_upsert_entry '{\"backup_id\":\"demo_b\",\"source_node\":\"local-dev\",\"source_site\":\"b.local\",\"reason\":\"demo\",\"created_at\":\"2026-01-01T00:00:00Z\",\"complete\":true,\"artifacts\":{\"db_dump\":\"b.sql.gz\",\"site_config\":\"site_config.json\"}}'; BT_RUNNER_MODE=dry-run backup_create_main --node local-dev >/dev/null 2>&1"; then
+    fail "backup create should require --site when multiple sites are known"
+  fi
+}
+
 test_list_library_exists() {
   assert_file_exists "${ROOT_DIR}/lib/list.sh"
   assert_file_contains "${ROOT_DIR}/lib/list.sh" "list_main"
@@ -369,6 +388,8 @@ run_all_tests() {
   test_cache_uses_per_node_files_and_aggregates_centrally
   test_cache_prunes_removed_node_files
   test_backup_library_exists
+  test_backup_create_can_infer_single_site_from_cache_and_default_reason
+  test_backup_create_requires_site_when_multiple_sites_are_known
   test_list_library_exists
   test_copy_library_exists
   test_restore_library_exists
