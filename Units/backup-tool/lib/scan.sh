@@ -119,7 +119,9 @@ bt_scan_site_backups() {
     
     if jq -e . "${manifest_file}" >/dev/null 2>&1; then
       backup_id="$(jq -r '.backup_id' "${manifest_file}")"
-      printf '%s\n' "$(jq -c '. + {"source_node": "'${node_id}'", "source_site": "'${site}'", "node_type": "'${node_type}'"}' "${manifest_file}")"
+      printf '%s\n' "$(jq -c --arg mf "$(basename "${manifest_file}")" '.
+        | .artifacts = ((.artifacts // {}) + (if ((.artifacts // {}) | has("manifest")) then {} else {manifest: $mf} end))
+        | . + {"source_node": "'${node_id}'", "source_site": "'${site}'", "node_type": "'${node_type}'"}' "${manifest_file}")"
       return
     fi
   done
@@ -167,7 +169,9 @@ bt_scan_plain_backup_dir() {
     [[ -f "${manifest_file}" ]] || continue
     
     if jq -e . "${manifest_file}" >/dev/null 2>&1; then
-      printf '%s\n' "$(jq -c '. + {"source_node": "'${node_id}'", "node_type": "plain-dir"}' "${manifest_file}")"
+      printf '%s\n' "$(jq -c --arg mf "$(basename "${manifest_file}")" '.
+        | .artifacts = ((.artifacts // {}) + (if ((.artifacts // {}) | has("manifest")) then {} else {manifest: $mf} end))
+        | . + {"source_node": "'${node_id}'", "node_type": "plain-dir"}' "${manifest_file}")"
     fi
   done
 }
@@ -177,19 +181,22 @@ bt_scan_remote_manifests() {
   local node_type="$2"
   local backup_root="$3"
 
-  local remote_cmd manifest_paths manifest_path manifest_json
+  local remote_cmd manifest_paths manifest_path manifest_json manifest_file
   remote_cmd="if [[ -d $(bt_quote "${backup_root}") ]]; then find $(bt_quote "${backup_root}") -type f \( -name 'manifest.json' -o -name '*-manifest.json' \); fi"
   manifest_paths="$(run_on_node "${node_id}" "${remote_cmd}" 2>/dev/null || true)"
 
   while IFS= read -r manifest_path; do
     [[ -n "${manifest_path}" ]] || continue
+    manifest_file="$(basename "${manifest_path}")"
 
     manifest_json="$(run_on_node "${node_id}" "cat $(bt_quote "${manifest_path}")" 2>/dev/null || true)"
     [[ -n "${manifest_json}" ]] || continue
 
     if jq -e . >/dev/null 2>&1 <<<"${manifest_json}"; then
-      jq -c --arg node "${node_id}" --arg nt "${node_type}" \
-        '. + {source_node: $node, node_type: $nt}' <<<"${manifest_json}"
+      jq -c --arg node "${node_id}" --arg nt "${node_type}" --arg mf "${manifest_file}" \
+        '.
+        | .artifacts = ((.artifacts // {}) + (if ((.artifacts // {}) | has("manifest")) then {} else {manifest: $mf} end))
+        | . + {source_node: $node, node_type: $nt}' <<<"${manifest_json}"
     fi
   done <<<"${manifest_paths}"
 }

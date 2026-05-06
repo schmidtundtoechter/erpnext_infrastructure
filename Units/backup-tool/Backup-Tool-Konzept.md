@@ -253,6 +253,12 @@ Die Konfiguration soll dem Skript erlauben:
 * lokal, remote, host-basiert und docker-basiert einheitlich zu behandeln
 * zwischen Frappe-Backup-Quellen und einfachen Backup-Verzeichnissen zu unterscheiden
 
+Wichtig fuer `frappe-node`:
+
+* `bench_path` ist die einzige Quelle fuer Bench-bezogene Laufzeitpfade.
+* Der Laufzeitcode darf keine festen Pfade wie `/home/frappe/frappe-bench` enthalten.
+* Abgeleitete Pfade wie `sites/<site>/private/backups` werden immer relativ zu `bench_path` gebaut.
+
 ---
 
 ## 7. Ausführungsmodell für Knoten
