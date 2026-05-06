@@ -28,6 +28,118 @@
       "enabled": true
     },
     {
+      "id": "erpnext-az",
+      "node_type": "frappe-node",
+      "access": "ssh-docker",
+      "ssh_config": "sut.netcup",
+      "bench_path": "/home/frappe/frappe-bench",
+      "backup_paths": [
+        "/home/frappe/frappe-bench/sites"
+      ],
+      "container": "erpnext-az_erpnext_frontend_container",
+      "tags": ["sut", "prod"],
+      "vpn_required": false,
+      "enabled": true
+    },
+    {
+      "id": "erpnext-imc",
+      "node_type": "frappe-node",
+      "access": "ssh-docker",
+      "ssh_config": "sut.netcup",
+      "bench_path": "/home/frappe/frappe-bench",
+      "backup_paths": [
+        "/home/frappe/frappe-bench/sites"
+      ],
+      "container": "erpnext-imc_erpnext_frontend_container",
+      "tags": ["sut", "prod"],
+      "vpn_required": false,
+      "enabled": true
+    },
+    {
+      "id": "erpnext-kunde",
+      "node_type": "frappe-node",
+      "access": "ssh-docker",
+      "ssh_config": "sut.netcup",
+      "bench_path": "/home/frappe/frappe-bench",
+      "backup_paths": [
+        "/home/frappe/frappe-bench/sites"
+      ],
+      "container": "erpnext-kunde_erpnext_frontend_container",
+      "tags": ["sut", "prod"],
+      "vpn_required": false,
+      "enabled": true
+    },
+    {
+      "id": "erpnext-m",
+      "node_type": "frappe-node",
+      "access": "ssh-docker",
+      "ssh_config": "sut.netcup",
+      "bench_path": "/home/frappe/frappe-bench",
+      "backup_paths": [
+        "/home/frappe/frappe-bench/sites"
+      ],
+      "container": "erpnext-m_erpnext_frontend_container",
+      "tags": ["sut", "prod"],
+      "vpn_required": false,
+      "enabled": true
+    },
+    {
+      "id": "erpnext-test",
+      "node_type": "frappe-node",
+      "access": "ssh-docker",
+      "ssh_config": "sut.netcup",
+      "bench_path": "/home/frappe/frappe-bench",
+      "backup_paths": [
+        "/home/frappe/frappe-bench/sites"
+      ],
+      "container": "erpnext-test_erpnext_frontend_container",
+      "tags": ["sut", "prod"],
+      "vpn_required": false,
+      "enabled": true
+    },
+    {
+      "id": "erpnext-ueag",
+      "node_type": "frappe-node",
+      "access": "ssh-docker",
+      "ssh_config": "sut.netcup",
+      "bench_path": "/home/frappe/frappe-bench",
+      "backup_paths": [
+        "/home/frappe/frappe-bench/sites"
+      ],
+      "container": "erpnext-ueag_erpnext_frontend_container",
+      "tags": ["sut", "prod"],
+      "vpn_required": false,
+      "enabled": true
+    },
+    {
+      "id": "vepro-erp",
+      "node_type": "frappe-node",
+      "access": "ssh-docker",
+      "ssh_config": "vepro",
+      "bench_path": "/home/frappe/frappe-bench",
+      "backup_paths": [
+        "/home/frappe/frappe-bench/sites"
+      ],
+      "container": "erp_erpnext_frontend_container",
+      "tags": ["sut", "prod"],
+      "vpn_required": false,
+      "enabled": true
+    },
+    {
+      "id": "vepro-erptest",
+      "node_type": "frappe-node",
+      "access": "ssh-docker",
+      "ssh_config": "vepro",
+      "bench_path": "/home/frappe/frappe-bench",
+      "backup_paths": [
+        "/home/frappe/frappe-bench/sites"
+      ],
+      "container": "erptest_erpnext_frontend_container",
+      "tags": ["sut", "prod"],
+      "vpn_required": false,
+      "enabled": true
+    },
+    {
       "id": "sut-backupdir",
       "node_type": "plain-dir",
       "access": "ssh",
