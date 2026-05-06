@@ -41,7 +41,7 @@ Global Options:
 Primary Commands:
   node list        List configured nodes
   node scan        Discover backups on configured nodes
-  backup list      List backups from cache (text/json, with filters)
+  backup list      List backups from local cache only (run 'node scan' first)
   backup create    Create backup on frappe-node sources
   backup copy      Copy backup between nodes
   backup restore   Restore backup to target site
@@ -51,7 +51,7 @@ Primary Commands:
 Compatibility Aliases:
   nodes list       Alias for node list
   scan             Alias for node scan
-  list             Alias for backup list
+  list             Alias for backup list (cache only, no scan)
   create           Alias for backup create
   copy             Alias for backup copy
   restore          Alias for backup restore
@@ -86,7 +86,7 @@ backup_usage() {
 Usage: backupctl backup <list|create|copy|restore> [options]
 
 Subcommands:
-  list             List backups from cache
+  list             Alias for backup list (cache only, no scan)
   create           Create backup on frappe-node sources
   copy             Copy backup between nodes
   restore          Restore backup to target site

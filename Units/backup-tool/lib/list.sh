@@ -4,6 +4,9 @@ list_usage() {
   cat <<'EOF'
 Usage: backupctl backup list [options]
 
+Shows backups from the LOCAL CACHE only. Does not connect to any node.
+Run 'backupctl node scan' first to populate the cache.
+
 Options:
   --format text|json        Output format (default: text)
   --node <id>               Filter by source node
@@ -13,7 +16,6 @@ Options:
   --complete true|false     Filter by completeness
   --from <iso8601>          Filter created_at >= from
   --to <iso8601>            Filter created_at <= to
-  --live-check              Reserved for optional real-state verification mode
   -h, --help                Show this help
 EOF
 }
@@ -71,8 +73,15 @@ list_main() {
   done
   
   bt_cache_init
-  bt_cache_has_node_files || bt_cache_rebuild
-  
+  if ! bt_cache_has_node_files; then
+    bt_log_info "Cache is empty. Run 'backupctl node scan' to populate it."
+    case "${format}" in
+      json) printf '[]\n' ;;
+      *) printf '(no backups in cache)\n' ;;
+    esac
+    return 0
+  fi
+
   local all_entries
   all_entries="$(bt_cache_list_all)"
   
