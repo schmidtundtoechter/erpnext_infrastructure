@@ -390,16 +390,30 @@ scan_main() {
   
   bt_require_loaded_config
 
+  bt_scan_print_report() {
+    local nid="$1"
+    local reachable="$2"
+    local found_count="$3"
+    local cache_status="$4"
+
+    printf 'REPORT node=%s reachable=%s backups=%s cache=%s\n' \
+      "${nid}" "${reachable}" "${found_count}" "${cache_status}"
+  }
+
   local _scan_and_cache
   _scan_and_cache() {
     local nid="$1"
     local found=0
     local collected_backups backup_json
+    local reachable="yes"
+    local cache_status="unchanged"
 
     if [[ "${BT_RUNNER_MODE:-execute}" != "dry-run" ]]; then
       if ! bt_scan_check_node_availability "${nid}"; then
+        reachable="no"
         bt_log_warn "Node ${nid}: scan skipped (cache not updated)"
         printf 'WARN  [------] node=%s unavailable\n' "${nid}"
+        bt_scan_print_report "${nid}" "${reachable}" "0" "${cache_status}"
         return 0
       fi
     fi
@@ -409,6 +423,9 @@ scan_main() {
 
     if [[ "${BT_RUNNER_MODE:-execute}" != "dry-run" ]]; then
       bt_cache_replace_node_backups "${nid}" "${collected_backups}"
+      cache_status="updated"
+    else
+      cache_status="dry-run"
     fi
 
     while IFS= read -r backup_json; do
@@ -419,6 +436,8 @@ scan_main() {
     if [[ "${BT_RUNNER_MODE:-execute}" != "dry-run" && ${found} -eq 0 ]]; then
       printf 'FOUND [------] node=%s none\n' "${nid}"
     fi
+
+    bt_scan_print_report "${nid}" "${reachable}" "${found}" "${cache_status}"
   }
 
   if [[ -z "${node_id}" ]]; then
