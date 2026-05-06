@@ -137,6 +137,53 @@ bt_cache_get_by_backup_id() {
   jq -e --arg bid "${backup_id}" 'map(select(.backup_id == $bid))[0]' <<<"${all_entries}"
 }
 
+bt_cache_get_by_backup_hash() {
+  local backup_hash="$1"
+  local all_entries
+
+  all_entries="$(bt_cache_list_all)"
+  jq -e --arg bh "${backup_hash}" 'map(select(.backup_hash == $bh))[0]' <<<"${all_entries}"
+}
+
+bt_resolve_backup_ref_to_id() {
+  local backup_ref="$1"
+  local by_id by_hash by_hash_count resolved_id
+
+  by_id="$(bt_cache_get_by_backup_id "${backup_ref}" 2>/dev/null || true)"
+  by_hash="$(bt_cache_get_by_backup_hash "${backup_ref}" 2>/dev/null || true)"
+  by_hash_count="$(bt_cache_list_all | jq --arg bh "${backup_ref}" 'map(select(.backup_hash == $bh)) | length')"
+
+  [[ "${by_id}" == "null" ]] && by_id=""
+  [[ "${by_hash}" == "null" ]] && by_hash=""
+
+  # Backward-compatible precedence: exact backup_id match wins over backup_hash match.
+  if [[ -n "${by_id}" ]]; then
+    resolved_id="$(jq -r '.backup_id' <<<"${by_id}")"
+    [[ -n "${resolved_id}" && "${resolved_id}" != "null" ]] || bt_die "Invalid cache entry for backup_id: ${backup_ref}"
+    printf '%s\n' "${resolved_id}"
+    return
+  fi
+
+  if [[ "${by_hash_count}" -gt 1 ]]; then
+    bt_die "Backup hash '${backup_ref}' is ambiguous (${by_hash_count} matches). Use full backup_id."
+  fi
+
+  if [[ -n "${by_hash}" ]]; then
+    resolved_id="$(jq -r '.backup_id' <<<"${by_hash}")"
+    [[ -n "${resolved_id}" && "${resolved_id}" != "null" ]] || bt_die "Invalid cache entry for backup_hash: ${backup_ref}"
+    printf '%s\n' "${resolved_id}"
+    return
+  fi
+
+  if [[ "${BT_RUNNER_MODE:-execute}" == "dry-run" ]]; then
+    # In dry-run mode allow unresolved references so command planning works without cache.
+    printf '%s\n' "${backup_ref}"
+    return
+  fi
+
+  bt_die "Backup reference not found in cache: ${backup_ref}. Run 'backupctl node scan' first."
+}
+
 bt_cache_list_all() {
   bt_cache_init
   bt_cache_prune_removed_node_files

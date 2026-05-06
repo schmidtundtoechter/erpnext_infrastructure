@@ -105,16 +105,28 @@ list_main() {
 bt_list_format_text() {
   local entries="$1"
   
-  printf '%-40s %-20s %-30s %-15s %s\n' "BACKUP_ID" "SOURCE_SITE" "REASON" "CREATED_AT" "COMPLETE"
-  printf '%s\n' "$(printf '=%.0s' {1..150})"
+  printf '%-8s %-40s %-20s %-30s %-15s %s\n' "HASH" "BACKUP_ID" "SOURCE_SITE" "REASON" "CREATED_AT" "ART"
+  printf '%s\n' "$(printf '=%.0s' {1..177})"
 
   if [[ -z "${entries//[[:space:]]/}" ]]; then
     return 0
   fi
 
-  echo "${entries}" | jq -r '
-    select(type == "object") |
-    "\(.backup_id // "?" | (if length > 40 then .[0:37] + "..." else . end))  \(.source_site // "?" | (if length > 20 then .[0:17] + "..." else . end))  \(.reason // "?" | (if length > 30 then .[0:27] + "..." else . end))  \(.created_at // "?" | (if length > 15 then .[0:12] + "..." else . end))  \(.complete // "?")"
+  printf '%s\n' "${entries}" | jq -r -s '
+    def normalize_input:
+      if (length == 1 and (.[0] | type) == "array") then .[0] else . end;
+    def artifact_code($a):
+      ((if (($a.db_dump? // "") != "") then "D" else "" end)
+      + (if (($a.site_config? // "") != "") then "S" else "" end)
+      + (if (($a.public_files? // "") != "") then "F" else "" end)
+      + (if (($a.private_files? // "") != "") then "P" else "" end)
+      + (if (($a.manifest? // "") != "") then "M" else "" end)
+      + (if (($a.checksums? // "") != "") then "C" else "" end)
+      + (if (($a.apps? // "") != "") then "A" else "" end));
+    normalize_input
+    | map(select(type == "object"))[]
+    | (.artifacts // {}) as $a
+    | "\(.backup_hash // "?" | tostring | .[0:8])  \(.backup_id // "?" | tostring | if length > 40 then .[0:37] + "..." else . end)  \(.source_site // "?" | tostring | if length > 20 then .[0:17] + "..." else . end)  \(.reason // "?" | tostring | if length > 30 then .[0:27] + "..." else . end)  \(.created_at // "?" | tostring | if length > 15 then .[0:12] + "..." else . end)  \(artifact_code($a))"
   '
 }
 

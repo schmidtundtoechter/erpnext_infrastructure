@@ -52,7 +52,7 @@ bt_scan_site_backups() {
   
   [[ -d "${backup_dir}" ]] || return 0
   
-  local manifest_file db_file public_file private_file config_file backup_id
+  local manifest_file db_file public_file private_file config_file backup_id id_suffix
   
   for manifest_file in "${backup_dir}"/manifest.json; do
     [[ -f "${manifest_file}" ]] || continue
@@ -70,8 +70,11 @@ bt_scan_site_backups() {
   done
   
   if [[ -f "${db_dump}" ]]; then
-    # Stable ID: node + site + db filename (db filename contains timestamp)
-    backup_id="${node_id}_${site}_$(basename "${db_dump}")"
+    # Stable ID: node + site + db stem (without -database.sql(.gz) suffix)
+    id_suffix="$(basename "${db_dump}")"
+    id_suffix="${id_suffix%-database.sql.gz}"
+    id_suffix="${id_suffix%-database.sql}"
+    backup_id="${node_id}_${site}_${id_suffix}"
     
     local artifacts_obj
     artifacts_obj="{\"db_dump\": \"$(basename "${db_dump}")\"}"
@@ -171,8 +174,11 @@ bt_scan_remote_frappe_without_manifest() {
       artifacts_obj="$(jq -c '. + {site_config: "site_config.json"}' <<<"${artifacts_obj}")"
     fi
 
-    # Stable ID: node + site + db filename (db filename already contains backup timestamp)
-    backup_id="${node_id}_${site}_${db_file}"
+    # Stable ID: node + site + db stem (without -database.sql(.gz) suffix)
+    local id_suffix
+    id_suffix="${db_file%-database.sql.gz}"
+    id_suffix="${id_suffix%-database.sql}"
+    backup_id="${node_id}_${site}_${id_suffix}"
     manifest_json="$(bt_generate_manifest_json "${backup_id}" "${node_id}" "${site}" "remote frappe backup (without manifest)" "${artifacts_obj}")"
 
     if ! jq -e '.artifacts | has("site_config")' >/dev/null 2>&1 <<<"${manifest_json}"; then
@@ -254,9 +260,13 @@ fi"
       artifacts_obj="$(jq -c --arg f "${private_file}" '. + {private_files: $f}' <<<"${artifacts_obj}")"
     fi
 
+    local id_suffix
+    id_suffix="${db_file%-database.sql.gz}"
+    id_suffix="${id_suffix%-database.sql}"
+
     source_site="${rel_dir}/${db_file}"
-    logical_site="$(sed 's/[^a-zA-Z0-9._-]/_/g' <<<"${source_site}")"
-    backup_id="${node_id}_${logical_site}"
+    logical_site="$(sed 's/[^a-zA-Z0-9._-]/_/g' <<<"${rel_dir}")"
+    backup_id="${node_id}_${logical_site}_${id_suffix}"
     manifest_json="$(bt_generate_manifest_json "${backup_id}" "${node_id}" "${source_site}" "remote plain backup (without manifest; inferred from site_config+db)" "${artifacts_obj}")"
 
     printf '%s\n' "${manifest_json}" | jq -c --arg rel_dir "${rel_dir}" '. + {source_node: .source_node, source_site: .source_site, node_type: "plain-dir", source_rel_dir: $rel_dir}'

@@ -7,7 +7,7 @@ backup_restore_usage() {
 Usage: backupctl backup restore --backup <id> --to <node> --site <site> [options]
 
 Options:
-  --backup <id>                              Backup id (required)
+  --backup <ref>                             Backup reference: backup_id or backup_hash (required)
   --to <node>                                Target node id (required)
   --site <site>                              Target site (required)
   --config-mode use-source-config|merge-config|keep-target-config
@@ -20,7 +20,7 @@ EOF
 }
 
 backup_restore_main() {
-  local backup_id="" target_node="" target_site="" config_mode="merge-config" \
+  local backup_ref="" backup_id="" target_node="" target_site="" config_mode="merge-config" \
     dry_run="" force="" no_checks=""
   
   while [[ $# -gt 0 ]]; do
@@ -30,7 +30,7 @@ backup_restore_main() {
         return
         ;;
       --backup)
-        backup_id="$2"
+        backup_ref="$2"
         shift 2
         ;;
       --to)
@@ -63,7 +63,7 @@ backup_restore_main() {
     esac
   done
   
-  [[ -n "${backup_id}" ]] || bt_die "restore: --backup is required"
+  [[ -n "${backup_ref}" ]] || bt_die "restore: --backup is required"
   [[ -n "${target_node}" ]] || bt_die "restore: --to is required"
   [[ -n "${target_site}" ]] || bt_die "restore: --site is required"
   
@@ -77,6 +77,8 @@ backup_restore_main() {
   esac
   
   bt_require_loaded_config
+
+  backup_id="$(bt_resolve_backup_ref_to_id "${backup_ref}")"
   
   restore_backup_to_node "${backup_id}" "${target_node}" "${target_site}" \
     "${config_mode}" "${dry_run}" "${force}" "${no_checks}"

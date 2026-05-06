@@ -9,7 +9,7 @@ backup_copy_usage() {
 Usage: backupctl backup copy --backup <id> --from <node> --to <node> [options]
 
 Options:
-  --backup <id>     Backup id (required)
+  --backup <ref>    Backup reference: backup_id or backup_hash (required)
   --from <node>     Source node id (required)
   --to <node>       Target node id (required)
   -f, --force       Skip overwrite confirmation if target backup exists
@@ -19,7 +19,7 @@ EOF
 }
 
 backup_copy_main() {
-  local backup_id="" from_node="" to_node="" force="" no_validate=""
+  local backup_ref="" backup_id="" from_node="" to_node="" force="" no_validate=""
   
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -28,7 +28,7 @@ backup_copy_main() {
         return
         ;;
       --backup)
-        backup_id="$2"
+        backup_ref="$2"
         shift 2
         ;;
       --from)
@@ -53,11 +53,13 @@ backup_copy_main() {
     esac
   done
   
-  [[ -n "${backup_id}" ]] || bt_die "copy: --backup is required"
+  [[ -n "${backup_ref}" ]] || bt_die "copy: --backup is required"
   [[ -n "${from_node}" ]] || bt_die "copy: --from is required"
   [[ -n "${to_node}" ]] || bt_die "copy: --to is required"
   
   bt_require_loaded_config
+
+  backup_id="$(bt_resolve_backup_ref_to_id "${backup_ref}")"
   
   copy_backup_between_nodes "${backup_id}" "${from_node}" "${to_node}" "${force}" "${no_validate}"
 }
@@ -193,11 +195,15 @@ bt_validate_backup_transfer() {
 bt_get_cached_backup_object() {
   local node_id="$1"
   local backup_id="$2"
+  local backup_hash
+
+  backup_hash="$(bt_backup_hash_from_id "${backup_id}")"
   
   # Konstruiere ein minimales Backup-Objekt für Cache
   cat <<EOF
 {
   "backup_id": "${backup_id}",
+  "backup_hash": "${backup_hash}",
   "source_node": "${node_id}",
   "created_at": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
   "last_seen": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
