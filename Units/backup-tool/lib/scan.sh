@@ -444,6 +444,8 @@ scan_node() {
   local path
   while IFS= read -r path; do
     [[ -z "${path}" ]] && continue
+
+    local path_results=""
     
     if [[ "${BT_RUNNER_MODE:-execute}" == "dry-run" ]]; then
       bt_log_info "Would scan: ${node_id} ${path} (${node_type})"
@@ -452,23 +454,25 @@ scan_node() {
 
     case "${access}" in
       ssh|ssh-docker|docker)
-        bt_scan_remote_manifests "${node_id}" "${node_type}" "${path}"
-        case "${node_type}" in
-          frappe-node)
-            bt_scan_remote_frappe_without_manifest "${node_id}" "${path}"
-            ;;
-          plain-dir)
-            bt_scan_remote_plain_without_manifest "${node_id}" "${path}"
-            ;;
-        esac
+        path_results="$({
+          bt_scan_remote_manifests "${node_id}" "${node_type}" "${path}"
+          case "${node_type}" in
+            frappe-node)
+              bt_scan_remote_frappe_without_manifest "${node_id}" "${path}"
+              ;;
+            plain-dir)
+              bt_scan_remote_plain_without_manifest "${node_id}" "${path}"
+              ;;
+          esac
+        } )"
         ;;
       local)
         case "${node_type}" in
           frappe-node)
-            bt_scan_frappe_backup_dir "${node_id}" "${path}"
+            path_results="$(bt_scan_frappe_backup_dir "${node_id}" "${path}")"
             ;;
           plain-dir)
-            bt_scan_plain_backup_dir "${node_id}" "${path}"
+            path_results="$(bt_scan_plain_backup_dir "${node_id}" "${path}")"
             ;;
           *)
             bt_die "Unsupported node_type: ${node_type}"
@@ -479,5 +483,12 @@ scan_node() {
         bt_die "Unsupported access for scan: ${access}"
         ;;
     esac
+
+    if [[ -z "${path_results}" ]]; then
+      bt_log_info "Node ${node_id}: found backup dir ${path}, but it is empty"
+      continue
+    fi
+
+    printf '%s\n' "${path_results}"
   done <<<"${backup_paths}"
 }
