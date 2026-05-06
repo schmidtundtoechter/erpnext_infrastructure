@@ -126,6 +126,14 @@ function backup() {
   deploy-tools.backupVolume SCENARIO_DATA_VOLUME_7_PATH "db-data" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
   deploy-tools.backupVolume SCENARIO_DATA_VOLUME_8_PATH "assets" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
 
+  # Bench backup (only if frontend container is running, otherwise we might end up with an incomplete backup and no way to recover)
+  local frontend_container="${SCENARIO_NAME}_erpnext_frontend_container"
+  if ! docker ps --format '{{.Names}}' | grep -qx "$frontend_container"; then
+    banner "Skip bench backup"
+    echo "Service $frontend_container is not running. Skipping internal bench backup."
+    return 0
+  fi
+
   # Run bench backup in create-site container
   banner "Run bench backup in create-site container"
   docker compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS run --rm create-site "bash -c \"cd /home/frappe/frappe-bench && \
