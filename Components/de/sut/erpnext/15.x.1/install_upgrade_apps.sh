@@ -2,6 +2,7 @@
 
 SITE_NAME=$1
 SCENARIO_INSTALL_APPS=$2
+UPGRADE_MARKER="sites/.run-app-upgrade"
 if [ -z "$SCENARIO_INSTALL_APPS" -o -z "$SITE_NAME" ]; then
     echo "Error: Missing required arguments."
     echo "Usage: $0 <site-name> <install-apps>"
@@ -51,11 +52,72 @@ else
 fi
 
 apps_installed=()
+site_changed=0
+upgrade_failed=0
 
 echo "Calling $0 in site $SITE_NAME"
 
-# Method to install or upgrade apps
-function install_upgrade_app() {
+APP_MANAGEMENT_MODE="reconcile"
+if [ -f "$UPGRADE_MARKER" ]; then
+    APP_MANAGEMENT_MODE="upgrade"
+fi
+echo "--iua- App management mode: $APP_MANAGEMENT_MODE"
+
+function is_app_installed_on_site() {
+    local app=$1
+    bench --site "${SITE_NAME}" list-apps 2>/dev/null | grep -q "^$app"
+}
+
+function install_app_on_site_if_missing() {
+    local app=$1
+
+    if is_app_installed_on_site "$app"; then
+        echo "$app is already installed on site, skipping install-app"
+    else
+        bench --site "${SITE_NAME}" install-app "$app"
+        if [ $? -eq 0 ]; then
+            echo "$app app installed successfully"
+            site_changed=1
+        else
+            echo "Error installing $app app, retrying with --force"
+            if bench --site "${SITE_NAME}" install-app --force "$app"; then
+                site_changed=1
+            else
+                echo "Error installing $app app (force retry failed)"
+                if [[ "$APP_MANAGEMENT_MODE" == "upgrade" ]]; then
+                    upgrade_failed=1
+                fi
+                return 1
+            fi
+        fi
+    fi
+}
+
+# Reconcile mode: install missing active apps only. Existing apps are not fetched,
+# checked out, reset, or upgraded.
+function reconcile_app() {
+    repo=$1
+    app=$2
+    version=$3
+
+    echo "Reconciling $app app from $repo"
+
+    if [ ! -d "apps/$app" ]; then
+        echo "Installing missing $app app at version $version"
+        bench get-app "$app" "$repo" --branch "$version"
+        site_changed=1
+    else
+        echo "$app app directory already exists, leaving code unchanged"
+    fi
+
+    install_app_on_site_if_missing "$app"
+
+    # Keep active apps in desired state to prevent accidental cleanup on inconsistent checks.
+    apps_installed+=($app)
+}
+
+# Upgrade mode: install missing apps and move existing apps to the configured ref.
+function upgrade_app() {
     repo=$1
     app=$2
     version=$3
@@ -67,6 +129,7 @@ function install_upgrade_app() {
     if [ ! -d apps/$app ]; then
         echo "Installing $app app"
         bench get-app $app $repo --branch $version
+        site_changed=1
     fi
 
     # Fix git refs to ensure all remote branches/tags are fetchable
@@ -122,18 +185,7 @@ function install_upgrade_app() {
     fi
     popd > /dev/null
 
-    # Install app only if it is not already installed on the site
-    if bench --site ${SITE_NAME} list-apps 2>/dev/null | grep -q "^$app"; then
-        echo "$app is already installed on site, skipping install-app"
-    else
-        bench --site ${SITE_NAME} install-app "$app"
-        if [ $? -eq 0 ]; then
-            echo "$app app installed successfully"
-        else
-            echo "Error installing $app app, retrying with --force"
-            bench --site ${SITE_NAME} install-app --force "$app" || echo "Error installing $app app (force retry failed)"
-        fi
-    fi
+    install_app_on_site_if_missing "$app"
 
     # Keep active apps in desired state to prevent accidental cleanup on inconsistent checks.
     apps_installed+=($app)
@@ -142,7 +194,7 @@ function install_upgrade_app() {
 function remove_app() {
 	app_name=$1
     is_installed_on_site=0
-    if bench --site ${SITE_NAME} list-apps 2>/dev/null | grep -q "^$app_name"; then
+    if is_app_installed_on_site "$app_name"; then
         is_installed_on_site=1
     fi
 
@@ -173,9 +225,9 @@ function remove_app() {
 		echo "Force removing $app_name directory"
 		rm -rf apps/$app_name
 		rm -rf archived/apps/${app_name}-*
+        site_changed=1
     else
         echo "--iua- $app_name not installed on site, skipping uninstall-app"
-		bench --site ${SITE_NAME} list-apps
     fi
 }
 
@@ -191,15 +243,20 @@ while IFS=$'\t' read -r app_name app_url app_version app_active; do
         echo "--iua- Removing app $app_name (active=false)"
         remove_app "$app_name"
     else
-        install_upgrade_app "$app_url" "$app_name" "$app_version"
+        if [[ "$APP_MANAGEMENT_MODE" == "upgrade" ]]; then
+            upgrade_app "$app_url" "$app_name" "$app_version"
+        else
+            reconcile_app "$app_url" "$app_name" "$app_version"
+        fi
     fi
 done < <(jq -r '.[] | [.name, .url, .version, (if .active == false then false else true end | tostring)] | @tsv' "$APPS_JSON")
 
-echo "--iua- Installed or upgraded apps: ${apps_installed[@]}"
+echo "--iua- Active apps kept: ${apps_installed[@]}"
 
 # Remove other apps
 echo "--iua- Removing other apps that are not in active apps JSON"
 for app in apps/*/; do
+    [ -d "$app" ] || continue
 	app_name=$(basename "$app")
 	if [[ ! " ${apps_installed[@]} " =~ " ${app_name} " ]]; then
 		remove_app "$app_name"
@@ -207,45 +264,71 @@ for app in apps/*/; do
 		echo "Keeping $app_name app"
 	fi
 done
-pwd
-ls
 
-# Update requirements
-echo "--iua- Updating requirements"
-# TODO: Fix error messages when erpnext or frappe are not on a branch
-bench update --requirements
+if [[ "$APP_MANAGEMENT_MODE" == "upgrade" ]]; then
+    # Update requirements
+    echo "--iua- Updating requirements"
+    # TODO: Fix error messages when erpnext or frappe are not on a branch
+    if ! bench update --requirements; then
+        upgrade_failed=1
+    fi
 
-# Ensure pkg_resources is available for frappe integrations during migrate.
-echo "--iua- Ensuring setuptools/pkg_resources is available"
-/home/frappe/frappe-bench/env/bin/python -m pip install --quiet --upgrade setuptools wheel
-if ! /home/frappe/frappe-bench/env/bin/python -c "import pkg_resources" >/dev/null 2>&1; then
-    echo "--iua- pkg_resources still missing, retrying with setuptools<81"
-    uv pip install --quiet --python /home/frappe/frappe-bench/env/bin/python "setuptools<81" || \
-      /home/frappe/frappe-bench/env/bin/python -m pip install --quiet "setuptools<81"
+    # Ensure pkg_resources is available for frappe integrations during migrate.
+    echo "--iua- Ensuring setuptools/pkg_resources is available"
+    if ! /home/frappe/frappe-bench/env/bin/python -m pip install --quiet --upgrade setuptools wheel; then
+        upgrade_failed=1
+    fi
+    if ! /home/frappe/frappe-bench/env/bin/python -c "import pkg_resources" >/dev/null 2>&1; then
+        echo "--iua- pkg_resources still missing, retrying with setuptools<81"
+        uv pip install --quiet --python /home/frappe/frappe-bench/env/bin/python "setuptools<81" || \
+          /home/frappe/frappe-bench/env/bin/python -m pip install --quiet "setuptools<81" || \
+          upgrade_failed=1
+    fi
+    if ! /home/frappe/frappe-bench/env/bin/python -c "import pkg_resources" >/dev/null 2>&1; then
+        echo "Error: pkg_resources is still missing after setuptools repair"
+        upgrade_failed=1
+    fi
+
+    # Migrate site
+    echo "--iua- Migrating site ${SITE_NAME}"
+    if ! bench --site ${SITE_NAME} migrate; then
+        upgrade_failed=1
+    fi
+
+    # Rebuild assets
+    echo "--iua- Rebuilding assets"
+    # TODO: Optimize, needs many resources
+    #bench build
+
+    # Set developer mode
+    echo "--iua- Setting developer mode and server script enabled"
+    bench set-config -g developer_mode 1 || upgrade_failed=1
+    bench set-config -g server_script_enabled 1 || upgrade_failed=1
+    bench setup requirements --dev || upgrade_failed=1
+
+    # Clear cache
+    echo "--iua- Clearing cache"
+    bench --site ${SITE_NAME} clear-cache || upgrade_failed=1
+    bench --site ${SITE_NAME} clear-website-cache || upgrade_failed=1
+
+    if [ "$upgrade_failed" -eq 0 ]; then
+        echo "--iua- Upgrade completed, removing marker $UPGRADE_MARKER"
+        rm -f "$UPGRADE_MARKER"
+    else
+        echo "--iua- Upgrade failed, keeping marker $UPGRADE_MARKER for retry"
+        exit 1
+    fi
+else
+    if [ "$site_changed" -eq 1 ]; then
+        echo "--iua- Site install state changed, migrating site ${SITE_NAME}"
+        bench --site ${SITE_NAME} migrate
+
+        echo "--iua- Clearing cache"
+        bench --site ${SITE_NAME} clear-cache
+        bench --site ${SITE_NAME} clear-website-cache
+    else
+        echo "--iua- Reconcile completed without install-state changes; skipping migrate and cache clear"
+    fi
 fi
-if ! /home/frappe/frappe-bench/env/bin/python -c "import pkg_resources" >/dev/null 2>&1; then
-    echo "Error: pkg_resources is still missing after setuptools repair"
-    exit 1
-fi
-
-# Migrate site
-echo "--iua- Migrating site ${SITE_NAME}"
-bench --site ${SITE_NAME} migrate;
-
-# Rebuild assets
-echo "--iua- Rebuilding assets"
-# TODO: Optimize, needs many resources
-#bench build
-
-# Set developer mode
-echo "--iua- Setting developer mode and server script enabled"
-bench set-config -g developer_mode 1
-bench set-config -g server_script_enabled 1
-bench setup requirements --dev
-
-# Clear cache
-echo "--iua- Clearing cache"
-bench --site ${SITE_NAME} clear-cache
-bench --site ${SITE_NAME} clear-website-cache
 
 # All containers need to restart after installation: This is done in create-site container startup script

@@ -17,7 +17,7 @@ if [ -z "$1" ]; then
 fi
 SCENARIO_NAME=$1
 
-scenario.deploy $SCENARIO_NAME stop,init,up
+scenario.deploy $SCENARIO_NAME init,update,down,up
 
 # Wait for user input
 read -p "Press enter to continue"

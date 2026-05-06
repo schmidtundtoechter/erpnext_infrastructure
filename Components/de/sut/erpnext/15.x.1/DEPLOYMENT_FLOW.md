@@ -31,7 +31,7 @@ Alle Daten-Volumes sind **external** (persistent über down/up hinaus):
 
 ### `update`
 
-> **Rein informativ. Kein Deployment, keine Container-Änderung.**
+> **Update-Vorbereitung: Versionsvorschläge, Docker-Pull/Build und Upgrade-Marker.**
 
 ```
 scenario.deploy → scenario.sh update
@@ -41,10 +41,11 @@ scenario.deploy → scenario.sh update
 2. Ruft für jede App `git ls-remote --tags` auf dem Remote-Repo auf
 3. Schreibt `apps.updated.json` mit Vorschlägen für neuere Tags (gleiche Major-Version)
 4. Gibt für `FRAPPE_VERSION` / `ERPNEXT_VERSION` aus `.env` ebenfalls Vorschläge aus
-5. **Ändert nichts** — weder Dateien noch Container
-6. **Kein `docker pull`, kein `docker compose build`, kein Image-Update**
+5. Führt `docker compose pull` aus
+6. Führt `docker compose build --pull` aus
+7. Schreibt `sites/.run-app-upgrade` ueber einen kurzlebigen Compose-Container in das persistente Sites-Volume
 
-→ Zum Übernehmen: `apps.updated.json` prüfen und manuell in `apps.json` / `.env` eintragen.
+→ Zum Übernehmen: `apps.updated.json` prüfen und manuell in `apps.json` / `.env` eintragen, dann `init,update,down,up` ausführen. Der eigentliche App-Upgrade-/Migrationslauf passiert beim folgenden `up`, weil dann der `create-site`-Container neu erzeugt wird.
 
 ---
 
@@ -93,19 +94,19 @@ scenario.deploy init
 ```
 scenario.deploy → scenario.sh up
     → checkAndCreateDataVolume  (legt Volumes an, falls nicht vorhanden)
-   → docker compose pull       (zieht aktuelle Images)
-   → docker compose build --pull (baut Docker-Image + aktualisiert Base-Images)
     → docker compose up -d      (startet alle Container)
 ```
 
-**`docker compose build`** baut das ERPNext-Image mit:
+`up` macht bewusst keinen expliziten Pull und keinen `build --pull` mehr. Es verwendet schlicht `docker compose up -d`; wenn das lokale Image noch fehlt, darf Docker Compose es bauen. Wenn das Image bereits existiert, wird es nicht aktiv aktualisiert.
+
+**Das ERPNext-Image** wird mit folgenden Build-Args gebaut:
 - `FRAPPE_VERSION` aus `.env` → frappe-Basis-Image
 - `ERPNEXT_VERSION` aus `.env` → erpnext wird im Image eingebaut
 
 Hinweis zum impliziten Update-Verhalten:
-- `frappe` und `erpnext` werden **nicht** im `update`-Step aktualisiert.
-- Ein implizites Aktualisieren passiert nur beim `up`-Step während `docker compose build`, weil im Dockerfile `bench init --frappe-branch=${FRAPPE_VERSION}` und `bench get-app --branch=${ERPNEXT_VERSION}` laufen.
-- Im aktuellen Prozess wird vor dem Start zusätzlich `docker compose pull` und danach `docker compose build --pull` ausgeführt, damit Images und Base-Images aktiv aktualisiert werden.
+- `frappe` und `erpnext` werden beim Docker-Build in das Image eingebaut.
+- Ein aktives Aktualisieren passiert im `update`-Step durch `docker compose pull` und `docker compose build --pull`.
+- Ein normales `down,up` aktualisiert weder Container-Images noch App-Repositories.
 - Für reproduzierbare Stände sind Tags/Commit-Hashes in `.env` besser als bewegliche Branch-Namen.
 
 > frappe und erpnext sind **im Docker-Image eingebaut** (nicht in den Apps-Volumes). Sie werden NICHT via `install_upgrade_apps.sh` geupdated.
@@ -131,19 +132,38 @@ Wird **bei jedem `up`** ausgeführt (auch wenn Site schon existiert).
 
 ```
 1. JSON lesen: apps.json (oder Legacy-Inline-Format konvertieren)
-2. apps_installed = [frappe, erpnext]  ← immer behalten
-3. Für jede App in apps.json:
-   - active: true  → install_upgrade_app()
+2. Modus bestimmen:
+   - sites/.run-app-upgrade vorhanden → upgrade
+   - keine Marker-Datei → reconcile
+3. apps_installed = [frappe, erpnext]  ← immer behalten
+4. Für jede App in apps.json:
+   - active: true  → reconcile_app() oder upgrade_app()
    - active: false → remove_app()
-4. Alle app-Verzeichnisse unter apps/*:
+5. Alle app-Verzeichnisse unter apps/*:
    - nicht in apps_installed → remove_app()
-5. bench update --requirements
-6. bench --site <site> migrate
-7. bench set-config developer_mode / server_script_enabled
-8. bench clear-cache / clear-website-cache
+6. Im reconcile-Modus:
+   - keine Git-Updates
+   - keine Requirements-Updates
+   - Migration/Cache-Clear nur, wenn Installationsstatus geändert wurde
+7. Im upgrade-Modus:
+   - Requirements aktualisieren
+   - Site migrieren
+   - Developer-Mode/server_script_enabled setzen
+   - Cache leeren
+   - Marker-Datei nach Erfolg löschen
 ```
 
-### `install_upgrade_app()` — Installieren / Updaten
+### `reconcile_app()` — Installationsstatus abgleichen
+
+```bash
+1. Wenn apps/<app> fehlt: bench get-app <app> <repo> --branch <version>
+2. Wenn App auf der Site fehlt: bench install-app <app>
+3. Wenn App bereits vorhanden und installiert ist: nichts am Code ändern
+```
+
+Im Reconcile-Modus gibt es kein `git fetch`, kein `git checkout`, kein `git reset --hard`, kein `bench update --requirements` und keine pauschale Migration.
+
+### `upgrade_app()` — Installieren / Updaten
 
 ```bash
 1. bench get-app <app> <repo> --branch <version>  # nur wenn apps/<app> fehlt
@@ -185,13 +205,13 @@ Wird **bei jedem `up`** ausgeführt (auch wenn Site schon existiert).
 
 | Was            | Wo konfiguriert          | Wie geupdated                                  |
 |----------------|--------------------------|------------------------------------------------|
-| frappe         | `FRAPPE_VERSION` in `.env` | Neues Docker-Image bauen: `scenario.deploy <s> init,down,up` |
-| erpnext        | `ERPNEXT_VERSION` in `.env` | Neues Docker-Image bauen: `scenario.deploy <s> init,down,up` |
-| Zusatz-Apps    | `apps.json` → `version`  | `install_upgrade_apps.sh` bei jedem `up`       |
+| frappe         | `FRAPPE_VERSION` in `.env` | Neues Docker-Image bauen: `scenario.deploy <s> init,update,down,up` |
+| erpnext        | `ERPNEXT_VERSION` in `.env` | Neues Docker-Image bauen: `scenario.deploy <s> init,update,down,up` |
+| Zusatz-Apps    | `apps.json` → `version`  | Upgrade-Modus über `sites/.run-app-upgrade` beim folgenden `up` |
 
-**Wichtig**: `update` (scenario.sh) ändert nur `apps.updated.json` — es deployed nichts. Die `.env`-Versionen für frappe/erpnext müssen manuell angepasst werden und dann braucht es ein vollständiges `init,down,up`.
+**Wichtig**: `update` (scenario.sh) erzeugt weiterhin Vorschläge, macht aber zusätzlich Pull/Build und setzt den Upgrade-Marker. Die `.env`-Versionen für frappe/erpnext müssen vorher per `init` auf den Server übertragen werden.
 
-Zusatz: Ein `init,down,up` triggert `docker compose pull` sowie `docker compose build --pull`. Für harte Reproduzierbarkeit sollten trotzdem Tags oder Commit-Hashes statt beweglicher Branch-Namen verwendet werden.
+Zusatz: Ein normales `down,up` triggert keinen Pull und keinen `build --pull`. Für harte Reproduzierbarkeit sollten trotzdem Tags oder Commit-Hashes statt beweglicher Branch-Namen verwendet werden.
 
 ---
 
@@ -207,11 +227,11 @@ Zusatz: Ein `init,down,up` triggert `docker compose pull` sowie `docker compose 
 
 ### App auf neue Version updaten (Tag/Branch)
 1. `apps.json`: `"version": "v15.43.0"` oder neuer Branch
-2. `scenario.deploy <s> init,down,up`
+2. `scenario.deploy <s> init,update,down,up`
 
 ### frappe/erpnext updaten
 1. `.env`: `FRAPPE_VERSION=version-15` / `ERPNEXT_VERSION=version-15`
-2. `scenario.deploy <s> init,down,up`
+2. `scenario.deploy <s> init,update,down,up`
    → `docker compose build` baut das Image neu
 
 ### Versionsstände prüfen (ohne Deployment)

@@ -4,6 +4,8 @@
 . .env
 . deploy-tools.sh
 
+APP_UPGRADE_MARKER=".run-app-upgrade"
+
 # Set some variables
 function setEnvironment() {
   deploy-tools.setEnvironment
@@ -48,10 +50,6 @@ function up() {
   # deploy-tools.up re-runs deploy-tools.setEnvironment internally and would overwrite
   # the COMPOSE_FILE_ARGUMENTS extension (e.g. docker-compose.ports.yml) added here.
   setEnvironment
-  banner "Pull Docker images"
-  docker compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS pull
-  banner "Build Docker images"
-  docker compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS build --pull
   banner "Create and run container"
   docker compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS up -d
 }
@@ -332,6 +330,9 @@ PY
 }
 
 function update() {
+  # Check data volume so the update marker can be written to the persistent sites volume.
+  checkAndCreateDataVolume
+
   banner "Collect latest version suggestions"
 
   local apps_json
@@ -348,7 +349,22 @@ function update() {
   printCoreVersionSuggestion "FRAPPE_VERSION" "https://github.com/frappe/frappe.git" "$FRAPPE_VERSION"
   printCoreVersionSuggestion "ERPNEXT_VERSION" "https://github.com/frappe/erpnext.git" "$ERPNEXT_VERSION"
 
-  echo "No container changes were made. Review $updated_apps_json and update .env manually if desired."
+  # Open permissions to docker sock
+  deploy-tools.setDockerSockPermissions
+
+  # Pull/build is intentionally part of update, not normal up.
+  setEnvironment
+  banner "Pull Docker images"
+  # Only pull registry-based images; erpnext_image is built locally and cannot be pulled
+  docker compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS pull db redis-queue redis-cache || exit 1
+  banner "Build Docker images"
+  docker compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS build --pull || exit 1
+
+  banner "Mark app upgrade for next up"
+  docker compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS run --rm --no-deps --entrypoint bash frontend \
+    -lc "touch sites/$APP_UPGRADE_MARKER && ls -l sites/$APP_UPGRADE_MARKER" || exit 1
+  echo "Created app upgrade marker: sites/$APP_UPGRADE_MARKER"
+  echo "Run scenario.deploy <scenario> down,up to execute app upgrades and migrations."
 }
 
 # Scenario vars
