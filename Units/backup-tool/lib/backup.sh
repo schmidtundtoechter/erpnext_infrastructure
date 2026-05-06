@@ -16,7 +16,7 @@ EOF
 
 bt_list_known_sites_for_node() {
   local node_id="$1"
-  local cached_entries cached_sites node_json bench_path sites_cmd discovered_sites
+  local cached_entries cached_sites bench_path sites_cmd discovered_sites
 
   cached_entries="$(bt_cache_node_entries "${node_id}" 2>/dev/null || printf '[]\n')"
   cached_sites="$(jq -r 'map(.source_site) | map(select(. != null and . != "")) | unique[]?' <<<"${cached_entries}" 2>/dev/null || true)"
@@ -27,8 +27,7 @@ bt_list_known_sites_for_node() {
 
   [[ "${BT_RUNNER_MODE:-execute}" == "dry-run" ]] && return
 
-  node_json="$(bt_get_node_json "${node_id}")"
-  bench_path="$(jq -r '.bench_path // "/home/frappe/frappe-bench"' <<<"${node_json}")"
+  bench_path="$(bt_node_bench_path "${node_id}")"
   sites_cmd="find $(bt_quote "${bench_path}/sites") -mindepth 1 -maxdepth 1 -type d ! -name assets -exec basename {} \\; | sort -u"
   discovered_sites="$(run_on_node "${node_id}" "${sites_cmd}" 2>/dev/null || true)"
   [[ -n "${discovered_sites}" ]] && printf '%s\n' "${discovered_sites}"
@@ -124,19 +123,21 @@ create_backup_on_node() {
     return
   fi
   
-  local backup_id artifacts_obj tags_array
+  local backup_id artifacts_obj tags_array bench_path
   # backup_id will be derived from the actual filename after bench runs; use a placeholder for now
   backup_id="${node_id}_${site}_$(date -u +%s)"
 
   tags_array="$(printf '[%s]\n' "$(printf '"%s",' ${tags_list} | sed 's/,$//g')")"
   
+  bench_path="$(bt_node_bench_path "${node_id}")"
+
   local bench_cmd
-  bench_cmd="cd /home/frappe/frappe-bench && bench --site ${site} backup --with-files"
+  bench_cmd="cd $(bt_quote "${bench_path}") && bench --site ${site} backup --with-files"
   
   run_on_node "${node_id}" "${bench_cmd}" || bt_die "Backup creation failed"
 
   local backups_dir actual_db_file id_suffix
-  backups_dir="/home/frappe/frappe-bench/sites/${site}/private/backups"
+  backups_dir="${bench_path}/sites/${site}/private/backups"
 
   # Resolve the actual DB filename created by bench (newest non-symlink *.sql.gz, not latest-*)
   actual_db_file="$(run_on_node "${node_id}" \
