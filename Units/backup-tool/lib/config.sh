@@ -119,11 +119,11 @@ bt_validate_config() {
     .nodes
     | all(.[];
       if ((normalized_node | .access) == "ssh" or (normalized_node | .access) == "ssh-docker")
-      then ((.host | type == "string" and length > 0) and (.user | type == "string" and length > 0) and ((.port == null) or ((.port | type) == "number" and .port >= 1 and .port <= 65535)))
+      then (.ssh_config | type == "string" and length > 0)
       else true
       end
     )
-  ' "${config_path}" >/dev/null || bt_die "Config validation failed: host/user are required for ssh access and port must be 1..65535 when set"
+  ' "${config_path}" >/dev/null || bt_die "Config validation failed: ssh_config is required for ssh access"
 
   jq -e '
     def normalize_access:
@@ -151,6 +151,7 @@ bt_validate_config() {
       and ((.vpn_required == null) or ((.vpn_required | type) == "boolean"))
       and ((.description == null) or (.description | type == "string"))
       and ((.enabled == null) or ((.enabled | type) == "boolean"))
+      and ((.ssh_config == null) or (.ssh_config | type == "string" and length > 0))
       and ((.container == null) or (.container | type == "string" and length > 0))
       and ((.compose_service == null) or (.compose_service | type == "string" and length > 0))
     )

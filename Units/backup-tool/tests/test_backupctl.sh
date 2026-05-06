@@ -111,17 +111,17 @@ test_runner_builds_commands_for_all_access_types() {
 
   cmd_local="$(run_libs "bt_load_config '${CONFIG_PATH}'; BT_RUNNER_MODE=dry-run run_on_node own-prod-01 'echo ok'" 2>/dev/null)"
   assert_contains "${cmd_local}" "ssh -o BatchMode=yes"
-  assert_contains "${cmd_local}" "ops@own-prod-01.example.net"
+  assert_contains "${cmd_local}" "own-prod-01"
 
   cmd_local_docker="$(run_libs "bt_load_config '${CONFIG_PATH}'; BT_RUNNER_MODE=dry-run run_on_node local-dev 'echo ok'" 2>/dev/null)"
   assert_contains "${cmd_local_docker}" "docker --context"
   assert_contains "${cmd_local_docker}" "exec -i"
 
   cmd_ssh_host="$(run_libs "bt_load_config '${CONFIG_PATH}'; BT_RUNNER_MODE=dry-run run_on_node archive-share 'echo ok'" 2>/dev/null)"
-  assert_contains "${cmd_ssh_host}" "backup@archive.example.net"
+  assert_contains "${cmd_ssh_host}" "archive-share"
 
   cmd_ssh_docker="$(run_libs "bt_load_config '${CONFIG_PATH}'; BT_RUNNER_MODE=dry-run run_on_node customer-a-prod 'echo ok'" 2>/dev/null)"
-  assert_contains "${cmd_ssh_docker}" "frappe@customer-a.example.net"
+  assert_contains "${cmd_ssh_docker}" "customer-a-prod"
   assert_contains "${cmd_ssh_docker}" "docker\\ compose\\ exec\\ -T"
 }
 
@@ -131,8 +131,8 @@ test_runner_reachability_dry_run_and_transfer_helper() {
   local transfer_cmd
   transfer_cmd="$(run_libs "bt_load_config '${CONFIG_PATH}'; build_transfer_command archive-share own-prod-01 '/srv/customer-backups/a.tgz' '/home/frappe/incoming/a.tgz'")"
   assert_contains "${transfer_cmd}" "rsync -a --partial --progress"
-  assert_contains "${transfer_cmd}" "backup@archive.example.net:/srv/customer-backups/a.tgz"
-  assert_contains "${transfer_cmd}" "ops@own-prod-01.example.net:/home/frappe/incoming/a.tgz"
+  assert_contains "${transfer_cmd}" "archive-share:/srv/customer-backups/a.tgz"
+  assert_contains "${transfer_cmd}" "own-prod-01:/home/frappe/incoming/a.tgz"
 }
 
 test_backup_model_definition_exists() {

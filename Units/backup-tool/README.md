@@ -74,9 +74,7 @@ Zusaetzliche Pflicht je nach Typ:
 - bei node_type=frappe-node:
 	- bench_path: Pfad zum Bench-Kontext.
 - bei access=ssh oder ssh-docker:
-	- host
-	- user
-	- port optional (Default 22)
+	- ssh_config: Name des SSH-Config-Eintrags, der fuer `ssh` und `rsync` verwendet wird.
 
 Optionale Felder:
 
@@ -84,6 +82,7 @@ Optionale Felder:
 - vpn_required: Hinweis fuer Netzwerkzugang.
 - description: Freitextbeschreibung.
 - enabled: Knoten aktiv/inaktiv.
+- ssh_config: SSH-Config-Hostalias fuer Remote-Zugriff.
 - container: Containername fuer docker exec.
 - compose_service: Service fuer docker compose exec.
 - docker_context: Erwarteter lokaler Docker-Context (Default: default) fuer docker.

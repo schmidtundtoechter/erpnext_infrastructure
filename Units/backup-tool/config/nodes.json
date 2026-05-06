@@ -17,9 +17,7 @@
       "id": "own-prod-01",
       "node_type": "frappe-node",
       "access": "ssh",
-      "host": "own-prod-01.example.net",
-      "port": 22,
-      "user": "ops",
+      "ssh_config": "own-prod-01",
       "bench_path": "/home/frappe/frappe-bench",
       "backup_paths": [
         "/home/frappe/frappe-bench/sites/*/private/backups"
@@ -32,9 +30,7 @@
       "id": "customer-a-prod",
       "node_type": "frappe-node",
       "access": "ssh-docker",
-      "host": "customer-a.example.net",
-      "port": 22,
-      "user": "frappe",
+      "ssh_config": "customer-a-prod",
       "bench_path": "/opt/frappe-bench",
       "backup_paths": [
         "/opt/frappe-bench/sites/*/private/backups"
@@ -48,9 +44,7 @@
       "id": "archive-share",
       "node_type": "plain-dir",
       "access": "ssh",
-      "host": "archive.example.net",
-      "port": 22,
-      "user": "backup",
+      "ssh_config": "archive-share",
       "backup_paths": [
         "/srv/customer-backups"
       ],

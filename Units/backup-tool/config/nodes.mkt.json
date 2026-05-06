@@ -17,9 +17,7 @@
       "id": "erpnext-demo",
       "node_type": "frappe-node",
       "access": "ssh-docker",
-      "host": "test.schmidtundtoechter.com",
-      "port": 22,
-      "user": "root",
+      "ssh_config": "sut.netcup",
       "bench_path": "/home/frappe/frappe-bench",
       "backup_paths": [
         "/home/frappe/frappe-bench/sites"
@@ -33,9 +31,7 @@
       "id": "sut-backupdir",
       "node_type": "plain-dir",
       "access": "ssh",
-      "host": "test.schmidtundtoechter.com",
-      "port": 22,
-      "user": "root",
+      "ssh_config": "sut.netcup",
       "backup_paths": [
         "/var/dev/MIMS-Scenarios/_backups"
       ],

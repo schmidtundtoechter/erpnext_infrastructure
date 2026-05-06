@@ -77,13 +77,11 @@ bt_wrap_local_docker_command() {
 
 bt_build_ssh_base_cmd() {
   local node_json="$1"
-  local host user port
+  local ssh_config
 
-  host="$(jq -r '.host' <<<"${node_json}")"
-  user="$(jq -r '.user' <<<"${node_json}")"
-  port="$(jq -r '.port // 22' <<<"${node_json}")"
+  ssh_config="$(jq -r '.ssh_config' <<<"${node_json}")"
 
-  printf 'ssh -o BatchMode=yes -o ConnectTimeout=10 -p %s %s@%s' "${port}" "${user}" "${host}"
+  printf 'ssh -o BatchMode=yes -o ConnectTimeout=10 %s' "$(bt_quote "${ssh_config}")"
 }
 
 bt_wrap_docker_exec_command() {
@@ -190,7 +188,7 @@ bt_check_node_reachability() {
 bt_node_path_spec() {
   local node_id="$1"
   local path="$2"
-  local node_json access host user
+  local node_json access ssh_config
 
   node_json="$(bt_get_node_json "${node_id}")"
   access="$(jq -r '.access' <<<"${node_json}")"
@@ -200,9 +198,8 @@ bt_node_path_spec() {
       printf '%s' "${path}"
       ;;
     ssh|ssh-docker)
-      host="$(jq -r '.host' <<<"${node_json}")"
-      user="$(jq -r '.user' <<<"${node_json}")"
-      printf '%s@%s:%s' "${user}" "${host}" "${path}"
+      ssh_config="$(jq -r '.ssh_config' <<<"${node_json}")"
+      printf '%s:%s' "${ssh_config}" "${path}"
       ;;
     *)
       bt_die "Unsupported access for path spec: ${access}"
