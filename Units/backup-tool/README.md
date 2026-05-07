@@ -17,7 +17,8 @@ Das Tool verwaltet ERPNext/Frappe-Backups ueber mehrere Systeme (lokal, SSH, Doc
 - backup_id: Eindeutige technische Kennung eines logischen Backups. Format: `<node>_<site>_<timestamp>`.
 - backup_hash: Kurzform der backup_id (6 Zeichen SHA256). Wird in der Scan-Ausgabe als `[abc123]` angezeigt.
 - display_name: Nutzerfreundliche Anzeige. Fallback-Reihenfolge: display_name -> reason -> backup_id.
-- source_rel_dir: Relativer Pfad des Backup-Verzeichnisses unterhalb von backup_root (relevant fuer plain-dir mit Unterverzeichnissen).
+- backup_path: Konfigurierter Such- und Ablagepfad eines Nodes. Fuer frappe-node ist das typischerweise der `sites`-Root.
+- source_rel_dir: Relativer Pfad des gefundenen Backup-Verzeichnisses unterhalb von backup_path. Copy verwendet denselben relativen Pfad auf dem Zielnode.
 
 ## Verzeichnisstruktur
 
@@ -67,7 +68,7 @@ Pflichtfelder je Node:
 - id: Eindeutiger Knotenname.
 - node_type: Fachliche Quellart.
 - access: Technischer Zugriffstyp.
-- backup_paths: Liste von Verzeichnissen/Patterns fuer Backup-Suche.
+- backup_path: Ein Verzeichnis fuer Backup-Suche und Ablage.
 
 Zusaetzliche Pflicht je nach Typ:
 
@@ -157,7 +158,7 @@ Nach einem `restore` fuehrt das Tool automatisch folgende Schritte aus:
 - `create`: Keine Erzeugung von `apps.json` und `checksums.sha256`.
 - `restore`: Kein automatischer Neustart von Containern/Diensten nach Restore.
 - `restore`: Keine explizite Produktiv-Schutzflag (--force ist reserviert).
-- `copy`/`restore`: Pfadrekonstruktion fuer `source_rel_dir` bei verschachtelten plain-dir Backups noch nicht vollstaendig implementiert.
+- Keine Migration von bestehenden Cache-Eintraegen ohne `backup_path`/`source_rel_dir`.
 - Keine Migration von altem globalen `cache.jsonl` auf neue per-Node-Struktur.
 
 ## Schnelltest

@@ -65,7 +65,7 @@ backup_copy_main() {
   [[ -n "${source_node}" ]] || bt_die "copy: source node could not be inferred from cache for backup '${backup_ref}'. Run 'backupctl node scan' first."
   bt_log_info "Resolved source node from cache: ${source_node}"
 
-  copy_backup_between_nodes "${backup_id}" "${source_node}" "${to_node}" "${force}" "${no_validate}"
+  copy_backup_between_nodes "${backup_id}" "${source_node}" "${to_node}" "${force}" "${no_validate}" "${backup_entry}"
 }
 
 copy_backup_between_nodes() {
@@ -74,6 +74,7 @@ copy_backup_between_nodes() {
   local to_node="$3"
   local force="${4:-}"
   local no_validate="${5:-}"
+  local backup_entry_json="${6:-}"
   
   bt_log_info "Copying backup: backup_id=${backup_id} from=${from_node} to=${to_node}"
   
@@ -88,11 +89,11 @@ copy_backup_between_nodes() {
   
   # Vorprüfung: Backup existiert auf Quelle
   local source_path target_path
-  source_path="$(bt_get_backup_path_for_node "${from_node}" "${backup_id}")"
+  source_path="$(bt_get_backup_path_for_node "${from_node}" "${backup_id}" "${backup_entry_json}")"
   [[ -n "${source_path}" ]] || bt_die "Backup ${backup_id} not found on node ${from_node}"
   
   # Zielpath konstruieren
-  target_path="$(bt_get_target_backup_path_for_node "${to_node}" "${backup_id}")"
+  target_path="$(bt_get_target_backup_path_for_node "${to_node}" "${backup_id}" "${backup_entry_json}")"
 
   # Zielverzeichnis auf dem Zielknoten sicherstellen (nicht lokal).
   run_on_node "${to_node}" "mkdir -p $(bt_quote "$(dirname "${target_path}")")" >/dev/null 2>&1 || true
@@ -125,7 +126,7 @@ copy_backup_between_nodes() {
   fi
   
   # Cache aktualisieren
-  bt_cache_add_entry "$(bt_get_cached_backup_object "${to_node}" "${backup_id}")"
+  bt_cache_add_entry "$(bt_get_cached_backup_object "${to_node}" "${backup_id}" "${backup_entry_json}")"
   
   bt_log_info "Backup copy completed: ${backup_id} copied to ${to_node}"
 }
@@ -165,22 +166,26 @@ bt_transfer_same_ssh_docker_host() {
 bt_get_backup_path_for_node() {
   local node_id="$1"
   local backup_id="$2"
-  local node_json node_type site backup_root
+  local backup_entry_json="${3:-}"
+  local node_json node_type backup_root rel_dir
   
   node_json="$(bt_get_node_json "${node_id}")"
   node_type="$(jq -r '.node_type' <<<"${node_json}")"
-  
-  # Extrahiere Site aus backup_id (Format: node_site_timestamp)
-  site="$(echo "${backup_id}" | cut -d_ -f2)"
+
+  if [[ -n "${backup_entry_json}" && "${backup_entry_json}" != "null" ]]; then
+    backup_root="$(jq -r '.backup_path // empty' <<<"${backup_entry_json}")"
+    rel_dir="$(jq -r '.source_rel_dir // empty' <<<"${backup_entry_json}")"
+    if [[ -n "${backup_root}" ]]; then
+      bt_join_backup_root_rel_dir "${backup_root}" "${rel_dir}"
+      return
+    fi
+  fi
   
   case "${node_type}" in
-    frappe-node)
-      backup_root="$(jq -r '.backup_paths[0]' <<<"${node_json}" | xargs dirname)"
-      printf '%s/%s' "${backup_root}" "${backup_id}"
-      ;;
-    plain-dir)
-      backup_root="$(jq -r '.backup_paths[0]' <<<"${node_json}")"
-      printf '%s/%s' "${backup_root}" "${backup_id}"
+    frappe-node|plain-dir)
+      backup_root="$(jq -r '.backup_path // empty' <<<"${node_json}")"
+      [[ -n "${backup_root}" ]] || return 1
+      printf '%s/%s' "${backup_root%/}" "${backup_id}"
       ;;
     *)
       return 1
@@ -191,26 +196,39 @@ bt_get_backup_path_for_node() {
 bt_get_target_backup_path_for_node() {
   local node_id="$1"
   local backup_id="$2"
-  local node_json node_type site backup_root
+  local backup_entry_json="${3:-}"
+  local node_json node_type backup_root rel_dir
   
   node_json="$(bt_get_node_json "${node_id}")"
   node_type="$(jq -r '.node_type' <<<"${node_json}")"
-  
-  site="$(echo "${backup_id}" | cut -d_ -f2)"
+  backup_root="$(jq -r '.backup_path // empty' <<<"${node_json}")"
+  [[ -n "${backup_root}" ]] || return 1
+
+  if [[ -n "${backup_entry_json}" && "${backup_entry_json}" != "null" ]]; then
+    rel_dir="$(jq -r '.source_rel_dir // empty' <<<"${backup_entry_json}")"
+    bt_join_backup_root_rel_dir "${backup_root}" "${rel_dir}"
+    return
+  fi
   
   case "${node_type}" in
-    frappe-node)
-      backup_root="$(jq -r '.backup_paths[0]' <<<"${node_json}" | xargs dirname)"
-      printf '%s/%s' "${backup_root}" "${backup_id}"
-      ;;
-    plain-dir)
-      backup_root="$(jq -r '.backup_paths[0]' <<<"${node_json}")"
-      printf '%s/%s' "${backup_root}" "${backup_id}"
+    frappe-node|plain-dir)
+      printf '%s/%s' "${backup_root%/}" "${backup_id}"
       ;;
     *)
       return 1
       ;;
   esac
+}
+
+bt_join_backup_root_rel_dir() {
+  local backup_root="$1"
+  local rel_dir="${2:-}"
+
+  if [[ -n "${rel_dir}" && "${rel_dir}" != "." ]]; then
+    printf '%s/%s' "${backup_root%/}" "${rel_dir#/}"
+  else
+    printf '%s' "${backup_root%/}"
+  fi
 }
 
 bt_validate_backup_transfer() {
@@ -235,16 +253,40 @@ bt_validate_backup_transfer() {
 bt_get_cached_backup_object() {
   local node_id="$1"
   local backup_id="$2"
+  local source_entry_json="${3:-}"
   local backup_hash
 
   backup_hash="$(bt_backup_hash_from_id "${backup_id}")"
-  
-  # Konstruiere ein minimales Backup-Objekt für Cache
+
+  if [[ -n "${source_entry_json}" && "${source_entry_json}" != "null" ]]; then
+    local target_node_json target_backup_path target_node_type
+    target_node_json="$(bt_get_node_json "${node_id}")"
+    target_backup_path="$(jq -r '.backup_path // empty' <<<"${target_node_json}")"
+    target_node_type="$(jq -r '.node_type // empty' <<<"${target_node_json}")"
+    jq -c \
+      --arg node_id "${node_id}" \
+      --arg node_type "${target_node_type}" \
+      --arg backup_path "${target_backup_path}" \
+      --arg now "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+      '. + {
+        source_node: $node_id,
+        node_type: $node_type,
+        backup_path: $backup_path,
+        created_at: (.created_at // $now),
+        last_seen: $now,
+        complete: (.complete // true)
+      }' <<<"${source_entry_json}"
+    return
+  fi
+
+  # Konstruiere ein minimales Backup-Objekt fuer Cache
   cat <<EOF
 {
   "backup_id": "${backup_id}",
   "backup_hash": "${backup_hash}",
   "source_node": "${node_id}",
+  "backup_path": "$(bt_get_node_json "${node_id}" | jq -r '.backup_path // empty')",
+  "source_rel_dir": "",
   "created_at": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
   "last_seen": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
   "complete": true

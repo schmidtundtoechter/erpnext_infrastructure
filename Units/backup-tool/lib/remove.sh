@@ -55,16 +55,21 @@ bt_backup_remote_base_dir() {
   node_type="$(jq -r '.node_type // empty' <<<"${backup_entry_json}")"
   source_site="$(jq -r '.source_site // empty' <<<"${backup_entry_json}")"
   source_rel_dir="$(jq -r '.source_rel_dir // empty' <<<"${backup_entry_json}")"
+  backup_root="$(jq -r '.backup_path // empty' <<<"${backup_entry_json}")"
 
   case "${node_type}" in
     frappe-node)
-      bench_path="$(bt_node_bench_path "${node_id}")"
-      printf '%s\n' "${bench_path}/sites/${source_site}/private/backups"
+      if [[ -n "${backup_root}" ]]; then
+        bt_join_backup_root_rel_dir "${backup_root}" "${source_rel_dir}"
+      else
+        bench_path="$(bt_node_bench_path "${node_id}")"
+        printf '%s\n' "${bench_path}/sites/${source_site}/private/backups"
+      fi
       ;;
     plain-dir)
       node_json="$(bt_get_node_json "${node_id}")"
-      backup_root="$(jq -r '.backup_paths[0] // empty' <<<"${node_json}")"
-      [[ -n "${backup_root}" ]] || bt_die "remove: no backup_paths configured for plain-dir node ${node_id}"
+      [[ -n "${backup_root}" ]] || backup_root="$(jq -r '.backup_path // empty' <<<"${node_json}")"
+      [[ -n "${backup_root}" ]] || bt_die "remove: no backup_path configured for plain-dir node ${node_id}"
 
       if [[ -n "${source_rel_dir}" ]]; then
         rel_dir="${source_rel_dir}"

@@ -205,8 +205,7 @@ nodes:
     access_type: local-docker
     base_path: /Users/matthias/projects/frappe-bench
     bench_path: /Users/matthias/projects/frappe-bench
-    backup_paths:
-      - /Users/matthias/projects/frappe-bench/sites/*/private/backups
+    backup_path: /Users/matthias/projects/frappe-bench/sites
     container: backend
     tags: [local, dev]
 
@@ -217,8 +216,7 @@ nodes:
     port: 22
     user: frappe
     bench_path: /home/frappe/frappe-bench
-    backup_paths:
-      - /home/frappe/frappe-bench/sites/*/private/backups
+    backup_path: /home/frappe/frappe-bench/sites
     container: erpnext-python
     tags: [own, prod]
 
@@ -229,8 +227,7 @@ nodes:
     port: 22
     user: frappe
     bench_path: /opt/frappe-bench
-    backup_paths:
-      - /opt/frappe-bench/sites/*/private/backups
+    backup_path: /opt/frappe-bench/sites
     tags: [customer-a, prod]
 
   - id: archive-share
@@ -239,8 +236,7 @@ nodes:
     host: archive.example.net
     port: 22
     user: backup
-    backup_paths:
-      - /srv/customer-backups
+    backup_path: /srv/customer-backups
     tags: [archive]
 ```
 
@@ -553,7 +549,7 @@ Dabei sind mindestens zwei Quellarten (`source_kind`) zu unterscheiden.
 
 Typischerweise:
 
-* `sites/*/private/backups`
+* `sites`
 * zusätzliche definierte Archivverzeichnisse
 * optionale manuelle Transfer-Ziele
 

@@ -216,6 +216,8 @@ Cache Entry (per-node pretty JSON arrays):
     "source_node": "string (required)",
     "node_type": "string (required)",
     "source_site": "string (required)",
+    "backup_path": "string (required, configured node backup_path used during scan)",
+    "source_rel_dir": "string (required, backup directory relative to backup_path)",
     "reason": "string (required)",
     "tags": "array (optional)",
     "created_at": "string ISO 8601 (required)",

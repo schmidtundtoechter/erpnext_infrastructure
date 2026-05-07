@@ -48,7 +48,7 @@ Diese Datei leitet aus `Backup-Tool-Konzept.md` eine umsetzbare Arbeitsliste fue
   YAML oder JSON.
 - [x] Schema fuer Knoten definieren.
 - [x] Pflichtfelder fuer `frappe-backup-dir` festlegen:
-  `id`, `source_kind`, `access_type`, `backup_paths`.
+  `id`, `source_kind`, `access_type`, `backup_path`.
 - [x] Zusatzfelder fuer Bench-basierte Quellen festlegen:
   `bench_path`, optional `container`, optional `compose_service`.
 - [x] Pflichtfelder fuer Remote-Zugriff festlegen:
@@ -343,22 +343,22 @@ Diese Nacharbeiten stellen sicher, dass alle abhaengigen Befehle korrekt mit den
 
 ## 20. Single-Pass Remote Scanner Nacharbeiten
 
-**Implikation:** Der Scanner erfasst jetzt `source_rel_dir` (relative Pfad unter `backup_root` fuer verschachtelte Backups).
+**Implikation:** Der Scanner erfasst jetzt `backup_path` und `source_rel_dir` (relativer Pfad unter `backup_path`).
 
-- [ ] `copy.sh`: `bt_get_backup_path_for_node()` anpassen, um `source_rel_dir` zu verwenden.
-  Falls `source_rel_dir` vorhanden, Pfad rekonstruieren als `${backup_root}/${source_rel_dir}`.
+- [x] `copy.sh`: `bt_get_backup_path_for_node()` anpassen, um `source_rel_dir` zu verwenden.
+  Falls `source_rel_dir` vorhanden, Pfad rekonstruieren als `${backup_path}/${source_rel_dir}`.
   Falls leer/null (Legacy), alten Fallback-Mechanismus verwenden.
   
-- [ ] `copy.sh`: Sicherstellen, dass bei direktem rsync/scp zwischen Nodes, `source_rel_dir` beruecksichtigt wird.
+- [x] `copy.sh`: Sicherstellen, dass bei direktem rsync/scp zwischen Nodes, `source_rel_dir` beruecksichtigt wird.
   Test mit verschachtelten Backup-Verzeichnissen durchfuehren.
   
-- [ ] `restore.sh`: `bt_get_target_backup_path_for_node()` anpassen, um `source_rel_dir` zu verwenden.
+- [x] `restore.sh`: `bt_get_target_backup_path_for_node()` anpassen, um `source_rel_dir` zu verwenden.
   Backup-Artefakte (db_dump, site_config, public_files, private_files) mit korrektiem Pfad laden.
   
 - [ ] `restore.sh`: Sicherstellen, dass `manifest.json` und andere Metadaten mit `source_rel_dir` gelesen werden.
   Test mit verschachtelten Backup-Verzeichnissen durchfuehren.
   
-- [ ] `lib/backup-model.sh`: Dokumentation ergaenzen: `source_rel_dir` ist Pfad relativ zu `backup_root` fuer plain-backup-dir Backups mit mehreren Verzeichnisebenen.
+- [x] `lib/backup-model.sh`: Dokumentation ergaenzen: `source_rel_dir` ist Pfad relativ zu `backup_path`.
   
 - [ ] Tests ergaenzen in `tests/test_backupctl.sh`:
   - Test: `copy` zwischen Nodes mit verschachtelten plain-backup-dir Backups.

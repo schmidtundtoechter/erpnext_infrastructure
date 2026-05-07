@@ -114,8 +114,9 @@ restore_backup_to_node() {
   fi
   
   # Hole Backup-Pfad
-  local backup_path bench_path
-  backup_path="$(bt_get_backup_path_for_node "${target_node}" "${backup_id}")" || \
+  local backup_path bench_path backup_entry
+  backup_entry="$(bt_cache_list_all | jq -c --arg bid "${backup_id}" --arg node "${target_node}" 'map(select(.backup_id == $bid and .source_node == $node))[0] // empty')"
+  backup_path="$(bt_get_backup_path_for_node "${target_node}" "${backup_id}" "${backup_entry}")" || \
     bt_die "Backup ${backup_id} not found on target node"
 
   bench_path="$(bt_node_bench_path "${target_node}")"

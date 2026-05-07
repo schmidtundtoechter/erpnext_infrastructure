@@ -7,6 +7,8 @@ Backup Object:
   source_node: string (node id from config)
   node_type: string (frappe-node | plain-dir)
   source_site: string (site name, e.g. erp.customer-a.de)
+  backup_path: string (configured node backup_path used during scan)
+  source_rel_dir: string (backup directory relative to backup_path)
   created_at: string (ISO 8601 timestamp)
   reason: string (fachlicher Grund des Backups)
   tags: array of strings (optional)

@@ -106,6 +106,12 @@ test_config_model_fields_are_present() {
   local node_type
   node_type="$(run_libs "bt_load_config '${CONFIG_PATH}'; bt_get_node_field local-dev node_type")"
   [[ "${node_type}" == "frappe-node" ]] || fail "unexpected node_type: ${node_type}"
+
+  local backup_path has_backup_paths
+  backup_path="$(run_libs "bt_load_config '${CONFIG_PATH}'; bt_get_node_field local-dev backup_path")"
+  [[ "${backup_path}" == "/Users/matthias/projects/frappe-bench/sites" ]] || fail "unexpected backup_path: ${backup_path}"
+  has_backup_paths="$(jq '[.nodes[] | has("backup_paths")] | any' "${CONFIG_PATH}")"
+  [[ "${has_backup_paths}" == "false" ]] || fail "config should use backup_path, not backup_paths"
 }
 
 test_runner_builds_commands_for_all_access_types() {
@@ -325,6 +331,36 @@ test_copy_can_infer_from_node_from_cache() {
   assert_contains "${out}" "Would copy backup demo_copy_1 from local-dev to own-prod-01"
 }
 
+test_copy_uses_cached_location_for_source_and_target_paths() {
+  local out
+
+  out="$(run_libs "bt_load_config '${CONFIG_PATH}'; entry='{\"backup_id\":\"demo_copy_2\",\"source_node\":\"local-dev\",\"node_type\":\"frappe-node\",\"source_site\":\"demo.local\",\"backup_path\":\"/Users/matthias/projects/frappe-bench/sites\",\"source_rel_dir\":\"demo.local/private/backups\",\"reason\":\"demo\",\"created_at\":\"2026-01-01T00:00:00Z\",\"complete\":true,\"artifacts\":{\"db_dump\":\"a.sql.gz\",\"site_config\":\"site_config.json\"}}'; printf 'SRC=%s\n' \"\$(bt_get_backup_path_for_node local-dev demo_copy_2 \"\${entry}\")\"; printf 'DST=%s\n' \"\$(bt_get_target_backup_path_for_node own-prod-01 demo_copy_2 \"\${entry}\")\"")"
+
+  assert_contains "${out}" "SRC=/Users/matthias/projects/frappe-bench/sites/demo.local/private/backups"
+  assert_contains "${out}" "DST=/home/frappe/frappe-bench/sites/demo.local/private/backups"
+}
+
+test_scan_local_frappe_records_backup_path_and_relative_dir() {
+  local tmp_dir config_path out
+
+  tmp_dir="$(mktemp -d)"
+  mkdir -p "${tmp_dir}/sites/demo.local/private/backups" "${tmp_dir}/sites/demo.local"
+  touch "${tmp_dir}/sites/demo.local/private/backups/20260507_001200-demo.local-database.sql.gz"
+  touch "${tmp_dir}/sites/demo.local/private/backups/20260507_001200-demo.local-files.tar"
+  touch "${tmp_dir}/sites/demo.local/private/backups/20260507_001200-demo.local-private-files.tar"
+  touch "${tmp_dir}/sites/demo.local/site_config.json"
+  config_path="${tmp_dir}/nodes.json"
+  jq -n --arg bp "${tmp_dir}/sites" '{nodes:[{id:"tmp-local",node_type:"frappe-node",access:"local",bench_path:"/tmp/bench",backup_path:$bp,enabled:true}]}' > "${config_path}"
+
+  out="$(run_libs "bt_load_config '${config_path}'; scan_node tmp-local | jq -c '{backup_path, source_rel_dir, source_site, artifacts}'")"
+
+  assert_contains "${out}" "\"backup_path\":\"${tmp_dir}/sites\""
+  assert_contains "${out}" "\"source_rel_dir\":\"demo.local/private/backups\""
+  assert_contains "${out}" "\"source_site\":\"demo.local\""
+  assert_contains "${out}" "\"public_files\":\"20260507_001200-demo.local-files.tar\""
+  assert_contains "${out}" "\"private_files\":\"20260507_001200-demo.local-private-files.tar\""
+}
+
 test_copy_rejects_removed_from_option() {
   if run_libs "bt_load_config '${CONFIG_PATH}'; backup_copy_main --backup demo_copy_1 --from local-dev --to own-prod-01" >/dev/null 2>&1; then
     fail "copy should reject removed --from option"
@@ -438,6 +474,9 @@ run_all_tests() {
   test_restore_library_exists
   test_remove_library_exists
   test_copy_requires_parameters
+  test_copy_can_infer_from_node_from_cache
+  test_copy_uses_cached_location_for_source_and_target_paths
+  test_scan_local_frappe_records_backup_path_and_relative_dir
   test_restore_requires_parameters
   test_restore_config_mode_validation
   test_remove_requires_parameters
