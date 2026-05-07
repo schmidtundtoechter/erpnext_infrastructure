@@ -162,6 +162,29 @@ bt_generate_manifest_json() {
     }'
 }
 
+# Enriches a manifest/backup JSON with node-location metadata,
+# identical to what bt_scan_remote_manifests produces.
+# Args: manifest_json  node_id  node_type  backup_root  backup_dir
+bt_manifest_add_node_meta() {
+  local manifest_json="$1"
+  local node_id="$2"
+  local node_type="$3"
+  local backup_root="$4"
+  local backup_dir="$5"
+
+  local rel_dir
+  rel_dir="${backup_dir#"${backup_root%/}/"}"
+  [[ "${rel_dir}" == "${backup_dir}" ]] && rel_dir=""
+
+  jq -c \
+    --arg node "${node_id}" \
+    --arg nt "${node_type}" \
+    --arg bp "${backup_root}" \
+    --arg rd "${rel_dir}" \
+    '. + {source_node: $node, node_type: $nt, backup_path: $bp, source_rel_dir: $rd}' \
+    <<<"${manifest_json}"
+}
+
 bt_backup_is_complete() {
   local backup_obj_json="$1"
   

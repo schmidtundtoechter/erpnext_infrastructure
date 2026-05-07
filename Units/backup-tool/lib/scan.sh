@@ -291,10 +291,10 @@ bt_scan_remote_manifests() {
       [[ "${rel_dir}" == "${backup_dir}" ]] && rel_dir=""
 
       local backup_json
-      backup_json="$(jq -c --arg node "${node_id}" --arg nt "${node_type}" --arg mf "${manifest_file}" --arg bp "${backup_root}" --arg rel_dir "${rel_dir}" \
-        '.
-        | .artifacts = ((.artifacts // {}) + (if ((.artifacts // {}) | has("manifest")) then {} else {manifest: $mf} end))
-        | . + {source_node: $node, node_type: $nt, backup_path: $bp, source_rel_dir: $rel_dir}' <<<"${manifest_json}")"
+      backup_json="$(jq -c --arg mf "${manifest_file}" \
+        '.artifacts = ((.artifacts // {}) + (if ((.artifacts // {}) | has("manifest")) then {} else {manifest: $mf} end))' \
+        <<<"${manifest_json}")"
+      backup_json="$(bt_manifest_add_node_meta "${backup_json}" "${node_id}" "${node_type}" "${backup_root}" "${backup_dir}")"
       backup_json="$(bt_scan_entry_with_location_hash "${backup_json}")"
       bt_scan_update_remote_manifest_hash "${node_id}" "${manifest_path}" "${backup_json}"
       printf '%s\n' "${backup_json}"

@@ -100,7 +100,16 @@ copy_backup_between_nodes() {
   run_on_node "${to_node}" "mkdir -p $(bt_quote "$(dirname "${target_path}")")" >/dev/null 2>&1 || true
 
   # Wenn bereits ein gleichnamiges Backup existiert: Force oder bestaetigen.
-  if run_on_node "${to_node}" "[[ -e $(bt_quote "${target_path}") ]]" >/dev/null 2>&1; then
+  # Prüfe konkrete Artifact-Datei (db_dump), nicht das Verzeichnis – das Verzeichnis
+  # (z.B. .../private/backups) existiert auf Zielknoten generell, auch ohne Backups.
+  local check_artifact check_path
+  check_artifact="$(jq -r '.artifacts.db_dump // empty' <<<"${backup_entry_json}" 2>/dev/null || true)"
+  if [[ -n "${check_artifact}" ]]; then
+    check_path="${target_path}/${check_artifact}"
+  else
+    check_path="${target_path}"
+  fi
+  if run_on_node "${to_node}" "[[ -e $(bt_quote "${check_path}") ]]" >/dev/null 2>&1; then
     bt_confirm_or_force "${force}" "Backup ${backup_id} exists on target node ${to_node} and may be overwritten. Continue?"
   fi
   

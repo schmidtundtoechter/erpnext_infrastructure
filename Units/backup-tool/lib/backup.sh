@@ -197,7 +197,17 @@ create_backup_on_node() {
   fi
 
   bt_log_info "Backup created: ${backup_id}"
-  
+
+  # Felder ergaenzen wie bt_scan_remote_manifests es tut (selbe Hilfsfunktion)
+  local node_json_meta
+  node_json_meta="$(bt_get_node_json "${node_id}")"
+  manifest_json="$(bt_manifest_add_node_meta \
+    "${manifest_json}" \
+    "${node_id}" \
+    "$(jq -r '.node_type // empty' <<<"${node_json_meta}")" \
+    "$(jq -r '.backup_path // empty' <<<"${node_json_meta}")" \
+    "${backups_dir}")"
+
   if bt_cache_add_entry "${manifest_json}"; then
     bt_log_info "Cache updated with new backup"
   fi
