@@ -234,11 +234,7 @@ main() {
           backup_copy_main "$@"
           ;;
         restore)
-          if [[ "${dry_run_global}" -eq 1 ]]; then
-            backup_restore_main --dry-run "$@"
-          else
-            backup_restore_main "$@"
-          fi
+          backup_restore_main "$@"
           ;;
         remove)
           backup_remove_main "$@"
@@ -261,11 +257,7 @@ main() {
       backup_copy_main "$@"
       ;;
     restore)
-      if [[ "${dry_run_global}" -eq 1 ]]; then
-        backup_restore_main --dry-run "$@"
-      else
-        backup_restore_main "$@"
-      fi
+      backup_restore_main "$@"
       ;;
     remove)
       backup_remove_main "$@"

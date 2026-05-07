@@ -30,21 +30,16 @@ config_file="${backup_path}/$(jq -r '.site_config // empty' <<<"${artifacts_obj}
 
 ---
 
-### C2 · Pfadvariablen ohne `bt_quote` in Remote-Befehlen
+### ~~C2 · Pfadvariablen ohne `bt_quote` in Remote-Befehlen~~ ✅ GEFIXT
 
-**Dateien:** [`lib/restore.sh:139`](lib/restore.sh), [`lib/restore.sh:243–248`](lib/restore.sh), [`lib/copy.sh:252–253`](lib/copy.sh)
+**Dateien:** [`lib/copy.sh`](lib/copy.sh)  
+**Gefixt am:** 2026-05-07
 
+`bt_validate_backup_transfer` in `copy.sh` verwendet jetzt `bt_quote` für `target_path`:
 ```bash
-# restore.sh:252
-check_cmd="[[ -d '${target_path}' ]] && [[ -n \"\$(ls -A '${target_path}')\" ]]"
-
-# restore.sh:243
-extract_cmd="cd ${site_path} && tar -xf ${tar_file} -C public/"
+check_cmd="[[ -d $(bt_quote "${target_path}") ]] && [[ -n \"\$(ls -A $(bt_quote "${target_path}") 2>/dev/null)\" ]]"
 ```
-
-Pfade mit Leerzeichen oder Sonderzeichen brechen diese Befehle. Alle anderen Remote-Befehle im Tool nutzen konsequent `bt_quote`. Diese Stellen sind Ausreißer.
-
-**Fix:** `bt_quote` durchgängig verwenden.
+`bt_restore_files_to_site` in `restore.sh` verwendete bereits durchgängig `bt_quote`.
 
 ---
 
@@ -225,39 +220,33 @@ Fügt keine Funktionalität hinzu. Entweder die Funktion entfernen und direkt `b
 
 ## WICHTIG – Inkonsistenz
 
-### I1 · Dry-run: globale `BT_RUNNER_MODE`-Variable UND lokale `--dry-run`-Flag für Restore
+### ~~I1 · Dry-run: globale `BT_RUNNER_MODE`-Variable UND lokale `--dry-run`-Flag für Restore~~ ✅ GEFIXT
 
-**Datei:** [`bin/backupctl:236–248`](bin/backupctl), [`lib/restore.sh:98–101`](lib/restore.sh)
+**Datei:** [`bin/backupctl`](bin/backupctl)  
+**Gefixt am:** 2026-05-07
 
-Alle anderen Kommandos (`create`, `copy`, `remove`, `scan`) prüfen `${BT_RUNNER_MODE:-execute}`.  
-`restore` allein wird zusätzlich mit `--dry-run` als Argument aufgerufen:
-
+Die redundante `--dry-run`-Injektion in `backupctl` wurde entfernt. `BT_RUNNER_MODE` wird vor dem `case`-Statement bereits exportiert – `backup_restore_main` wird nun direkt wie alle anderen Kommandos aufgerufen:
 ```bash
-# backupctl:
-if [[ "${dry_run_global}" -eq 1 ]]; then
-  backup_restore_main --dry-run "$@"
-else
+restore)
   backup_restore_main "$@"
-fi
+  ;;
 ```
-
-```bash
-# restore.sh:
-if [[ -n "${dry_run}" ]]; then   # lokale Variable, nicht BT_RUNNER_MODE
-  bt_log_info "DRY-RUN: ..."
-  return
-fi
-```
-
-`BT_RUNNER_MODE` ist bereits exportiert, bevor `restore` aufgerufen wird. Der zusätzliche `--dry-run`-Parameter und die lokale Variable sind unnötiger Overhead. Entweder einheitlich `BT_RUNNER_MODE` nutzen (wie alle anderen) oder den `--dry-run`-Parameter für alle Kommandos einführen.
+Nutzer können `--dry-run` weiterhin explizit auf der Kommandozeile übergeben.
 
 ---
 
-### I2 · Dry-run-Prüfung fehlt in mehreren kritischen `restore.sh`-Pfaden
+### ~~I2 · Dry-run-Prüfung fehlt in mehreren kritischen `restore.sh`-Pfaden~~ ✅ GEFIXT
 
-**Datei:** [`lib/restore.sh:87–157`](lib/restore.sh)
+**Datei:** [`lib/restore.sh`](lib/restore.sh)  
+**Gefixt am:** 2026-05-07
 
-`restore_backup_to_node` prüft `dry_run` (lokal) nur am Anfang und gibt dann zurück. Wenn jedoch `BT_RUNNER_MODE=dry-run` gesetzt ist und `--dry-run` nicht explizit übergeben wird (z. B. bei direktem Aufruf der Funktion), werden tatsächlich Remote-Befehle ausgeführt. Die anderen Module sind gegen diesen Fall abgesichert.
+`restore_backup_to_node` prüft jetzt beide Quellen:
+```bash
+if [[ -n "${dry_run}" || "${BT_RUNNER_MODE:-execute}" == "dry-run" ]]; then
+  bt_log_info "DRY-RUN: Would restore ${backup_id} to ${target_node}/${target_site}"
+  return
+fi
+```
 
 ---
 
@@ -358,10 +347,10 @@ Beide Funktionen prüfen ob `backup_hash` sich geändert hat und schreiben ihn z
 4. ~~**C4** – `bt_get_cached_backup_object` auf `jq -n --arg` umstellen~~ ✅ GEFIXT
 
 ### Kurzfristig (Robustheit und Konsistenz)
-5. **C2** – Alle Remote-Befehle mit fehlenden `bt_quote`-Aufrufen fixen
+5. ~~**C2** – Alle Remote-Befehle mit fehlenden `bt_quote`-Aufrufen fixen~~ ✅ GEFIXT
 6. ~~**C6** – `bt_handle_site_config_merge` auf einzigen jq-Merge umstellen~~ ✅ GEFIXT
-7. **I1** – Dry-run auf einheitliches `BT_RUNNER_MODE`-Pattern konsolidieren
-8. **I2** – `restore_backup_to_node` gegen `BT_RUNNER_MODE` absichern
+7. ~~**I1** – Dry-run auf einheitliches `BT_RUNNER_MODE`-Pattern konsolidieren~~ ✅ GEFIXT
+8. ~~**I2** – `restore_backup_to_node` gegen `BT_RUNNER_MODE` absichern~~ ✅ GEFIXT
 
 ### Mittelfristig (DRY / Wartbarkeit)
 9. **D1** – `normalize_node_type`/`normalize_access` aus `bt_validate_config` zusammenfassen

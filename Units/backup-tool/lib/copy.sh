@@ -307,7 +307,7 @@ bt_validate_backup_transfer() {
   
   # Vereinfachte Validierung: Prüfe ob Zielverzeichnis existiert und nicht leer ist
   local check_cmd result
-  check_cmd="[[ -d '${target_path}' ]] && [[ -n \"\$(ls -A '${target_path}' 2>/dev/null)\" ]]"
+  check_cmd="[[ -d $(bt_quote "${target_path}") ]] && [[ -n \"\$(ls -A $(bt_quote "${target_path}") 2>/dev/null)\" ]]"
   
   if run_on_node "${to_node}" "${check_cmd}" >/dev/null 2>&1; then
     bt_log_info "Backup validation passed: target path contains files"

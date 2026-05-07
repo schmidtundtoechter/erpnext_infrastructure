@@ -95,7 +95,7 @@ restore_backup_to_node() {
   
   bt_log_info "Restoring backup: backup_id=${backup_id} to=${target_node} site=${target_site} config_mode=${config_mode}"
   
-  if [[ -n "${dry_run}" ]]; then
+  if [[ -n "${dry_run}" || "${BT_RUNNER_MODE:-execute}" == "dry-run" ]]; then
     bt_log_info "DRY-RUN: Would restore ${backup_id} to ${target_node}/${target_site}"
     return
   fi
