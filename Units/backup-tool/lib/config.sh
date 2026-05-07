@@ -153,7 +153,7 @@ nodes_list() {
 
 bt_node_overview_rows_json() {
   local node_filter="${1:-}"
-  local node_rows scan_states
+  local node_rows scan_states live_counts nid count
 
   bt_require_loaded_config
 
@@ -184,11 +184,20 @@ bt_node_overview_rows_json() {
 
   scan_states="$(bt_cache_scan_state_all)"
 
+  live_counts="$(
+    while IFS= read -r nid; do
+      count="$(bt_cache_node_backup_count "${nid}")"
+      jq -cn --arg nid "${nid}" --argjson count "${count}" '{($nid): $count}'
+    done < <(bt_list_node_ids) | jq -sc 'add // {}'
+  )"
+
   jq -cn \
     --argjson nodes "${node_rows}" \
     --argjson states "${scan_states}" \
+    --argjson counts "${live_counts}" \
     --arg filter "${node_filter}" '
     $states as $scan_map
+    | $counts as $count_map
     | $nodes
     | (if ($filter | length) > 0 then map(select(.node == $filter)) else . end)
     | map(
@@ -197,7 +206,7 @@ bt_node_overview_rows_json() {
         | $node
         + {
             reachable: ($state.reachable // "unknown"),
-            backups: (($state.backups // 0) | tostring),
+            backups: (($count_map[$node.node] // 0) | tostring),
             last_scan_at: ($state.last_scan_at // "-"),
             cache_status: ($state.cache_status // "not-scanned")
           }
@@ -213,25 +222,49 @@ bt_print_node_overview_table() {
   overview_rows="$(bt_node_overview_rows_json "${node_filter}")"
 
   printf '%s:\n' "${title}"
-  printf '%-14s %-10s %-6s %-8s %-2s %-2s %-4s %-10s %s\n' \
-    'NODE' 'HOST' 'TYPE' 'ACCESS' 'EN' 'UP' 'BKP' 'LAST_SCAN' 'CACHE'
-  printf '%s\n' "$(printf '=%.0s' {1..74})"
 
-  jq -r '
-    def trunc($n): if (length > $n) then .[0:($n-3)] + "..." else . end;
-    .[]
-    | [
-        (.node | tostring | trunc(14)),
-        (.host | tostring | trunc(10)),
-        (.node_type | tostring | trunc(6)),
-        (.access | tostring | trunc(8)),
-        (if ((.enabled | tostring) | test("^(true|yes|1)$"; "i")) then "Y" else "N" end),
-        (if ((.reachable | tostring) | test("^(yes|true|1)$"; "i")) then "Y" else "N" end),
-        (.backups | tostring | trunc(4)),
-        (.last_scan_at // "-" | tostring | if length > 10 then .[0:10] else . end),
-        (.cache_status | tostring)
-      ]
-    | @tsv
-  ' <<<"${overview_rows}" \
-    | awk -F'\t' '{ printf "%-14s %-10s %-6s %-8s %-2s %-2s %-4s %-10s %s\n", $1, $2, $3, $4, $5, $6, $7, $8, $9 }'
+  {
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+      'NODE' 'HOST' 'TYPE' 'ACCESS' 'EN' 'UP' 'BKP' 'LAST_SCAN' 'CACHE'
+    jq -r '
+      .[]
+      | [
+          (.node | tostring),
+          (.host | tostring),
+          (.node_type | tostring),
+          (.access | tostring),
+          (if ((.enabled | tostring) | test("^(true|yes|1)$"; "i")) then "Y" else "N" end),
+          (if ((.reachable | tostring) | test("^(yes|true|1)$"; "i")) then "Y" else "N" end),
+          (.backups | tostring),
+          (.last_scan_at // "-" | tostring | if length > 10 then .[0:10] else . end),
+          (.cache_status | tostring)
+        ]
+      | @tsv
+    ' <<<"${overview_rows}"
+  } | awk -F'\t' '
+    {
+      rows[NR] = $0
+      n = split($0, f, FS)
+      for (i = 1; i <= n; i++)
+        if (length(f[i]) > w[i]) w[i] = length(f[i])
+      if (n > ncols) ncols = n
+    }
+    END {
+      sep_len = 0
+      for (i = 1; i <= ncols; i++) sep_len += w[i] + (i < ncols ? 2 : 0)
+      for (r = 1; r <= NR; r++) {
+        n = split(rows[r], f, FS)
+        for (i = 1; i <= ncols; i++) {
+          v = (i <= n ? f[i] : "")
+          if (i < ncols) printf "%-*s  ", w[i], v
+          else printf "%s", v
+        }
+        printf "\n"
+        if (r == 1) {
+          for (j = 0; j < sep_len; j++) printf "="
+          printf "\n"
+        }
+      }
+    }
+  '
 }
