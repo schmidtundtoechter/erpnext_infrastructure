@@ -190,8 +190,9 @@ create_backup_on_node() {
   fi
   artifacts_obj="$(jq -c --arg f "${manifest_file}" '. + {manifest: $f}' <<<"${artifacts_obj}")"
 
-  local manifest_json
-  manifest_json="$(bt_generate_manifest_json "${backup_id}" "${node_id}" "${site}" "${reason}" "${artifacts_obj}" "${tags_array}")"
+  local apps_json manifest_json
+  apps_json="$(bt_collect_site_apps_json "${node_id}" "${site}" "${bench_path}")"
+  manifest_json="$(bt_generate_manifest_json "${backup_id}" "${node_id}" "${site}" "${reason}" "${artifacts_obj}" "${tags_array}" "" "${apps_json}")"
 
   # Write manifest to the remote backup directory so the scan reads it back.
   # This makes reason/tags/artifacts persistent independent of the local cache.

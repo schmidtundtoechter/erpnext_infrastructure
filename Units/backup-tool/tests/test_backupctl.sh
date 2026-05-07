@@ -176,6 +176,20 @@ test_manifest_json_generation() {
   assert_contains "${manifest_json}" "full-with-files"
   assert_contains "${manifest_json}" "backup_hash"
   assert_contains "${manifest_json}" "true"
+  assert_contains "${manifest_json}" "\"apps\":[]"
+}
+
+test_manifest_json_generation_with_apps() {
+  local artifacts_json apps_json manifest_json
+
+  artifacts_json='{"db_dump":"test-database.sql.gz","site_config":"site_config.json"}'
+  apps_json='[{"app":"frappe","version":"15.68.0","branch":"version-15"},{"app":"erpnext","version":"15.63.1","branch":"version-15"}]'
+  manifest_json="$(run_libs "bt_generate_manifest_json 'backup_apps_1' 'test-node' 'test.site' 'Test backup reason' '${artifacts_json}' '[]' '' '${apps_json}' | jq -c .")"
+
+  assert_contains "${manifest_json}" "\"apps\":["
+  assert_contains "${manifest_json}" "\"app\":\"frappe\""
+  assert_contains "${manifest_json}" "\"version\":\"15.68.0\""
+  assert_contains "${manifest_json}" "\"branch\":\"version-15\""
 }
 
 test_backup_hash_generation() {
@@ -462,6 +476,37 @@ test_restore_config_mode_validation() {
   fi
 }
 
+test_restore_app_compatibility_check_passes_on_matching_apps() {
+  run_libs '
+    run_on_node() { return 0; }
+    bt_collect_site_apps_json() { printf "[%s]\n" "{\"app\":\"frappe\",\"version\":\"15.68.0\",\"branch\":\"version-15\"}"; }
+    entry="{\"apps\":[{\"app\":\"frappe\",\"version\":\"15.68.0\",\"branch\":\"version-15\"}]}"
+    bt_restore_check_app_compatibility "${entry}" local-dev demo.local /tmp/bench
+  ' >/dev/null || fail "restore app compatibility should pass on matching apps"
+}
+
+test_restore_app_compatibility_check_fails_on_mismatch() {
+  if run_libs '
+    run_on_node() { return 0; }
+    bt_collect_site_apps_json() { printf "[%s]\n" "{\"app\":\"frappe\",\"version\":\"15.68.0\",\"branch\":\"version-15\"}"; }
+    entry="{\"apps\":[{\"app\":\"frappe\",\"version\":\"15.67.0\",\"branch\":\"version-15\"}]}"
+    bt_restore_check_app_compatibility "${entry}" local-dev demo.local /tmp/bench
+  ' >/dev/null 2>&1; then
+    fail "restore app compatibility should fail on version mismatch"
+  fi
+}
+
+test_restore_app_compatibility_check_requires_manifest_apps() {
+  if run_libs '
+    run_on_node() { return 0; }
+    bt_collect_site_apps_json() { printf "[]\n"; }
+    entry="{\"apps\":[]}"
+    bt_restore_check_app_compatibility "${entry}" local-dev demo.local /tmp/bench
+  ' >/dev/null 2>&1; then
+    fail "restore app compatibility should fail when manifest has no apps"
+  fi
+}
+
 test_remove_requires_parameters() {
   if run_libs "bt_load_config '${CONFIG_PATH}'; backup_remove_main --force" >/dev/null 2>&1; then
     fail "remove should require --backup parameter"
@@ -530,6 +575,7 @@ run_all_tests() {
   test_backup_model_definition_exists
   test_backup_id_generation
   test_manifest_json_generation
+  test_manifest_json_generation_with_apps
   test_backup_hash_generation
   test_backup_hash_uses_location
   test_backup_is_complete_check
@@ -554,6 +600,9 @@ run_all_tests() {
   test_list_text_shows_node_instead_of_source_site
   test_restore_requires_parameters
   test_restore_config_mode_validation
+  test_restore_app_compatibility_check_passes_on_matching_apps
+  test_restore_app_compatibility_check_fails_on_mismatch
+  test_restore_app_compatibility_check_requires_manifest_apps
   test_remove_requires_parameters
   test_remove_requires_force_in_non_interactive_mode
   test_remove_cache_only_with_force_removes_entry

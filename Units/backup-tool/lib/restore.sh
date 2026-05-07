@@ -100,19 +100,6 @@ restore_backup_to_node() {
     return
   fi
 
-  bt_confirm_or_force "${force}" "Restore will overwrite data for site ${target_site} on node ${target_node}. Continue?"
-  
-  # Vorpruefungen
-  if [[ -z "${no_checks}" ]]; then
-    bt_check_node_reachability "${target_node}" || bt_die "Target node ${target_node} is not reachable"
-    
-    # Prüfe ob Site existiert oder anlegbar ist
-    local site_check
-    site_check="curl -s http://localhost:8000/api/resource/Website -u Administrator:admin >/dev/null 2>&1"
-    run_on_node "${target_node}" "${site_check}" >/dev/null 2>&1 || \
-      bt_log_warn "Could not verify target site exists (may be new site)"
-  fi
-  
   # Hole Backup vom Cache (egal auf welchem Knoten es ist)
   local backup_path bench_path backup_entry source_node target_backup_entry
   backup_entry="$(bt_cache_list_all | jq -c --arg bid "${backup_id}" 'map(select(.backup_id == $bid))[0] // empty')"
@@ -120,6 +107,23 @@ restore_backup_to_node() {
   
   source_node="$(jq -r '.source_node // empty' <<<"${backup_entry}")"
   [[ -n "${source_node}" ]] || bt_die "Backup ${backup_id} has no source_node metadata"
+
+  bench_path="$(bt_node_bench_path "${target_node}")"
+
+  # Vorpruefungen inkl. App-Kompatibilitaet VOR Confirm-Prompt
+  if [[ -z "${no_checks}" ]]; then
+    bt_check_node_reachability "${target_node}" || bt_die "Target node ${target_node} is not reachable"
+    bt_restore_check_app_compatibility "${backup_entry}" "${target_node}" "${target_site}" "${bench_path}"
+  fi
+
+  bt_confirm_or_force "${force}" "Restore will overwrite data for site ${target_site} on node ${target_node}. Continue?"
+
+  if [[ -z "${no_checks}" ]]; then
+    local site_check
+    site_check="curl -s http://localhost:8000/api/resource/Website -u Administrator:admin >/dev/null 2>&1"
+    run_on_node "${target_node}" "${site_check}" >/dev/null 2>&1 || \
+      bt_log_warn "Could not verify target site exists (may be new site)"
+  fi
   
   # Prüfe ob Backup bereits auf Zielknoten existiert
   target_backup_entry="$(bt_cache_list_all | jq -c --arg bid "${backup_id}" --arg node "${target_node}" 'map(select(.backup_id == $bid and .source_node == $node))[0] // empty')"
@@ -141,8 +145,6 @@ restore_backup_to_node() {
   backup_path="$(bt_get_backup_path_for_node "${target_node}" "${backup_id}" "${target_backup_entry}")" || \
     bt_die "Backup ${backup_id} not found on target node"
 
-  bench_path="$(bt_node_bench_path "${target_node}")"
-  
   # Extrahiere Dateien aus Backup – verwende die Artifact-Namen aus dem Cache
   local db_dump public_files private_files config_file artifacts_obj
   artifacts_obj="$(jq -r '.artifacts // {}' <<<"${target_backup_entry}")"
@@ -183,6 +185,73 @@ restore_backup_to_node() {
   bt_execute_post_restore_tasks "${backup_id}" "${target_node}" "${target_site}" "${bench_path}"
   
   bt_log_info "Restore completed: ${backup_id} restored to ${target_site} on ${target_node}"
+}
+
+bt_restore_check_app_compatibility() {
+  local backup_entry="$1"
+  local target_node="$2"
+  local target_site="$3"
+  local bench_path="$4"
+  local site_apps_file backup_apps_json target_apps_json compat_report
+
+  site_apps_file="${bench_path}/sites/${target_site}/apps.txt"
+  if ! run_on_node "${target_node}" "[[ -f $(bt_quote "${site_apps_file}") ]]" >/dev/null 2>&1; then
+    bt_log_warn "Skipping app compatibility check: site ${target_site} has no apps.txt on ${target_node}"
+    return 0
+  fi
+
+  backup_apps_json="$(jq -c '.apps // []' <<<"${backup_entry}")"
+  if ! jq -e 'type == "array" and length > 0' <<<"${backup_apps_json}" >/dev/null 2>&1; then
+    bt_die "Restore compatibility check failed: backup manifest has no app metadata. Create/scan a backup with apps list or use --no-checks."
+  fi
+
+  target_apps_json="$(bt_collect_site_apps_json "${target_node}" "${target_site}" "${bench_path}")"
+
+  compat_report="$(jq -cn \
+    --argjson backup_apps "${backup_apps_json}" \
+    --argjson target_apps "${target_apps_json}" '
+      def normalize($arr):
+        ($arr // [])
+        | map({
+            app: (.app // ""),
+            version: (.version // ""),
+            branch: (.branch // "")
+          })
+        | map(select(.app != ""));
+
+      (normalize($backup_apps)) as $b
+      | (normalize($target_apps)) as $t
+      | {
+          missing_apps: [ $b[] | select((.app as $a | ($t | map(.app) | index($a))) == null) | .app ],
+          version_mismatches: [
+            $b[] as $src
+            | $t[]
+            | select(.app == $src.app)
+            | select(($src.version != "") and (.version != "") and (.version != $src.version))
+            | {app: .app, backup_version: $src.version, target_version: .version}
+          ],
+          branch_mismatches: [
+            $b[] as $src
+            | $t[]
+            | select(.app == $src.app)
+            | select(($src.branch != "") and (.branch != "") and (.branch != $src.branch))
+            | {app: .app, backup_branch: $src.branch, target_branch: .branch}
+          ]
+        }
+    ')"
+
+  if jq -e '(.missing_apps | length) > 0 or (.version_mismatches | length) > 0 or (.branch_mismatches | length) > 0' <<<"${compat_report}" >/dev/null 2>&1; then
+    bt_die "Restore compatibility check failed before overwrite prompt:
+$(jq -r '
+  [
+    (if (.missing_apps|length)>0 then "missing apps on target: " + (.missing_apps|join(", ")) else empty end),
+    (if (.version_mismatches|length)>0 then "version mismatches: " + (.version_mismatches|map(.app + " (backup=" + .backup_version + ", target=" + .target_version + ")")|join("; ")) else empty end),
+    (if (.branch_mismatches|length)>0 then "branch mismatches: " + (.branch_mismatches|map(.app + " (backup=" + .backup_branch + ", target=" + .target_branch + ")")|join("; ")) else empty end)
+  ] | join("\n")
+' <<<"${compat_report}")"
+  fi
+
+  bt_log_info "App compatibility check passed for ${target_site} on ${target_node}"
 }
 
 # TODO 13: Behandlung von site_config.json

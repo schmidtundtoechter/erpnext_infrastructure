@@ -233,7 +233,7 @@ bt_scan_site_backups() {
     done
     
     # site_config wird von Frappe als *-site_config_backup.json gespeichert (oder plain site_config_backup.json)
-    local site_config_found
+    local site_config_found=""
     for artifact_file in "${backup_dir}"/*-site_config_backup.json; do
       [[ -f "${artifact_file}" ]] || continue
       artifacts_obj="$(jq -c --arg f "$(basename "${artifact_file}")" '. + {site_config: $f}' <<<"${artifacts_obj}")"
