@@ -1,0 +1,15 @@
+services:
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: ${SCENARIO_NAME}_mailpit_container
+    restart: unless-stopped
+    volumes:
+      - ${SCENARIO_DATA_MOUNTPOINT_1}:/data
+    ports:
+      - "${SCENARIO_RESOURCE_WEBUIPORT}:8025"
+      - "${SCENARIO_RESOURCE_SMTPPORT}:1025"
+    environment:
+      - MP_MAX_MESSAGES=${SCENARIO_MAILPIT_MAXMESSAGES}
+      - MP_DATABASE=/data/mailpit.db
+      - MP_SMTP_AUTH_ACCEPT_ANY=${SCENARIO_MAILPIT_SMTPAUTHACCEPTANY}
+      - MP_SMTP_AUTH_ALLOW_INSECURE=${SCENARIO_MAILPIT_SMTPAUTHALLOWINSECURE}

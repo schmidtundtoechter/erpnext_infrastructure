@@ -1,0 +1,39 @@
+scenario:
+  ## Config data setup
+  data:
+    volume:
+      # What is the path used to store the mailpit data (e.g. './mailpit-data' or 'mailpit-volume'; if it contains a '/', it is considered as a path, otherwise as a docker volume name)?
+      - path: mailpit-volume
+        # Is the data volume external (true or false; if not external, it will be deleted on down)?
+        external: true
+    # What is the path used to store the volume backups
+    backupdir: /var/dev/MIMS-Scenarios/_backups
+
+  ## Unique resources
+  resource:
+    # What is the web ui port of the docker container?
+    webuiport: 8025
+    # What is the smtp port of the docker container?
+    smtpport: 1025
+
+  ## Mailpit setup
+  mailpit:
+    # Max number of messages to keep in database
+    maxmessages: 5000
+    # Accept any SMTP auth credentials (1 means true, 0 means false)
+    smtpauthacceptany: 1
+    # Allow insecure SMTP auth without TLS (1 means true, 0 means false)
+    smtpauthallowinsecure: 1
+
+  ## Traefik proxy setup
+  traefik:
+    # Do you want to route this service via traefik?
+    enable: false
+    # What is the url of the mailpit service?
+    mailpit:
+      url: mailpit.automate.matthiaskittner.de
+      # Route to service (this service must support other routes than '/')
+      route: /
+    # What is the traefik proxy network name?
+    network:
+      name: traefik
