@@ -1,0 +1,377 @@
+# Backup-Tool – Architektur- und Code-Review
+
+**Datum:** 2026-05-07  
+**Reviewer:** Claude (automatisierter Review)  
+**Schwerpunkt:** Robustheit, DRY-Prinzip, Konsistenz, Komplexität
+
+---
+
+## Zusammenfassung
+
+Das Tool ist insgesamt gut strukturiert: klare Modultrennung, durchgängige Nutzung von `jq` für JSON, einheitliches Logging. Die Hauptprobleme liegen in drei Bereichen: (1) kritische Robustheitslücken, die zur Laufzeit scheitern können, (2) systematische Code-Duplikation vor allem rund um jq-Hilfsfunktionen, und (3) inkonsistentes Dry-run-Handling.
+
+---
+
+## KRITISCH – Robustheit
+
+### C1 · `restore.sh` ignoriert `artifacts`-Objekt: hardcodierte `latest-*`-Namen
+
+**Datei:** [`lib/restore.sh:126–129`](lib/restore.sh)
+
+```bash
+db_dump="${backup_path}/latest-database.sql.gz"
+public_files="${backup_path}/latest-files.tar"
+private_files="${backup_path}/latest-private-files.tar"
+config_file="${backup_path}/site_config.json"
+```
+
+Jedes Backup hat ein `artifacts`-Objekt mit den **tatsächlichen** Dateinamen (z. B. `20241203_112055-database.sql.gz`). Restore ignoriert das komplett und greift immer auf `latest-*` zurück. Wenn das Backup kein Symlink-Set hat oder das Backup nicht das neueste ist, schlägt der Restore kommentarlos fehl.
+
+**Fix:** Artifact-Namen aus dem Cache-Eintrag lesen:
+```bash
+db_dump="${backup_path}/$(jq -r '.artifacts.db_dump' <<<"${backup_entry}")"
+```
+
+---
+
+### C2 · Pfadvariablen ohne `bt_quote` in Remote-Befehlen
+
+**Dateien:** [`lib/restore.sh:139`](lib/restore.sh), [`lib/restore.sh:243–248`](lib/restore.sh), [`lib/copy.sh:252–253`](lib/copy.sh)
+
+```bash
+# restore.sh:252
+check_cmd="[[ -d '${target_path}' ]] && [[ -n \"\$(ls -A '${target_path}')\" ]]"
+
+# restore.sh:243
+extract_cmd="cd ${site_path} && tar -xf ${tar_file} -C public/"
+```
+
+Pfade mit Leerzeichen oder Sonderzeichen brechen diese Befehle. Alle anderen Remote-Befehle im Tool nutzen konsequent `bt_quote`. Diese Stellen sind Ausreißer.
+
+**Fix:** `bt_quote` durchgängig verwenden.
+
+---
+
+### C3 · `bt_cache_filter` interpoliert User-Input direkt in jq-Code
+
+**Datei:** [`lib/cache.sh:333–340`](lib/cache.sh)
+
+```bash
+[[ -n "${node_filter}" ]] && filter_expr="${filter_expr} | select(.source_node == \"${node_filter}\")"
+[[ -n "${site_filter}" ]] && filter_expr="${filter_expr} | select(.source_site == \"${site_filter}\")"
+```
+
+Ein Filterwert wie `") | halt_error` oder ein einfaches `"` bricht die jq-Auswertung oder liefert falsche Ergebnisse. jq bietet `--arg` genau für diesen Zweck.
+
+**Fix:**
+```bash
+jq -c --arg node "${node_filter}" --arg site "${site_filter}" \
+  '.[] | select($node == "" or .source_node == $node)
+       | select($site == "" or .source_site == $site)' <<<"${json_lines}"
+```
+
+---
+
+### C4 · `bt_get_cached_backup_object` baut JSON per Heredoc-String-Interpolation
+
+**Datei:** [`lib/copy.sh:300–312`](lib/copy.sh)
+
+```bash
+cat <<EOF
+{
+  "backup_id": "${backup_id}",
+  "backup_path": "$(bt_get_node_json "${node_id}" | jq -r '.backup_path // empty')",
+  ...
+}
+EOF
+```
+
+Enthält `backup_id` oder `backup_path` ein `"`, `\` oder Newline, ist das Ergebnis kein valides JSON. Außerdem wird `bt_get_node_json` ein zweites Mal aufgerufen, obwohl der Aufruf oben in der Funktion schon passiert ist.
+
+**Fix:** Komplett auf `jq -n --arg` umstellen.
+
+---
+
+### C5 · `bt_handle_site_config_merge`: Modus `use-source-config` tut nichts
+
+**Datei:** [`lib/restore.sh:171–174`](lib/restore.sh)
+
+```bash
+use-source-config)
+  bt_log_info "Using source site_config.json"
+  ;;
+```
+
+Der Modus ist dokumentiert und hat eine eigene Option `--config-mode use-source-config`, aber die Implementierung schreibt die source-config nie auf den Zielknoten. Der Nutzer denkt, die Konfiguration wurde übernommen – dem ist nicht so.
+
+---
+
+### C6 · `bt_handle_site_config_merge`: `for field in $(jq -r 'keys[]')` bricht bei Feldnamen mit Leerzeichen
+
+**Datei:** [`lib/restore.sh:207`](lib/restore.sh)
+
+```bash
+for field in $(echo "${source_config}" | jq -r 'keys[]' 2>/dev/null); do
+```
+
+JSON-Schlüssel mit Leerzeichen werden word-gesplittet. Außerdem läuft pro Feld eine jq-Subshell – bei vielen Feldern sehr langsam.
+
+**Fix:** Merge in einem einzigen `jq`-Aufruf:
+```bash
+merged_config="$(jq -n \
+  --argjson src "${source_config}" \
+  --argjson tgt "${target_config}" \
+  --argjson protected '["db_name","db_password","admin_password","encryption_key","file_watcher_port"]' \
+  '$src * ($tgt | with_entries(select(.key | IN($protected[]))))')"
+```
+
+---
+
+## WICHTIG – DRY-Verletzungen / Duplikation
+
+### D1 · `normalize_node_type` und `normalize_access` in 6+ jq-Aufrufen wiederholt
+
+**Datei:** [`lib/config.sh`](lib/config.sh) (5×), [`lib/nodes.sh:239–256`](lib/nodes.sh) (1×)
+
+Die jq-Funktionen werden in jedem einzelnen `jq`-Aufruf neu definiert:
+
+```jq
+def normalize_node_type:
+  if . == "frappe-backup-dir" then "frappe-node" ...
+```
+
+In `bt_validate_config` allein erscheinen sie 4-mal. `bt_normalize_node_json` tut das noch einmal separat. `nodes_list` ebenfalls.
+
+Die Normalisierung existiert bereits als Shell-Funktion `bt_normalize_node_json`. Die Validierung sollte entweder eine einzige jq-Datei/`--jsonargs`-Kette sein, oder die normalize-Definitionen werden in einen gemeinsamen jq-Include ausgelagert.
+
+**Minimaler Fix:** `bt_validate_config` auf einen einzigen kombinierten `jq`-Aufruf reduzieren, der alle 5 Prüfungen gleichzeitig ausführt.
+
+---
+
+### D2 · `bt_scan_relative_dir` existiert, wird aber an 2+ Stellen inline kopiert
+
+**Funktion:** [`lib/scan.sh:146–158`](lib/scan.sh)  
+**Inline-Kopien:** [`lib/scan.sh:290–291`](lib/scan.sh), [`lib/scan.sh:321–322`](lib/scan.sh), [`lib/backup-model.sh:176–178`](lib/backup-model.sh)
+
+```bash
+# Drei unterschiedliche Stellen mit identischer Logik:
+rel_dir="${backup_dir#"${backup_root%/}/"}"
+[[ "${rel_dir}" == "${backup_dir}" ]] && rel_dir=""
+```
+
+Die Funktion `bt_scan_relative_dir` sollte überall genutzt werden.
+
+---
+
+### D3 · `bt_backup_display_name` und `bt_list_get_display_name` sind identisch
+
+**Dateien:** [`lib/backup-model.sh:194–197`](lib/backup-model.sh), [`lib/list.sh:172–176`](lib/list.sh)
+
+```bash
+jq -r '.display_name // .reason // .backup_id' <<<"${backup_obj_json}"
+```
+
+Exakt die gleiche Zeile in zwei verschiedenen Funktionen. Eine davon streichen.
+
+---
+
+### D4 · `run_on_node` ruft `bt_get_node_json` zweimal auf
+
+**Datei:** [`lib/nodes.sh:149–170`](lib/nodes.sh)
+
+```bash
+run_on_node() {
+  runner_cmd="$(bt_build_run_command "${node_id}" "${command}")"  # bt_get_node_json intern
+  # ...
+  node_json="$(bt_get_node_json "${node_id}")"  # nochmal
+  access="$(jq -r '.access' <<<"${node_json}")"
+```
+
+`bt_build_run_command` liest den Node schon komplett. Das Ergebnis sollte weitergereich werden, statt nochmal abzufragen.
+
+---
+
+### D5 · `bt_run_with_timeout` / `bt_eval_with_timeout`: nahezu identischer Python-Inlineblock
+
+**Datei:** [`lib/common.sh:41–89`](lib/common.sh)
+
+Beide Funktionen haben denselben Python-Code mit `subprocess.run` + Timeout + Exit-Code-Forwarding. Der einzige Unterschied: eine übergibt `cmd` direkt, die andere wrappt in `bash -lc`. Der Python-Block könnte eine gemeinsame Hilfsfunktion sein.
+
+---
+
+### D6 · `bt_cache_replace_node_backups` dupliziert `bt_cache_build_entry`-Logik
+
+**Datei:** [`lib/cache.sh:199–208`](lib/cache.sh)
+
+```bash
+bt_cache_replace_node_backups() {
+  timestamp="$(date -u ...)"
+  cache_entries="$(jq --arg last_seen "${timestamp}" '[ .[] + {last_seen: $last_seen} ]' ...)"
+```
+
+`bt_cache_build_entry` (Zeile 233) macht genau das – `backup + {last_seen}`. `bt_cache_replace_node_backups` sollte diese Funktion nutzen oder auf den gemeinsamen jq-Ausdruck verweisen.
+
+---
+
+### D7 · `bt_cache_add_entry` ist ein überflüssiger Alias
+
+**Datei:** [`lib/cache.sh:243–247`](lib/cache.sh)
+
+```bash
+bt_cache_add_entry() {
+  bt_cache_upsert_entry "${backup_obj_json}"
+}
+```
+
+Fügt keine Funktionalität hinzu. Entweder die Funktion entfernen und direkt `bt_cache_upsert_entry` aufrufen, oder dokumentieren warum sie als separater Einstiegspunkt existiert.
+
+---
+
+## WICHTIG – Inkonsistenz
+
+### I1 · Dry-run: globale `BT_RUNNER_MODE`-Variable UND lokale `--dry-run`-Flag für Restore
+
+**Datei:** [`bin/backupctl:236–248`](bin/backupctl), [`lib/restore.sh:98–101`](lib/restore.sh)
+
+Alle anderen Kommandos (`create`, `copy`, `remove`, `scan`) prüfen `${BT_RUNNER_MODE:-execute}`.  
+`restore` allein wird zusätzlich mit `--dry-run` als Argument aufgerufen:
+
+```bash
+# backupctl:
+if [[ "${dry_run_global}" -eq 1 ]]; then
+  backup_restore_main --dry-run "$@"
+else
+  backup_restore_main "$@"
+fi
+```
+
+```bash
+# restore.sh:
+if [[ -n "${dry_run}" ]]; then   # lokale Variable, nicht BT_RUNNER_MODE
+  bt_log_info "DRY-RUN: ..."
+  return
+fi
+```
+
+`BT_RUNNER_MODE` ist bereits exportiert, bevor `restore` aufgerufen wird. Der zusätzliche `--dry-run`-Parameter und die lokale Variable sind unnötiger Overhead. Entweder einheitlich `BT_RUNNER_MODE` nutzen (wie alle anderen) oder den `--dry-run`-Parameter für alle Kommandos einführen.
+
+---
+
+### I2 · Dry-run-Prüfung fehlt in mehreren kritischen `restore.sh`-Pfaden
+
+**Datei:** [`lib/restore.sh:87–157`](lib/restore.sh)
+
+`restore_backup_to_node` prüft `dry_run` (lokal) nur am Anfang und gibt dann zurück. Wenn jedoch `BT_RUNNER_MODE=dry-run` gesetzt ist und `--dry-run` nicht explizit übergeben wird (z. B. bei direktem Aufruf der Funktion), werden tatsächlich Remote-Befehle ausgeführt. Die anderen Module sind gegen diesen Fall abgesichert.
+
+---
+
+### I3 · `nodes_list` in `nodes.sh` statt in `config.sh`
+
+**Datei:** [`lib/nodes.sh:235–257`](lib/nodes.sh)
+
+`nodes_list` listet Knoten aus der Config – es ist keine Node-Runtime-Logik. Die Funktion passt inhaltlich besser nach `config.sh`. Cosmetic, aber erschwert die Orientierung.
+
+---
+
+## MITTLERE PROBLEME – Komplexität / Sauberkeit
+
+### M1 · `scan_main` definiert Funktionen zur Laufzeit (keine echten lokalen Funktionen)
+
+**Datei:** [`lib/scan.sh:573–624`](lib/scan.sh)
+
+```bash
+scan_main() {
+  bt_scan_print_reports() { ... }
+  _scan_and_cache() { ... }
+```
+
+In Bash gibt es keine function-scoped Funktionen. Diese Definitionen überschreiben den globalen Namespace und werden bei jedem Aufruf von `scan_main` neu definiert. Beides sollte als Top-Level-Funktion außerhalb von `scan_main` definiert werden.
+
+---
+
+### M2 · `bt_scan_collect_node_backups` und `bt_cache_scan_state_rows_json`: O(n²) JSON-Akkumulation
+
+**Dateien:** [`lib/scan.sh:533–545`](lib/scan.sh), [`lib/cache.sh:82–119`](lib/cache.sh)
+
+```bash
+while IFS= read -r backup_json; do
+  collected_backups="$(jq --argjson entry "${backup_json}" '. + [$entry]' <<<"${collected_backups}")"
+done
+```
+
+Jede Iteration startet einen neuen `jq`-Prozess und wächst die Payload. Bei 50 Backups sind das 50 jq-Prozesse, bei 500 wären es 500. Pattern:
+
+```bash
+# Besser: alle Zeilen sammeln, einmal verarbeiten
+collected_backups="$(scan_node "${node_id}" | jq -s '.')"
+```
+
+---
+
+### M3 · `bt_validate_config` lädt die Config-Datei 5-mal von Disk
+
+**Datei:** [`lib/config.sh:55–160`](lib/config.sh)
+
+Fünf separate `jq`-Aufrufe mit `"${config_path}"` als Argument. Alle könnten in einem einzigen Aufruf kombiniert werden, der alle Regeln prüft. Nebenbei würden die duplizierten `normalize`-Definitionen (D1) entfallen.
+
+---
+
+### M4 · `remove_backup_by_id` ist totes Code
+
+**Datei:** [`lib/remove.sh:122–132`](lib/remove.sh)
+
+`remove_backup_by_id` wird intern von nichts aufgerufen. `backup_remove_main` ruft direkt `remove_backup_entry` auf. Die Funktion ist entweder zu streichen oder als offizieller Einstiegspunkt zu dokumentieren.
+
+---
+
+### M5 · `bt_json_get` / `bt_json_set` in `common.sh` sind totes Code
+
+**Datei:** [`lib/common.sh:117–133`](lib/common.sh)
+
+Generische Wrapper-Funktionen, die nirgendwo im Tool aufgerufen werden.
+
+---
+
+### M6 · `bt_scan_update_local_manifest_hash` und `bt_scan_update_remote_manifest_hash`: viel Parallellogik
+
+**Datei:** [`lib/scan.sh:95–144`](lib/scan.sh)
+
+Beide Funktionen prüfen ob `backup_hash` sich geändert hat und schreiben ihn zurück. Die gemeinsame Logik (Hash-Vergleich, Tmp-Datei-Pattern) könnte in eine private Hilfsfunktion mit einem `local/remote`-Parameter extrahiert werden – zumindest der Vergleichsteil.
+
+---
+
+## KLEINERE ANMERKUNGEN
+
+| # | Datei | Beobachtung |
+|---|-------|-------------|
+| K1 | [`lib/backup.sh:130`](lib/backup.sh) | `tags_list` zu JSON: `printf '[%s]\n' "$(printf '"%s",' ${tags_list}...)"` – bricht bei Tags mit Leerzeichen oder Anführungszeichen. `jq -n --args '$ARGS.positional'` wäre robust. |
+| K2 | [`lib/restore.sh:111`](lib/restore.sh) | Site-Check via `curl` auf hardcoded `Administrator:admin` – sollte nicht in produktiver Code sein. |
+| K3 | [`lib/restore.sh:278–279`](lib/restore.sh) | Post-Restore URL-Check auf `http://localhost:8000` – nicht anpassbar, falsches Positiv-/Negativ-Verhältnis. |
+| K4 | [`lib/copy.sh:1–6`](lib/copy.sh) | TODO-Kommentare am Dateianfang (`# TODO 11`) – sind diese noch aktuell oder erledigt? |
+| K5 | [`lib/restore.sh:1–3`](lib/restore.sh) | Dasselbe: `# TODO 12-14` am Dateianfang, obwohl die Funktionen implementiert sind. |
+| K6 | [`lib/nodes.sh:193`](lib/nodes.sh) | `bt_check_node_reachability` führt bei ssh/ssh-docker `eval` auf einem `ssh_base true`-String durch – konsistent mit dem Rest, aber sollte eine explizite Array-Form bevorzugen wenn möglich. |
+
+---
+
+## Priorisierte Handlungsempfehlungen
+
+### Sofort (blockieren Korrektheit)
+1. **C1** – Restore auf tatsächliche `artifacts`-Felder umstellen
+2. **C5** – `use-source-config` implementieren
+3. **C3** – `bt_cache_filter` auf `--arg`-basierte jq-Abfragen umstellen
+4. **C4** – `bt_get_cached_backup_object` auf `jq -n --arg` umstellen
+
+### Kurzfristig (Robustheit und Konsistenz)
+5. **C2** – Alle Remote-Befehle mit fehlenden `bt_quote`-Aufrufen fixen
+6. **C6** – `bt_handle_site_config_merge` auf einzigen jq-Merge umstellen
+7. **I1** – Dry-run auf einheitliches `BT_RUNNER_MODE`-Pattern konsolidieren
+8. **I2** – `restore_backup_to_node` gegen `BT_RUNNER_MODE` absichern
+
+### Mittelfristig (DRY / Wartbarkeit)
+9. **D1** – `normalize_node_type`/`normalize_access` aus `bt_validate_config` zusammenfassen
+10. **D2** – `bt_scan_relative_dir` überall nutzen
+11. **D3** – Eine der beiden `display_name`-Funktionen streichen
+12. **M1** – Nested Funktionen in `scan_main` nach oben heben
+13. **M2** – O(n²) JSON-Loops durch `jq -s` ersetzen
+14. **M4/M5** – Tote Funktionen entfernen (`remove_backup_by_id`, `bt_json_get`, `bt_json_set`)
+15. **D7** – `bt_cache_add_entry`-Alias entfernen oder begründen
