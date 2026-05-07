@@ -117,6 +117,8 @@ copy_backup_between_nodes() {
   local transfer_cmd transfer_result
   if bt_transfer_same_ssh_docker_host "${from_node}" "${to_node}" "${source_path}" "${target_path}"; then
     bt_log_info "Transfer completed successfully"
+  elif bt_transfer_from_ssh_docker_source "${from_node}" "${to_node}" "${source_path}" "${target_path}"; then
+    bt_log_info "Transfer completed successfully"
   else
     transfer_cmd="$(build_transfer_command "${from_node}" "${to_node}" "${source_path}" "${target_path}")"
     bt_log_info "Executing transfer: $(echo "${transfer_cmd}" | head -c 100)..."
@@ -171,6 +173,62 @@ bt_transfer_same_ssh_docker_host() {
   ssh_base="$(bt_build_ssh_base_cmd "${from_json}")"
 
   eval "${ssh_base} $(bt_quote "${host_cmd}")"
+}
+
+bt_transfer_from_ssh_docker_source() {
+  local from_node="$1"
+  local to_node="$2"
+  local source_path="$3"
+  local target_path="$4"
+  local from_json to_json from_access to_access source_container ssh_base source_cmd
+  local target_parent
+
+  from_json="$(bt_get_node_json "${from_node}")"
+  to_json="$(bt_get_node_json "${to_node}")"
+  from_access="$(jq -r '.access' <<<"${from_json}")"
+  to_access="$(jq -r '.access' <<<"${to_json}")"
+
+  [[ "${from_access}" == "ssh-docker" ]] || return 1
+
+  source_container="$(jq -r '.container // empty' <<<"${from_json}")"
+  [[ -n "${source_container}" ]] || return 1
+
+  ssh_base="$(bt_build_ssh_base_cmd "${from_json}")"
+  target_parent="$(dirname "${target_path}")"
+  source_cmd="docker exec -i $(bt_quote "${source_container}") test -d $(bt_quote "${source_path}") && docker cp $(bt_quote "${source_container}:${source_path}") -"
+
+  case "${to_access}" in
+    local)
+      bt_log_info "Executing transfer from ssh-docker source via docker cp stream"
+      mkdir -p "${target_parent}" || return 1
+      eval "${ssh_base} $(bt_quote "${source_cmd}")" | tar -C "${target_parent}" -xf -
+      ;;
+    docker)
+      local target_context target_container target_compose target_mkdir_cmd target_extract_cmd
+      target_context="$(bt_docker_local_context "${to_json}")"
+      target_container="$(jq -r '.container // empty' <<<"${to_json}")"
+      target_compose="$(jq -r '.compose_service // empty' <<<"${to_json}")"
+
+      bt_ensure_local_docker_context "${to_json}"
+
+      if [[ -n "${target_compose}" ]]; then
+        target_mkdir_cmd="docker --context $(bt_quote "${target_context}") compose exec -T $(bt_quote "${target_compose}") bash -lc $(bt_quote "mkdir -p $(bt_quote "${target_parent}")")"
+        target_extract_cmd="docker --context $(bt_quote "${target_context}") compose exec -T $(bt_quote "${target_compose}") tar -C $(bt_quote "${target_parent}") -xf -"
+      elif [[ -n "${target_container}" ]]; then
+        target_mkdir_cmd="docker --context $(bt_quote "${target_context}") exec -i $(bt_quote "${target_container}") bash -lc $(bt_quote "mkdir -p $(bt_quote "${target_parent}")")"
+        target_extract_cmd="docker --context $(bt_quote "${target_context}") exec -i $(bt_quote "${target_container}") tar -C $(bt_quote "${target_parent}") -xf -"
+      else
+        return 1
+      fi
+
+      bt_log_info "Executing transfer from ssh-docker source into local docker target via docker cp stream"
+      eval "${target_mkdir_cmd}" || return 1
+      eval "${ssh_base} $(bt_quote "${source_cmd}")" | eval "${target_extract_cmd}"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
 }
 
 bt_get_backup_path_for_node() {
