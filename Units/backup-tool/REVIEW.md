@@ -294,12 +294,12 @@ Beide Funktionen prüfen ob `backup_hash` sich geändert hat und schreiben ihn z
 
 | # | Datei | Beobachtung |
 |---|-------|-------------|
-| K1 | [`lib/backup.sh:130`](lib/backup.sh) | `tags_list` zu JSON: `printf '[%s]\n' "$(printf '"%s",' ${tags_list}...)"` – bricht bei Tags mit Leerzeichen oder Anführungszeichen. `jq -n --args '$ARGS.positional'` wäre robust. |
-| K2 | [`lib/restore.sh:111`](lib/restore.sh) | Site-Check via `curl` auf hardcoded `Administrator:admin` – sollte nicht in produktiver Code sein. |
-| K3 | [`lib/restore.sh:278–279`](lib/restore.sh) | Post-Restore URL-Check auf `http://localhost:8000` – nicht anpassbar, falsches Positiv-/Negativ-Verhältnis. |
-| K4 | [`lib/copy.sh:1–6`](lib/copy.sh) | TODO-Kommentare am Dateianfang (`# TODO 11`) – sind diese noch aktuell oder erledigt? |
-| K5 | [`lib/restore.sh:1–3`](lib/restore.sh) | Dasselbe: `# TODO 12-14` am Dateianfang, obwohl die Funktionen implementiert sind. |
-| K6 | [`lib/nodes.sh:193`](lib/nodes.sh) | `bt_check_node_reachability` führt bei ssh/ssh-docker `eval` auf einem `ssh_base true`-String durch – konsistent mit dem Rest, aber sollte eine explizite Array-Form bevorzugen wenn möglich. |
+| K1 ✅ | [`lib/backup.sh:130`](lib/backup.sh) | `tags_list` zu JSON: `printf '[%s]\n' "$(printf '"%s",' ${tags_list}...)"` – bricht bei Tags mit Leerzeichen oder Anführungszeichen. `jq -n --args '$ARGS.positional'` wäre robust. |
+| K2 ✅ | [`lib/restore.sh:111`](lib/restore.sh) | Site-Check via `curl` auf hardcoded `Administrator:admin` – sollte nicht in produktiver Code sein. |
+| K3 ✅ | [`lib/restore.sh:278–279`](lib/restore.sh) | Post-Restore URL-Check auf `http://localhost:8000` – nicht anpassbar, falsches Positiv-/Negativ-Verhältnis. |
+| K4 ✅ | [`lib/copy.sh:1–6`](lib/copy.sh) | TODO-Kommentare am Dateianfang (`# TODO 11`) – sind diese noch aktuell oder erledigt? |
+| K5 ✅ | [`lib/restore.sh:1–3`](lib/restore.sh) | Dasselbe: `# TODO 12-14` am Dateianfang, obwohl die Funktionen implementiert sind. |
+| K6 ✅ | [`lib/nodes.sh:193`](lib/nodes.sh) | `bt_check_node_reachability` führt bei ssh/ssh-docker `eval` auf einem `ssh_base true`-String durch – konsistent mit dem Rest, aber sollte eine explizite Array-Form bevorzugen wenn möglich. |
 
 ---
 
@@ -318,10 +318,10 @@ Beide Funktionen prüfen ob `backup_hash` sich geändert hat und schreiben ihn z
 8. ~~**I2** – `restore_backup_to_node` gegen `BT_RUNNER_MODE` absichern~~ ✅ GEFIXT
 
 ### Mittelfristig (DRY / Wartbarkeit)
-9. **D1** – `normalize_node_type`/`normalize_access` aus `bt_validate_config` zusammenfassen
-10. **D2** – `bt_scan_relative_dir` überall nutzen
-11. **D3** – Eine der beiden `display_name`-Funktionen streichen
-12. **M1** – Nested Funktionen in `scan_main` nach oben heben
-13. **M2** – O(n²) JSON-Loops durch `jq -s` ersetzen
-14. **M4/M5** – Tote Funktionen entfernen (`remove_backup_by_id`, `bt_json_get`, `bt_json_set`)
-15. **D7** – `bt_cache_add_entry`-Alias entfernen oder begründen
+9. ~~**D1** – `normalize_node_type`/`normalize_access` aus `bt_validate_config` zusammenfassen~~ ✅ GEFIXT
+10. ~~**D2** – `bt_scan_relative_dir` überall nutzen~~ ✅ GEFIXT
+11. ~~**D3** – Eine der beiden `display_name`-Funktionen streichen~~ ✅ GEFIXT
+12. ~~**M1** – Nested Funktionen in `scan_main` nach oben heben~~ ✅ GEFIXT
+13. ~~**M2** – O(n²) JSON-Loops durch `jq -s` ersetzen~~ ✅ GEFIXT
+14. ~~**M4/M5** – Tote Funktionen entfernen (`remove_backup_by_id`, `bt_json_get`, `bt_json_set`)~~ ✅ GEFIXT
+15. ~~**D7** – `bt_cache_add_entry`-Alias entfernen oder begründen~~ ✅ GEFIXT

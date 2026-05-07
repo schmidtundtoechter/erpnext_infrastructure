@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-# TODO 11: Transferlogik implementieren
 # Kopiert ein Backup von einem Quellknoten auf einen Zielknoten
 # Unterstützt rsync als Standard mit scp als Fallback
 

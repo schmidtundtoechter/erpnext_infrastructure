@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-# TODO 12-14: Restore implementieren mit site_config.json Handling und Nacharbeiten
-
 backup_restore_usage() {
   cat <<'EOF'
 Usage: backupctl backup restore --backup <id> --to <node> --site <site> [options]
@@ -120,7 +118,7 @@ restore_backup_to_node() {
 
   if [[ -z "${no_checks}" ]]; then
     local site_check
-    site_check="curl -s http://localhost:8000/api/resource/Website -u Administrator:admin >/dev/null 2>&1"
+    site_check="curl -s http://localhost:8000/api/resource/Website >/dev/null 2>&1"
     run_on_node "${target_node}" "${site_check}" >/dev/null 2>&1 || \
       bt_log_warn "Could not verify target site exists (may be new site)"
   fi
@@ -267,7 +265,6 @@ $(jq -r '
   bt_log_info "App compatibility check passed for ${target_site} on ${target_node}"
 }
 
-# TODO 13: Behandlung von site_config.json
 bt_handle_site_config_merge() {
   local backup_id="$1"
   local target_node="$2"
@@ -371,7 +368,6 @@ bt_normalize_restored_files_layout() {
   fi
 }
 
-# TODO 14: Post-Restore Aufgaben
 bt_execute_post_restore_tasks() {
   local backup_id="$1"
   local target_node="$2"
@@ -390,16 +386,13 @@ bt_execute_post_restore_tasks() {
   clear_cache_cmd="cd $(bt_quote "${bench_path}") && bench --site ${target_site} clear-cache"
   run_on_node "${target_node}" "${clear_cache_cmd}" || bt_log_warn "Clear cache failed"
   
-  # 4. Erreichbarkeit testen (einfacher Check)
-  local url_check
-  url_check="curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/app/home"
-  local http_code
-  http_code="$(run_on_node "${target_node}" "${url_check}")" || http_code="0"
-  
-  if [[ "${http_code}" == "200" ]] || [[ "${http_code}" == "302" ]]; then
-    bt_log_info "Post-restore verification passed: site responds with HTTP ${http_code}"
+  # 4. Erreichbarkeit testen (bench-based)
+  local site_status_cmd
+  site_status_cmd="cd $(bt_quote "${bench_path}") && bench --site ${target_site} list-apps"
+  if run_on_node "${target_node}" "${site_status_cmd}" >/dev/null 2>&1; then
+    bt_log_info "Post-restore verification passed: site is operational"
   else
-    bt_log_warn "Post-restore verification warning: site responded with HTTP ${http_code}"
+    bt_log_warn "Post-restore verification warning: bench list-apps failed for site ${target_site}"
   fi
   
   bt_log_info "Post-restore tasks completed"

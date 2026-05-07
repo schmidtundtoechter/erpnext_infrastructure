@@ -209,8 +209,9 @@ bt_check_node_reachability() {
       bt_run_with_timeout "${BT_DOCKER_TIMEOUT_SEC:-10}" docker ps >/dev/null 2>&1
       ;;
     ssh|ssh-docker)
-      ssh_base="$(bt_build_ssh_base_cmd "${node_json}")"
-      eval "${ssh_base} true" >/dev/null 2>&1
+      local ssh_config
+      ssh_config="$(jq -r '.ssh_config' <<<"${node_json}")"
+      ssh -n -o BatchMode=yes -o ConnectTimeout=10 "${ssh_config}" true >/dev/null 2>&1
       ;;
     *)
       bt_die "Unsupported access for reachability: ${access}"

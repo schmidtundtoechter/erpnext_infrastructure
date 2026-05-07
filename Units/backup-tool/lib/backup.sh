@@ -127,7 +127,8 @@ create_backup_on_node() {
   # backup_id will be derived from the actual filename after bench runs; use a placeholder for now
   backup_id="${node_id}_${site}_$(date -u +%s)"
 
-  tags_array="$(printf '[%s]\n' "$(printf '"%s",' ${tags_list} | sed 's/,$//g')")"
+  read -ra _tags <<< "${tags_list}"
+  tags_array="$(jq -cn '$ARGS.positional' --args "${_tags[@]}")"
   
   bench_path="$(bt_node_bench_path "${node_id}")"
 
