@@ -113,25 +113,54 @@ restore_backup_to_node() {
       bt_log_warn "Could not verify target site exists (may be new site)"
   fi
   
-  # Hole Backup-Pfad
-  local backup_path bench_path backup_entry
-  backup_entry="$(bt_cache_list_all | jq -c --arg bid "${backup_id}" --arg node "${target_node}" 'map(select(.backup_id == $bid and .source_node == $node))[0] // empty')"
-  backup_path="$(bt_get_backup_path_for_node "${target_node}" "${backup_id}" "${backup_entry}")" || \
+  # Hole Backup vom Cache (egal auf welchem Knoten es ist)
+  local backup_path bench_path backup_entry source_node target_backup_entry
+  backup_entry="$(bt_cache_list_all | jq -c --arg bid "${backup_id}" 'map(select(.backup_id == $bid))[0] // empty')"
+  [[ -n "${backup_entry}" && "${backup_entry}" != "null" ]] || bt_die "Backup ${backup_id} not found in cache"
+  
+  source_node="$(jq -r '.source_node // empty' <<<"${backup_entry}")"
+  [[ -n "${source_node}" ]] || bt_die "Backup ${backup_id} has no source_node metadata"
+  
+  # Prüfe ob Backup bereits auf Zielknoten existiert
+  target_backup_entry="$(bt_cache_list_all | jq -c --arg bid "${backup_id}" --arg node "${target_node}" 'map(select(.backup_id == $bid and .source_node == $node))[0] // empty')"
+  
+  if [[ -z "${target_backup_entry}" || "${target_backup_entry}" == "null" ]]; then
+    # Backup muss kopiert werden
+    if [[ "${source_node}" != "${target_node}" ]]; then
+      bt_log_info "Backup not yet on target node; copying from ${source_node} to ${target_node}..."
+      copy_backup_between_nodes "${backup_id}" "${source_node}" "${target_node}" "${force}" "1" "${backup_entry}" || \
+        bt_die "Failed to copy backup to target node"
+      
+      # Neu laden nach Copy
+      target_backup_entry="$(bt_cache_list_all | jq -c --arg bid "${backup_id}" --arg node "${target_node}" 'map(select(.backup_id == $bid and .source_node == $node))[0] // empty')"
+    else
+      target_backup_entry="${backup_entry}"
+    fi
+  fi
+  
+  backup_path="$(bt_get_backup_path_for_node "${target_node}" "${backup_id}" "${target_backup_entry}")" || \
     bt_die "Backup ${backup_id} not found on target node"
 
   bench_path="$(bt_node_bench_path "${target_node}")"
   
-  # Extrahiere Dateien aus Backup
-  local db_dump public_files private_files config_file
-  db_dump="${backup_path}/latest-database.sql.gz"
-  public_files="${backup_path}/latest-files.tar"
-  private_files="${backup_path}/latest-private-files.tar"
-  config_file="${backup_path}/site_config.json"
+  # Extrahiere Dateien aus Backup – verwende die Artifact-Namen aus dem Cache
+  local db_dump public_files private_files config_file artifacts_obj
+  artifacts_obj="$(jq -r '.artifacts // {}' <<<"${target_backup_entry}")"
   
-  # Handle site_config.json gemäß config_mode
-  if [[ "${config_mode}" == "merge-config" ]] || [[ "${config_mode}" == "keep-target-config" ]]; then
-    bt_handle_site_config_merge "${backup_id}" "${target_node}" "${target_site}" \
-      "${config_file}" "${config_mode}" "${bench_path}"
+  db_dump="${backup_path}/$(jq -r '.db_dump // empty' <<<"${artifacts_obj}")"
+  public_files="${backup_path}/$(jq -r '.public_files // empty' <<<"${artifacts_obj}")"
+  private_files="${backup_path}/$(jq -r '.private_files // empty' <<<"${artifacts_obj}")"
+  config_file="${backup_path}/$(jq -r '.site_config // empty' <<<"${artifacts_obj}")"
+  
+  [[ -n "${db_dump}" && "${db_dump}" != "${backup_path}/" ]] || \
+    bt_die "Restore: no db_dump artifact found for backup ${backup_id}"
+  
+  # Handle site_config.json gemäß config_mode (nur wenn Datei vorhanden ist)
+  if [[ -n "${config_file}" && "${config_file}" != "${backup_path}/" ]]; then
+    if [[ "${config_mode}" != "use-source-config" ]]; then
+      bt_handle_site_config_merge "${backup_id}" "${target_node}" "${target_site}" \
+        "${config_file}" "${config_mode}" "${bench_path}"
+    fi
   fi
   
   # Führe bench restore aus
@@ -167,68 +196,49 @@ bt_handle_site_config_merge() {
   
   bt_log_info "Handling site_config.json with mode: ${config_mode}"
   
+  local target_config_path site_path
+  site_path="${bench_path}/sites/${target_site}"
+  target_config_path="${site_path}/site_config.json"
+  
   case "${config_mode}" in
     use-source-config)
-      # Einfach Quelle verwenden
-      bt_log_info "Using source site_config.json"
+      # Übernehme Quellconfig komplett
+      bt_log_info "Copying source site_config.json"
+      run_on_node "${target_node}" "cp $(bt_quote "${source_config_file}") $(bt_quote "${target_config_path}")" || \
+        bt_log_warn "Failed to copy source site_config.json"
       ;;
+      
     keep-target-config)
-      # Zielkonfiguration bewahren
+      # Behalte Zielconfig komplett – nichts tun
       bt_log_info "Keeping target site_config.json"
       return
       ;;
+      
     merge-config)
-      # Merge: Behalte zielspezifische Felder, übernehme nur allgemeine Felder
+      # Merge: Behalte protected Fields vom Ziel, übernehme andere von Quelle
       bt_log_info "Merging site_config.json..."
       
-      # Felder die NICHT von Quelle übernommen werden (sind zielspezifisch)
-      local protected_fields=(
-        "db_name"
-        "db_password"
-        "admin_password"
-        "encryption_key"
-        "file_watcher_port"
-      )
+      # Configs lokal einlesen, mit jq mergen, Ergebnis zurückschreiben
+      local source_cfg target_cfg merged_cfg
+      source_cfg="$(run_on_node "${target_node}" "cat $(bt_quote "${source_config_file}")" 2>/dev/null || echo '{}')"
+      target_cfg="$(run_on_node "${target_node}" "cat $(bt_quote "${target_config_path}")" 2>/dev/null || echo '{}')"
       
-      # Hole target-site-config
-      local target_config_path get_cmd
-      target_config_path="${bench_path}/sites/${target_site}/site_config.json"
-      get_cmd="cat ${target_config_path}"
+      # Merge lokal: Starte mit source, überschreibe protected fields mit target-Werten
+      merged_cfg="$(jq -s '.[0] as $source | .[1] as $target | $source | .db_name = ($target.db_name // .db_name) | .db_password = ($target.db_password // .db_password) | .admin_password = ($target.admin_password // .admin_password) | .encryption_key = ($target.encryption_key // .encryption_key) | .file_watcher_port = ($target.file_watcher_port // .file_watcher_port)' \
+        <(printf '%s' "${source_cfg}") <(printf '%s' "${target_cfg}") 2>/dev/null || echo '')"
       
-      local target_config
-      target_config="$(run_on_node "${target_node}" "${get_cmd}" 2>/dev/null || echo '{}')"
-      
-      # Merger Logik: Übernehme allgemeine Felder von Quelle, bewahre protected Fields vom Ziel
-      local source_config merged_config
-      source_config="$(run_on_node "${target_node}" "cat ${source_config_file}" 2>/dev/null || echo '{}')"
-      
-      # Baue merged config auf
-      merged_config="{}"
-      for field in $(echo "${source_config}" | jq -r 'keys[]' 2>/dev/null); do
-        # Prüfe ob Feld protegiert ist
-        local is_protected=0
-        for protected in "${protected_fields[@]}"; do
-          if [[ "${field}" == "${protected}" ]]; then
-            is_protected=1
-            break
-          fi
-        done
-        
-        if [[ $is_protected -eq 1 ]]; then
-          # Bewahre Zielwert
-          merged_config="$(jq -c ". + {\"${field}\": $(jq -c ".${field}" <<<"${target_config}")}" <<<"${merged_config}" 2>/dev/null)"
-        else
-          # Übernehme Quellwert
-          merged_config="$(jq -c ". + {\"${field}\": $(jq -c ".${field}" <<<"${source_config}")}" <<<"${merged_config}" 2>/dev/null)"
-        fi
-      done
-      
-      # Schreibe gemergete config zurück
-      echo "${merged_config}" | run_on_node "${target_node}" "cat > ${target_config_path}"
-      bt_log_info "Site config merge completed"
+      if [[ -n "${merged_cfg}" ]] && echo "${merged_cfg}" | jq -e . >/dev/null 2>&1; then
+        # Merged JSON auf Ziel-Node schreiben
+        run_on_node "${target_node}" "cat > $(bt_quote "${target_config_path}")" <<<"${merged_cfg}" || \
+          bt_log_warn "Could not write merged site_config.json"
+        bt_log_info "Site config merge completed"
+      else
+        bt_log_warn "Merge produced invalid JSON – keeping target site_config.json unchanged"
+      fi
       ;;
   esac
 }
+
 
 bt_restore_files_to_site() {
   local node_id="$1"

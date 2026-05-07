@@ -231,8 +231,17 @@ bt_scan_site_backups() {
       artifacts_obj="$(jq -c --arg f "$(basename "${artifact_file}")" '. + {private_files: $f}' <<<"${artifacts_obj}")"
       break
     done
-    if [[ -f "${backup_dir}"/site_config.json ]]; then
-      artifacts_obj="$(jq -c '. + {"site_config": "site_config.json"}' <<<"${artifacts_obj}")"
+    
+    # site_config wird von Frappe als *-site_config_backup.json gespeichert (oder plain site_config_backup.json)
+    local site_config_found
+    for artifact_file in "${backup_dir}"/*-site_config_backup.json; do
+      [[ -f "${artifact_file}" ]] || continue
+      artifacts_obj="$(jq -c --arg f "$(basename "${artifact_file}")" '. + {site_config: $f}' <<<"${artifacts_obj}")"
+      site_config_found=1
+      break
+    done
+    if [[ -z "${site_config_found}" ]] && [[ -f "${backup_dir}"/site_config_backup.json ]]; then
+      artifacts_obj="$(jq -c '. + {"site_config": "site_config_backup.json"}' <<<"${artifacts_obj}")"
     fi
     
     created_at="$(bt_scan_local_file_mtime_iso8601 "${db_dump}")"
@@ -317,8 +326,7 @@ bt_scan_remote_frappe_without_manifest() {
     backup_dir="$(dirname "${db_path}")"
     site_dir="$(dirname "$(dirname "${backup_dir}")")"
     site="$(basename "${site_dir}")"
-    rel_dir="${backup_dir#"${backup_root%/}/"}"
-    [[ "${rel_dir}" == "${backup_dir}" ]] && rel_dir="$(basename "${backup_dir}")"
+    rel_dir="$(bt_scan_relative_dir "${backup_root}" "${backup_dir}")"
     db_file="$(basename "${db_path}")"
     id_suffix="${db_file%-database.sql.gz}"
     id_suffix="${id_suffix%-database.sql}"
@@ -335,7 +343,7 @@ bt_scan_remote_frappe_without_manifest() {
     public_file="${public_file/-database.sql/-files.tar}"
     private_file="${db_file/-database.sql.gz/-private-files.tar}"
     private_file="${private_file/-database.sql/-private-files.tar}"
-    site_config_file="${site_dir}/site_config.json"
+    site_config_file="${db_file%-database.sql*}-site_config_backup.json"
 
     artifacts_obj="{\"db_dump\":\"${db_file}\"}"
 
@@ -345,8 +353,8 @@ bt_scan_remote_frappe_without_manifest() {
     if run_on_node "${node_id}" "[[ -f $(bt_quote "${backup_dir}/${private_file}") ]]" >/dev/null 2>&1; then
       artifacts_obj="$(jq -c --arg f "${private_file}" '. + {private_files: $f}' <<<"${artifacts_obj}")"
     fi
-    if run_on_node "${node_id}" "[[ -f $(bt_quote "${site_config_file}") ]]" >/dev/null 2>&1; then
-      artifacts_obj="$(jq -c '. + {site_config: "site_config.json"}' <<<"${artifacts_obj}")"
+    if run_on_node "${node_id}" "[[ -f $(bt_quote "${backup_dir}/${site_config_file}") ]]" >/dev/null 2>&1; then
+      artifacts_obj="$(jq -c --arg f "${site_config_file}" '. + {site_config: $f}' <<<"${artifacts_obj}")"
     fi
 
     # Stable ID: node + site + db stem (without -database.sql(.gz) suffix)
@@ -571,14 +579,7 @@ scan_main() {
   bt_require_loaded_config
 
   bt_scan_print_reports() {
-    local overview_rows
-
-    overview_rows="$(bt_cache_scan_state_rows_json)"
-    printf 'Scan overview:\n'
-    printf '%-25s %-10s %-10s %-20s %s\n' 'NODE' 'REACHABLE' 'BACKUPS' 'LAST_SCAN' 'CACHE'
-    printf '%s\n' "$(printf '=%.0s' {1..86})"
-    jq -r '.[] | [.node, .reachable, (.backups | tostring), .last_scan_at, .cache_status] | @tsv' <<<"${overview_rows}" \
-      | awk -F'\t' '{ printf "%-25s %-10s %-10s %-20s %s\n", $1, $2, $3, $4, $5 }'
+    bt_print_node_overview_table "Scan overview"
   }
 
   local _scan_and_cache

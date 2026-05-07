@@ -174,7 +174,13 @@ create_backup_on_node() {
     artifacts_obj="$(jq -c '. + {"private_files":"latest-private-files.tar"}' <<<"${artifacts_obj}")"
   fi
 
-  artifacts_obj="$(jq -c '. + {"site_config":"site_config.json"}' <<<"${artifacts_obj}")"
+  # site_config wird von Frappe als *-site_config_backup.json gespeichert, nicht als site_config.json
+  local site_config_file="${id_suffix}-site_config_backup.json"
+  if run_on_node "${node_id}" "[[ -f $(bt_quote "${backups_dir}/${site_config_file}") ]]" >/dev/null 2>&1; then
+    artifacts_obj="$(jq -c --arg f "${site_config_file}" '. + {site_config: $f}' <<<"${artifacts_obj}")"
+  elif run_on_node "${node_id}" "[[ -f $(bt_quote "${backups_dir}/site_config_backup.json") ]]" >/dev/null 2>&1; then
+    artifacts_obj="$(jq -c '. + {"site_config":"site_config_backup.json"}' <<<"${artifacts_obj}")"
+  fi
 
   local manifest_file
   if [[ -n "${id_suffix}" ]]; then
