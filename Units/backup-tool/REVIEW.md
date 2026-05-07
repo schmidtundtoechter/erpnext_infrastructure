@@ -14,22 +14,18 @@ Das Tool ist insgesamt gut strukturiert: klare Modultrennung, durchgängige Nutz
 
 ## KRITISCH – Robustheit
 
-### C1 · `restore.sh` ignoriert `artifacts`-Objekt: hardcodierte `latest-*`-Namen
+### ~~C1 · `restore.sh` ignoriert `artifacts`-Objekt: hardcodierte `latest-*`-Namen~~ ✅ GEFIXT
 
-**Datei:** [`lib/restore.sh:126–129`](lib/restore.sh)
+**Datei:** [`lib/restore.sh`](lib/restore.sh)  
+**Gefixt am:** 2026-05-07
 
+Artifact-Namen werden jetzt korrekt aus dem Cache-Eintrag gelesen:
 ```bash
-db_dump="${backup_path}/latest-database.sql.gz"
-public_files="${backup_path}/latest-files.tar"
-private_files="${backup_path}/latest-private-files.tar"
-config_file="${backup_path}/site_config.json"
-```
-
-Jedes Backup hat ein `artifacts`-Objekt mit den **tatsächlichen** Dateinamen (z. B. `20241203_112055-database.sql.gz`). Restore ignoriert das komplett und greift immer auf `latest-*` zurück. Wenn das Backup kein Symlink-Set hat oder das Backup nicht das neueste ist, schlägt der Restore kommentarlos fehl.
-
-**Fix:** Artifact-Namen aus dem Cache-Eintrag lesen:
-```bash
-db_dump="${backup_path}/$(jq -r '.artifacts.db_dump' <<<"${backup_entry}")"
+artifacts_obj="$(jq -r '.artifacts // {}' <<<"${target_backup_entry}")"
+db_dump="${backup_path}/$(jq -r '.db_dump // empty' <<<"${artifacts_obj}")"
+public_files="${backup_path}/$(jq -r '.public_files // empty' <<<"${artifacts_obj}")"
+private_files="${backup_path}/$(jq -r '.private_files // empty' <<<"${artifacts_obj}")"
+config_file="${backup_path}/$(jq -r '.site_config // empty' <<<"${artifacts_obj}")"
 ```
 
 ---
@@ -92,37 +88,37 @@ Enthält `backup_id` oder `backup_path` ein `"`, `\` oder Newline, ist das Ergeb
 
 ---
 
-### C5 · `bt_handle_site_config_merge`: Modus `use-source-config` tut nichts
+### ~~C5 · `bt_handle_site_config_merge`: Modus `use-source-config` tut nichts~~ ✅ GEFIXT
 
-**Datei:** [`lib/restore.sh:171–174`](lib/restore.sh)
+**Datei:** [`lib/restore.sh`](lib/restore.sh)  
+**Gefixt am:** 2026-05-07
 
+Der `use-source-config`-Branch kopiert die Quellconfig jetzt korrekt auf den Zielknoten:
 ```bash
 use-source-config)
-  bt_log_info "Using source site_config.json"
+  bt_log_info "Copying source site_config.json"
+  run_on_node "${target_node}" "cp $(bt_quote "${source_config_file}") $(bt_quote "${target_config_path}")" || \
+    bt_log_warn "Failed to copy source site_config.json"
   ;;
 ```
 
-Der Modus ist dokumentiert und hat eine eigene Option `--config-mode use-source-config`, aber die Implementierung schreibt die source-config nie auf den Zielknoten. Der Nutzer denkt, die Konfiguration wurde übernommen – dem ist nicht so.
-
 ---
 
-### C6 · `bt_handle_site_config_merge`: `for field in $(jq -r 'keys[]')` bricht bei Feldnamen mit Leerzeichen
+### ~~C6 · `bt_handle_site_config_merge`: `for field in $(jq -r 'keys[]')` bricht bei Feldnamen mit Leerzeichen~~ ✅ GEFIXT
 
-**Datei:** [`lib/restore.sh:207`](lib/restore.sh)
+**Datei:** [`lib/restore.sh`](lib/restore.sh)  
+**Gefixt am:** 2026-05-07
 
+Merge erfolgt jetzt in einem einzigen `jq -s`-Aufruf ohne Pro-Feld-Subshell:
 ```bash
-for field in $(echo "${source_config}" | jq -r 'keys[]' 2>/dev/null); do
-```
-
-JSON-Schlüssel mit Leerzeichen werden word-gesplittet. Außerdem läuft pro Feld eine jq-Subshell – bei vielen Feldern sehr langsam.
-
-**Fix:** Merge in einem einzigen `jq`-Aufruf:
-```bash
-merged_config="$(jq -n \
-  --argjson src "${source_config}" \
-  --argjson tgt "${target_config}" \
-  --argjson protected '["db_name","db_password","admin_password","encryption_key","file_watcher_port"]' \
-  '$src * ($tgt | with_entries(select(.key | IN($protected[]))))')"
+merged_cfg="$(jq -s '.[0] as $source | .[1] as $target
+  | $source
+  | .db_name = ($target.db_name // .db_name)
+  | .db_password = ($target.db_password // .db_password)
+  | .admin_password = ($target.admin_password // .admin_password)
+  | .encryption_key = ($target.encryption_key // .encryption_key)
+  | .file_watcher_port = ($target.file_watcher_port // .file_watcher_port)' \
+  <(printf '%s' "${source_cfg}") <(printf '%s' "${target_cfg}") 2>/dev/null || echo '')"
 ```
 
 ---
@@ -356,14 +352,14 @@ Beide Funktionen prüfen ob `backup_hash` sich geändert hat und schreiben ihn z
 ## Priorisierte Handlungsempfehlungen
 
 ### Sofort (blockieren Korrektheit)
-1. **C1** – Restore auf tatsächliche `artifacts`-Felder umstellen
-2. **C5** – `use-source-config` implementieren
+1. ~~**C1** – Restore auf tatsächliche `artifacts`-Felder umstellen~~ ✅ GEFIXT
+2. ~~**C5** – `use-source-config` implementieren~~ ✅ GEFIXT
 3. **C3** – `bt_cache_filter` auf `--arg`-basierte jq-Abfragen umstellen
 4. **C4** – `bt_get_cached_backup_object` auf `jq -n --arg` umstellen
 
 ### Kurzfristig (Robustheit und Konsistenz)
 5. **C2** – Alle Remote-Befehle mit fehlenden `bt_quote`-Aufrufen fixen
-6. **C6** – `bt_handle_site_config_merge` auf einzigen jq-Merge umstellen
+6. ~~**C6** – `bt_handle_site_config_merge` auf einzigen jq-Merge umstellen~~ ✅ GEFIXT
 7. **I1** – Dry-run auf einheitliches `BT_RUNNER_MODE`-Pattern konsolidieren
 8. **I2** – `restore_backup_to_node` gegen `BT_RUNNER_MODE` absichern
 
