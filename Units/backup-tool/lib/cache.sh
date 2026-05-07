@@ -327,18 +327,23 @@ bt_cache_filter() {
   local complete_filter="${6:-}"
   local from_date="${7:-}"
   local to_date="${8:-}"
-  
-  local filter_expr='.'
-  
-  [[ -n "${node_filter}" ]] && filter_expr="${filter_expr} | select(.source_node == \"${node_filter}\")"
-  [[ -n "${site_filter}" ]] && filter_expr="${filter_expr} | select(.source_site == \"${site_filter}\")"
-  [[ -n "${tag_filter}" ]] && filter_expr="${filter_expr} | select(.tags | map(select(. == \"${tag_filter}\")) | length > 0)"
-  [[ -n "${reason_contains}" ]] && filter_expr="${filter_expr} | select(.reason | contains(\"${reason_contains}\"))"
-  [[ -n "${complete_filter}" ]] && filter_expr="${filter_expr} | select(.complete == ${complete_filter})"
-  [[ -n "${from_date}" ]] && filter_expr="${filter_expr} | select(.created_at >= \"${from_date}\")"
-  [[ -n "${to_date}" ]] && filter_expr="${filter_expr} | select(.created_at <= \"${to_date}\")"
-  
-  jq -c ".[] | ${filter_expr}" <<<"${json_lines}"
+
+  jq -c \
+    --arg node      "${node_filter}" \
+    --arg site      "${site_filter}" \
+    --arg tag       "${tag_filter}" \
+    --arg reason    "${reason_contains}" \
+    --arg complete  "${complete_filter}" \
+    --arg from_date "${from_date}" \
+    --arg to_date   "${to_date}" \
+    '.[]
+    | select($node      == "" or .source_node == $node)
+    | select($site      == "" or .source_site == $site)
+    | select($tag       == "" or (.tags // [] | map(select(. == $tag)) | length > 0))
+    | select($reason    == "" or (.reason // "" | contains($reason)))
+    | select($complete  == "" or (.complete == ($complete == "true")))
+    | select($from_date == "" or .created_at >= $from_date)
+    | select($to_date   == "" or .created_at <= $to_date)' <<<"${json_lines}"
 }
 
 bt_cache_rebuild() {

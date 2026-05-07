@@ -48,43 +48,43 @@ Pfade mit Leerzeichen oder Sonderzeichen brechen diese Befehle. Alle anderen Rem
 
 ---
 
-### C3 · `bt_cache_filter` interpoliert User-Input direkt in jq-Code
+### ~~C3 · `bt_cache_filter` interpoliert User-Input direkt in jq-Code~~ ✅ GEFIXT
 
-**Datei:** [`lib/cache.sh:333–340`](lib/cache.sh)
+**Datei:** [`lib/cache.sh`](lib/cache.sh)  
+**Gefixt am:** 2026-05-07
 
+Alle Filter-Parameter werden jetzt sicher über `--arg` an jq übergeben – kein User-Input mehr im jq-Ausdruck selbst:
 ```bash
-[[ -n "${node_filter}" ]] && filter_expr="${filter_expr} | select(.source_node == \"${node_filter}\")"
-[[ -n "${site_filter}" ]] && filter_expr="${filter_expr} | select(.source_site == \"${site_filter}\")"
-```
-
-Ein Filterwert wie `") | halt_error` oder ein einfaches `"` bricht die jq-Auswertung oder liefert falsche Ergebnisse. jq bietet `--arg` genau für diesen Zweck.
-
-**Fix:**
-```bash
-jq -c --arg node "${node_filter}" --arg site "${site_filter}" \
-  '.[] | select($node == "" or .source_node == $node)
-       | select($site == "" or .source_site == $site)' <<<"${json_lines}"
+jq -c \
+  --arg node      "${node_filter}" \
+  --arg site      "${site_filter}" \
+  --arg tag       "${tag_filter}" \
+  --arg reason    "${reason_contains}" \
+  --arg complete  "${complete_filter}" \
+  --arg from_date "${from_date}" \
+  --arg to_date   "${to_date}" \
+  '.[] | select($node == "" or .source_node == $node) | ...' <<<"${json_lines}"
 ```
 
 ---
 
-### C4 · `bt_get_cached_backup_object` baut JSON per Heredoc-String-Interpolation
+### ~~C4 · `bt_get_cached_backup_object` baut JSON per Heredoc-String-Interpolation~~ ✅ GEFIXT
 
-**Datei:** [`lib/copy.sh:300–312`](lib/copy.sh)
+**Datei:** [`lib/copy.sh`](lib/copy.sh)  
+**Gefixt am:** 2026-05-07
 
+Der Fallback-Pfad verwendet jetzt `jq -cn --arg` – kein Heredoc mehr, kein doppelter `bt_get_node_json`-Aufruf:
 ```bash
-cat <<EOF
-{
-  "backup_id": "${backup_id}",
-  "backup_path": "$(bt_get_node_json "${node_id}" | jq -r '.backup_path // empty')",
-  ...
-}
-EOF
+jq -cn \
+  --arg backup_id   "${backup_id}" \
+  --arg backup_hash "${backup_hash}" \
+  --arg node_id     "${node_id}" \
+  --arg backup_path "${backup_path}" \
+  --arg now         "${now}" \
+  '{backup_id: $backup_id, backup_hash: $backup_hash, source_node: $node_id,
+    backup_path: $backup_path, source_rel_dir: "",
+    created_at: $now, last_seen: $now, complete: true}'
 ```
-
-Enthält `backup_id` oder `backup_path` ein `"`, `\` oder Newline, ist das Ergebnis kein valides JSON. Außerdem wird `bt_get_node_json` ein zweites Mal aufgerufen, obwohl der Aufruf oben in der Funktion schon passiert ist.
-
-**Fix:** Komplett auf `jq -n --arg` umstellen.
 
 ---
 
@@ -354,8 +354,8 @@ Beide Funktionen prüfen ob `backup_hash` sich geändert hat und schreiben ihn z
 ### Sofort (blockieren Korrektheit)
 1. ~~**C1** – Restore auf tatsächliche `artifacts`-Felder umstellen~~ ✅ GEFIXT
 2. ~~**C5** – `use-source-config` implementieren~~ ✅ GEFIXT
-3. **C3** – `bt_cache_filter` auf `--arg`-basierte jq-Abfragen umstellen
-4. **C4** – `bt_get_cached_backup_object` auf `jq -n --arg` umstellen
+3. ~~**C3** – `bt_cache_filter` auf `--arg`-basierte jq-Abfragen umstellen~~ ✅ GEFIXT
+4. ~~**C4** – `bt_get_cached_backup_object` auf `jq -n --arg` umstellen~~ ✅ GEFIXT
 
 ### Kurzfristig (Robustheit und Konsistenz)
 5. **C2** – Alle Remote-Befehle mit fehlenden `bt_quote`-Aufrufen fixen

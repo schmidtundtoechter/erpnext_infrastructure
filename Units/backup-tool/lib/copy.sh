@@ -352,20 +352,19 @@ bt_get_cached_backup_object() {
     return
   fi
 
-  local backup_hash
+  local node_json backup_path backup_hash now
+  node_json="$(bt_get_node_json "${node_id}")"
+  backup_path="$(jq -r '.backup_path // empty' <<<"${node_json}")"
   backup_hash="$(bt_backup_hash_from_id "${backup_id}")"
+  now="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
-  # Konstruiere ein minimales Backup-Objekt fuer Cache
-  cat <<EOF
-{
-  "backup_id": "${backup_id}",
-  "backup_hash": "${backup_hash}",
-  "source_node": "${node_id}",
-  "backup_path": "$(bt_get_node_json "${node_id}" | jq -r '.backup_path // empty')",
-  "source_rel_dir": "",
-  "created_at": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
-  "last_seen": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
-  "complete": true
-}
-EOF
+  jq -cn \
+    --arg backup_id   "${backup_id}" \
+    --arg backup_hash "${backup_hash}" \
+    --arg node_id     "${node_id}" \
+    --arg backup_path "${backup_path}" \
+    --arg now         "${now}" \
+    '{backup_id: $backup_id, backup_hash: $backup_hash, source_node: $node_id,
+      backup_path: $backup_path, source_rel_dir: "",
+      created_at: $now, last_seen: $now, complete: true}'
 }
