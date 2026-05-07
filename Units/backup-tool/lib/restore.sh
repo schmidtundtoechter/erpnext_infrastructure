@@ -165,10 +165,26 @@ restore_backup_to_node() {
     fi
   fi
   
+  # Passwort für bench restore ermitteln (aus Node-Config oder interaktiv abfragen)
+  local db_root_password node_json_for_pw
+  node_json_for_pw="$(bt_get_node_json "${target_node}")"
+  db_root_password="$(jq -r '.db_root_password // empty' <<<"${node_json_for_pw}")"
+
+  if [[ -z "${db_root_password}" ]]; then
+    bt_log_info "No db_root_password configured for node '${target_node}'."
+    printf 'Enter MariaDB/MySQL root password for bench restore: ' >&2
+    read -rs db_root_password </dev/tty
+    printf '\n' >&2
+  fi
+
   # Führe bench restore aus
   local bench_cmd
-  bench_cmd="cd $(bt_quote "${bench_path}") && bench --site ${target_site} restore ${db_dump}"
-  
+  if [[ -n "${db_root_password}" ]]; then
+    bench_cmd="cd $(bt_quote "${bench_path}") && bench --site ${target_site} restore ${db_dump} --db-root-password $(bt_quote "${db_root_password}")"
+  else
+    bench_cmd="cd $(bt_quote "${bench_path}") && bench --site ${target_site} restore ${db_dump}"
+  fi
+
   bt_log_info "Executing bench restore for site ${target_site}..."
   run_on_node "${target_node}" "${bench_cmd}" || bt_die "Bench restore failed"
   
@@ -192,13 +208,7 @@ bt_restore_check_app_compatibility() {
   local target_node="$2"
   local target_site="$3"
   local bench_path="$4"
-  local site_apps_file backup_apps_json target_apps_json compat_report
-
-  site_apps_file="${bench_path}/sites/${target_site}/apps.txt"
-  if ! run_on_node "${target_node}" "[[ -f $(bt_quote "${site_apps_file}") ]]" >/dev/null 2>&1; then
-    bt_log_warn "Skipping app compatibility check: site ${target_site} has no apps.txt on ${target_node}"
-    return 0
-  fi
+  local backup_apps_json target_apps_json compat_report
 
   backup_apps_json="$(jq -c '.apps // []' <<<"${backup_entry}")"
   if ! jq -e 'type == "array" and length > 0' <<<"${backup_apps_json}" >/dev/null 2>&1; then
@@ -206,6 +216,9 @@ bt_restore_check_app_compatibility() {
   fi
 
   target_apps_json="$(bt_collect_site_apps_json "${target_node}" "${target_site}" "${bench_path}")"
+  if ! jq -e 'type == "array" and length > 0' <<<"${target_apps_json}" >/dev/null 2>&1; then
+    bt_die "Restore compatibility check failed: could not determine target app installation (no apps.txt and no apps in bench/apps). Use --no-checks to bypass."
+  fi
 
   compat_report="$(jq -cn \
     --argjson backup_apps "${backup_apps_json}" \
@@ -291,16 +304,24 @@ bt_handle_site_config_merge() {
       local source_cfg target_cfg merged_cfg
       source_cfg="$(run_on_node "${target_node}" "cat $(bt_quote "${source_config_file}")" 2>/dev/null || echo '{}')"
       target_cfg="$(run_on_node "${target_node}" "cat $(bt_quote "${target_config_path}")" 2>/dev/null || echo '{}')"
+
+      [[ -n "${source_cfg}" ]] || source_cfg='{}'
+      [[ -n "${target_cfg}" ]] || target_cfg='{}'
+      jq -e . >/dev/null 2>&1 <<<"${source_cfg}" || source_cfg='{}'
+      jq -e . >/dev/null 2>&1 <<<"${target_cfg}" || target_cfg='{}'
       
       # Merge lokal: Starte mit source, überschreibe protected fields mit target-Werten
       merged_cfg="$(jq -s '.[0] as $source | .[1] as $target | $source | .db_name = ($target.db_name // .db_name) | .db_password = ($target.db_password // .db_password) | .admin_password = ($target.admin_password // .admin_password) | .encryption_key = ($target.encryption_key // .encryption_key) | .file_watcher_port = ($target.file_watcher_port // .file_watcher_port)' \
         <(printf '%s' "${source_cfg}") <(printf '%s' "${target_cfg}") 2>/dev/null || echo '')"
       
       if [[ -n "${merged_cfg}" ]] && echo "${merged_cfg}" | jq -e . >/dev/null 2>&1; then
-        # Merged JSON auf Ziel-Node schreiben
-        run_on_node "${target_node}" "cat > $(bt_quote "${target_config_path}")" <<<"${merged_cfg}" || \
-          bt_log_warn "Could not write merged site_config.json"
-        bt_log_info "Site config merge completed"
+        # Merged JSON auf Ziel-Node schreiben (ohne stdin-Weitergabe, um leere Dateien zu vermeiden)
+        if run_on_node "${target_node}" "printf '%s' $(bt_quote "${merged_cfg}") > $(bt_quote "${target_config_path}")" \
+          && run_on_node "${target_node}" "python3 -c \"import json,sys; json.load(open(sys.argv[1], 'r', encoding='utf-8'))\" $(bt_quote "${target_config_path}")" >/dev/null 2>&1; then
+          bt_log_info "Site config merge completed"
+        else
+          bt_log_warn "Could not write valid merged site_config.json"
+        fi
       else
         bt_log_warn "Merge produced invalid JSON – keeping target site_config.json unchanged"
       fi
@@ -340,13 +361,8 @@ bt_execute_post_restore_tasks() {
   
   # 1. Bench-Migration wenn nötig
   local migration_cmd
-  migration_cmd="cd $(bt_quote "${bench_path}") && bench migrate --site ${target_site}"
+  migration_cmd="cd $(bt_quote "${bench_path}") && bench --site ${target_site} migrate"
   run_on_node "${target_node}" "${migration_cmd}" || bt_log_warn "Bench migration failed (site may need manual attention)"
-  
-  # 2. Rechte und Dateipfade prüfen
-  local fix_perms_cmd
-  fix_perms_cmd="cd $(bt_quote "${bench_path}") && bench fix-permissions --user frappe"
-  run_on_node "${target_node}" "${fix_perms_cmd}" || bt_log_warn "Fix permissions failed"
   
   # 3. Clear Cache
   local clear_cache_cmd

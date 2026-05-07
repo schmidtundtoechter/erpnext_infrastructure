@@ -181,10 +181,7 @@ import sys
 bench_path = sys.argv[1]
 site = sys.argv[2]
 apps_file = os.path.join(bench_path, "sites", site, "apps.txt")
-
-if not os.path.isfile(apps_file):
-    print("[]")
-    raise SystemExit(0)
+apps_root = os.path.join(bench_path, "apps")
 
 def run(cmd, cwd=None):
     try:
@@ -228,12 +225,25 @@ def parse_version(app_dir, app_name):
     return ""
 
 apps = []
-with open(apps_file, "r", encoding="utf-8") as f:
+if os.path.isfile(apps_file):
+  with open(apps_file, "r", encoding="utf-8") as f:
     for line in f:
-        app = line.strip()
-        if not app or app.startswith("#"):
-            continue
-        apps.append(app)
+      app = line.strip()
+      if not app or app.startswith("#"):
+        continue
+      apps.append(app)
+elif os.path.isdir(apps_root):
+  for app in os.listdir(apps_root):
+    app_dir = os.path.join(apps_root, app)
+    if not os.path.isdir(app_dir):
+      continue
+    if app.startswith("."):
+      continue
+    apps.append(app)
+
+if not apps:
+  print("[]")
+  raise SystemExit(0)
 
 result = []
 for app in apps:
