@@ -216,6 +216,8 @@ Cache Entry (per-node pretty JSON arrays):
     "source_node": "string (required)",
     "node_type": "string (required)",
     "source_site": "string (required)",
+    "backup_path": "string (required, configured node backup_path used during scan)",
+    "source_rel_dir": "string (required, backup directory relative to backup_path)",
     "reason": "string (required)",
     "tags": "array (optional)",
     "created_at": "string ISO 8601 (required)",
@@ -260,43 +262,48 @@ bt_cache_get_by_backup_hash() {
   jq -e --arg bh "${backup_hash}" 'map(select(.backup_hash == $bh))[0]' <<<"${all_entries}"
 }
 
-bt_resolve_backup_ref_to_id() {
+bt_resolve_backup_ref_to_entry() {
   local backup_ref="$1"
-  local by_id by_hash by_hash_count resolved_id
+  local all_entries by_id_count by_hash_count
 
-  by_id="$(bt_cache_get_by_backup_id "${backup_ref}" 2>/dev/null || true)"
-  by_hash="$(bt_cache_get_by_backup_hash "${backup_ref}" 2>/dev/null || true)"
-  by_hash_count="$(bt_cache_list_all | jq --arg bh "${backup_ref}" 'map(select(.backup_hash == $bh)) | length')"
+  all_entries="$(bt_cache_list_all)"
+  by_id_count="$(jq --arg bid "${backup_ref}" 'map(select(.backup_id == $bid)) | length' <<<"${all_entries}")"
+  by_hash_count="$(jq --arg bh "${backup_ref}" 'map(select(.backup_hash == $bh)) | length' <<<"${all_entries}")"
 
-  [[ "${by_id}" == "null" ]] && by_id=""
-  [[ "${by_hash}" == "null" ]] && by_hash=""
+  if [[ "${by_hash_count}" -gt 1 ]]; then
+    bt_die "Backup hash '${backup_ref}' is ambiguous (${by_hash_count} matches). Run 'backupctl node scan' to refresh location hashes."
+  fi
 
-  # Backward-compatible precedence: exact backup_id match wins over backup_hash match.
-  if [[ -n "${by_id}" ]]; then
-    resolved_id="$(jq -r '.backup_id' <<<"${by_id}")"
-    [[ -n "${resolved_id}" && "${resolved_id}" != "null" ]] || bt_die "Invalid cache entry for backup_id: ${backup_ref}"
-    printf '%s\n' "${resolved_id}"
+  if [[ "${by_hash_count}" -eq 1 ]]; then
+    jq -c --arg bh "${backup_ref}" 'map(select(.backup_hash == $bh))[0]' <<<"${all_entries}"
     return
   fi
 
-  if [[ "${by_hash_count}" -gt 1 ]]; then
-    bt_die "Backup hash '${backup_ref}' is ambiguous (${by_hash_count} matches). Use full backup_id."
+  if [[ "${by_id_count}" -gt 1 ]]; then
+    bt_die "Backup id '${backup_ref}' has multiple copies (${by_id_count} matches). Use backup_hash."
   fi
 
-  if [[ -n "${by_hash}" ]]; then
-    resolved_id="$(jq -r '.backup_id' <<<"${by_hash}")"
-    [[ -n "${resolved_id}" && "${resolved_id}" != "null" ]] || bt_die "Invalid cache entry for backup_hash: ${backup_ref}"
-    printf '%s\n' "${resolved_id}"
+  if [[ "${by_id_count}" -eq 1 ]]; then
+    jq -c --arg bid "${backup_ref}" 'map(select(.backup_id == $bid))[0]' <<<"${all_entries}"
     return
   fi
 
   if [[ "${BT_RUNNER_MODE:-execute}" == "dry-run" ]]; then
-    # In dry-run mode allow unresolved references so command planning works without cache.
-    printf '%s\n' "${backup_ref}"
+    jq -nc --arg bid "${backup_ref}" '{backup_id: $bid}'
     return
   fi
 
   bt_die "Backup reference not found in cache: ${backup_ref}. Run 'backupctl node scan' first."
+}
+
+bt_resolve_backup_ref_to_id() {
+  local backup_ref="$1"
+  local entry_json resolved_id
+
+  entry_json="$(bt_resolve_backup_ref_to_entry "${backup_ref}")"
+  resolved_id="$(jq -r '.backup_id // empty' <<<"${entry_json}")"
+  [[ -n "${resolved_id}" ]] || bt_die "Invalid cache entry for backup reference: ${backup_ref}"
+  printf '%s\n' "${resolved_id}"
 }
 
 bt_cache_list_all() {
@@ -377,7 +384,13 @@ bt_cache_upsert_entry() {
   node_id="$(jq -r '.source_node' <<<"${normalized_entry}")"
   node_entries="$(bt_cache_node_entries "${node_id}")"
   updated_entries="$(jq --argjson entry "${normalized_entry}" '
-    [ .[] | select(.backup_id != $entry.backup_id) ] + [ $entry ]
+    [ .[]
+      | select(
+          .backup_id != $entry.backup_id
+          or (.backup_path // "") != ($entry.backup_path // "")
+          or (.source_rel_dir // "") != ($entry.source_rel_dir // "")
+        )
+    ] + [ $entry ]
   ' <<<"${node_entries}")"
 
   bt_cache_replace_node_entries "${node_id}" "${updated_entries}"

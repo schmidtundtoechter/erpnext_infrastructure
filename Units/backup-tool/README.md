@@ -15,9 +15,11 @@ Das Tool verwaltet ERPNext/Frappe-Backups ueber mehrere Systeme (lokal, SSH, Doc
 	- ssh-docker: Ausfuehrung via SSH im Remote-Container.
 - Cache: Lokaler, regenerierbarer Index fuer schnelle Suche und Filterung. Liegt unter `~/.cache/backupctl/nodes/<node-id>.json` (eine JSON-Array-Datei pro Knoten). Der Cache ist nie die Wahrheit.
 - backup_id: Eindeutige technische Kennung eines logischen Backups. Format: `<node>_<site>_<timestamp>`.
-- backup_hash: Kurzform der backup_id (6 Zeichen SHA256). Wird in der Scan-Ausgabe als `[abc123]` angezeigt.
+- backup_hash: Kurzform der konkreten Backup-Location (6 Zeichen SHA256 aus backup_id, Node und Pfad). Wird in der Scan-Ausgabe als `[abc123]` angezeigt.
 - display_name: Nutzerfreundliche Anzeige. Fallback-Reihenfolge: display_name -> reason -> backup_id.
-- source_rel_dir: Relativer Pfad des Backup-Verzeichnisses unterhalb von backup_root (relevant fuer plain-dir mit Unterverzeichnissen).
+- backup_path: Konfigurierter Such- und Ablagepfad eines Nodes. Fuer frappe-node ist das typischerweise der `sites`-Root.
+- source_rel_dir: Relativer Pfad des gefundenen Backup-Verzeichnisses unterhalb von backup_path. Copy verwendet denselben relativen Pfad auf dem Zielnode.
+- origin_backup_hash: Bei kopierten Backups der Hash der Kopie, von der aus kopiert wurde.
 
 ## Verzeichnisstruktur
 
@@ -67,7 +69,7 @@ Pflichtfelder je Node:
 - id: Eindeutiger Knotenname.
 - node_type: Fachliche Quellart.
 - access: Technischer Zugriffstyp.
-- backup_paths: Liste von Verzeichnissen/Patterns fuer Backup-Suche.
+- backup_path: Ein Verzeichnis fuer Backup-Suche und Ablage.
 
 Zusaetzliche Pflicht je nach Typ:
 
@@ -112,7 +114,7 @@ Hilfe aufrufen:
 	- Listet Cache-Eintraege mit optionalen Filtern.
 - backupctl create --node <id> --site <site> --reason <text> [--tag <tag>] [--backup-type <type>]
 	- Erzeugt auf frappe-node ein neues Backup inkl. Manifest (nur frappe-node).
-- backupctl copy --backup <id> --from <source-node> --to <target-node> [--no-validate]
+- backupctl copy --backup <id> --to <target-node> [--no-validate]
 	- Uebertraegt ein Backup zwischen Knoten (rsync, mit optionaler Validierung).
 - backupctl restore --backup <id> --to <target-node> --site <target-site>
                [--config-mode use-source-config|merge-config|keep-target-config]
@@ -157,7 +159,7 @@ Nach einem `restore` fuehrt das Tool automatisch folgende Schritte aus:
 - `create`: Keine Erzeugung von `apps.json` und `checksums.sha256`.
 - `restore`: Kein automatischer Neustart von Containern/Diensten nach Restore.
 - `restore`: Keine explizite Produktiv-Schutzflag (--force ist reserviert).
-- `copy`/`restore`: Pfadrekonstruktion fuer `source_rel_dir` bei verschachtelten plain-dir Backups noch nicht vollstaendig implementiert.
+- Keine Migration von bestehenden Cache-Eintraegen ohne `backup_path`/`source_rel_dir`.
 - Keine Migration von altem globalen `cache.jsonl` auf neue per-Node-Struktur.
 
 ## Schnelltest

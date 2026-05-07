@@ -114,9 +114,12 @@ restore_backup_to_node() {
   fi
   
   # Hole Backup-Pfad
-  local backup_path
-  backup_path="$(bt_get_backup_path_for_node "${target_node}" "${backup_id}")" || \
+  local backup_path bench_path backup_entry
+  backup_entry="$(bt_cache_list_all | jq -c --arg bid "${backup_id}" --arg node "${target_node}" 'map(select(.backup_id == $bid and .source_node == $node))[0] // empty')"
+  backup_path="$(bt_get_backup_path_for_node "${target_node}" "${backup_id}" "${backup_entry}")" || \
     bt_die "Backup ${backup_id} not found on target node"
+
+  bench_path="$(bt_node_bench_path "${target_node}")"
   
   # Extrahiere Dateien aus Backup
   local db_dump public_files private_files config_file
@@ -128,27 +131,27 @@ restore_backup_to_node() {
   # Handle site_config.json gemäß config_mode
   if [[ "${config_mode}" == "merge-config" ]] || [[ "${config_mode}" == "keep-target-config" ]]; then
     bt_handle_site_config_merge "${backup_id}" "${target_node}" "${target_site}" \
-      "${config_file}" "${config_mode}"
+      "${config_file}" "${config_mode}" "${bench_path}"
   fi
   
   # Führe bench restore aus
   local bench_cmd
-  bench_cmd="cd /home/frappe/frappe-bench && bench --site ${target_site} restore ${db_dump}"
+  bench_cmd="cd $(bt_quote "${bench_path}") && bench --site ${target_site} restore ${db_dump}"
   
   bt_log_info "Executing bench restore for site ${target_site}..."
   run_on_node "${target_node}" "${bench_cmd}" || bt_die "Bench restore failed"
   
   # Restore Files wenn vorhanden
   if run_on_node "${target_node}" "[[ -f ${public_files} ]]" >/dev/null 2>&1; then
-    bt_restore_files_to_site "${target_node}" "${target_site}" "${public_files}" "public"
+    bt_restore_files_to_site "${target_node}" "${target_site}" "${public_files}" "public" "${bench_path}"
   fi
   
   if run_on_node "${target_node}" "[[ -f ${private_files} ]]" >/dev/null 2>&1; then
-    bt_restore_files_to_site "${target_node}" "${target_site}" "${private_files}" "private"
+    bt_restore_files_to_site "${target_node}" "${target_site}" "${private_files}" "private" "${bench_path}"
   fi
   
   # Post-Restore Aufgaben
-  bt_execute_post_restore_tasks "${backup_id}" "${target_node}" "${target_site}"
+  bt_execute_post_restore_tasks "${backup_id}" "${target_node}" "${target_site}" "${bench_path}"
   
   bt_log_info "Restore completed: ${backup_id} restored to ${target_site} on ${target_node}"
 }
@@ -160,6 +163,7 @@ bt_handle_site_config_merge() {
   local target_site="$3"
   local source_config_file="$4"
   local config_mode="$5"
+  local bench_path="$6"
   
   bt_log_info "Handling site_config.json with mode: ${config_mode}"
   
@@ -188,7 +192,7 @@ bt_handle_site_config_merge() {
       
       # Hole target-site-config
       local target_config_path get_cmd
-      target_config_path="/home/frappe/frappe-bench/sites/${target_site}/site_config.json"
+      target_config_path="${bench_path}/sites/${target_site}/site_config.json"
       get_cmd="cat ${target_config_path}"
       
       local target_config
@@ -231,9 +235,10 @@ bt_restore_files_to_site() {
   local site="$2"
   local tar_file="$3"
   local file_type="$4"  # "public" oder "private"
+  local bench_path="$5"
   
   local extract_cmd site_path
-  site_path="/home/frappe/frappe-bench/sites/${site}"
+  site_path="${bench_path}/sites/${site}"
   
   if [[ "${file_type}" == "public" ]]; then
     extract_cmd="cd ${site_path} && tar -xf ${tar_file} -C public/"
@@ -250,22 +255,23 @@ bt_execute_post_restore_tasks() {
   local backup_id="$1"
   local target_node="$2"
   local target_site="$3"
+  local bench_path="$4"
   
   bt_log_info "Executing post-restore tasks..."
   
   # 1. Bench-Migration wenn nötig
   local migration_cmd
-  migration_cmd="cd /home/frappe/frappe-bench && bench migrate --site ${target_site}"
+  migration_cmd="cd $(bt_quote "${bench_path}") && bench migrate --site ${target_site}"
   run_on_node "${target_node}" "${migration_cmd}" || bt_log_warn "Bench migration failed (site may need manual attention)"
   
   # 2. Rechte und Dateipfade prüfen
   local fix_perms_cmd
-  fix_perms_cmd="cd /home/frappe/frappe-bench && bench fix-permissions --user frappe"
+  fix_perms_cmd="cd $(bt_quote "${bench_path}") && bench fix-permissions --user frappe"
   run_on_node "${target_node}" "${fix_perms_cmd}" || bt_log_warn "Fix permissions failed"
   
   # 3. Clear Cache
   local clear_cache_cmd
-  clear_cache_cmd="cd /home/frappe/frappe-bench && bench --site ${target_site} clear-cache"
+  clear_cache_cmd="cd $(bt_quote "${bench_path}") && bench --site ${target_site} clear-cache"
   run_on_node "${target_node}" "${clear_cache_cmd}" || bt_log_warn "Clear cache failed"
   
   # 4. Erreichbarkeit testen (einfacher Check)

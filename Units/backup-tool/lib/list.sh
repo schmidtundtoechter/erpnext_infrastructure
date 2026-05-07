@@ -128,7 +128,7 @@ bt_list_print_scan_overview() {
 bt_list_format_text() {
   local entries="$1"
   
-  printf '%-8s %-40s %-20s %-30s %-20s %-20s %s\n' "HASH" "BACKUP_ID" "SOURCE_SITE" "REASON" "CREATED_AT" "LAST_SCAN" "ART"
+  printf '%-8s %-40s %-20s %-30s %-20s %-20s %s\n' "HASH" "BACKUP_ID" "NODE" "REASON" "CREATED_AT" "LAST_SCAN" "ART"
   printf '%s\n' "$(printf '=%.0s' {1..198})"
 
   if [[ -z "${entries//[[:space:]]/}" ]]; then
@@ -147,12 +147,14 @@ bt_list_format_text() {
       + (if (($a.checksums? // "") != "") then "C" else "" end)
       + (if (($a.apps? // "") != "") then "A" else "" end));
     normalize_input
-    | map(select(type == "object"))[]
+    | map(select(type == "object"))
+    | sort_by(.created_at // "")
+    | .[]
     | (.artifacts // {}) as $a
     | [
         (.backup_hash // "?" | tostring | .[0:8]),
         (.backup_id // "?" | tostring | if length > 40 then .[0:37] + "..." else . end),
-        (.source_site // "?" | tostring | if length > 20 then .[0:17] + "..." else . end),
+        (.source_node // "?" | tostring | if length > 20 then .[0:17] + "..." else . end),
         (.reason // "?" | tostring | if length > 30 then .[0:27] + "..." else . end),
         (.created_at // "?" | tostring | if length > 20 then .[0:19] else . end),
         (.last_scan_at // "-" | tostring | if length > 20 then .[0:19] else . end),

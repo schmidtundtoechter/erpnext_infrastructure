@@ -6,11 +6,10 @@
 
 backup_copy_usage() {
   cat <<'EOF'
-Usage: backupctl backup copy --backup <id> --from <node> --to <node> [options]
+Usage: backupctl backup copy --backup <id> --to <node> [options]
 
 Options:
   --backup <ref>    Backup reference: backup_id or backup_hash (required)
-  --from <node>     Source node id (required)
   --to <node>       Target node id (required)
   -f, --force       Skip overwrite confirmation if target backup exists
   --no-validate     Skip transfer validation step
@@ -19,7 +18,7 @@ EOF
 }
 
 backup_copy_main() {
-  local backup_ref="" backup_id="" from_node="" to_node="" force="" no_validate=""
+  local backup_ref="" backup_id="" source_node="" to_node="" force="" no_validate=""
   
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -29,10 +28,6 @@ backup_copy_main() {
         ;;
       --backup)
         backup_ref="$2"
-        shift 2
-        ;;
-      --from)
-        from_node="$2"
         shift 2
         ;;
       --to)
@@ -54,14 +49,24 @@ backup_copy_main() {
   done
   
   [[ -n "${backup_ref}" ]] || bt_die "copy: --backup is required"
-  [[ -n "${from_node}" ]] || bt_die "copy: --from is required"
   [[ -n "${to_node}" ]] || bt_die "copy: --to is required"
   
   bt_require_loaded_config
 
-  backup_id="$(bt_resolve_backup_ref_to_id "${backup_ref}")"
-  
-  copy_backup_between_nodes "${backup_id}" "${from_node}" "${to_node}" "${force}" "${no_validate}"
+  local backup_entry
+  backup_entry="$(bt_resolve_backup_ref_to_entry "${backup_ref}")"
+  [[ "${backup_entry}" == "null" ]] && backup_entry=""
+  backup_id="$(jq -r '.backup_id // empty' <<<"${backup_entry}")"
+  [[ -n "${backup_id}" ]] || bt_die "copy: backup reference could not be resolved: ${backup_ref}"
+
+  if [[ -n "${backup_entry}" ]]; then
+    source_node="$(jq -r '.source_node // empty' <<<"${backup_entry}")"
+  fi
+
+  [[ -n "${source_node}" ]] || bt_die "copy: source node could not be inferred from cache for backup '${backup_ref}'. Run 'backupctl node scan' first."
+  bt_log_info "Resolved source node from cache: ${source_node}"
+
+  copy_backup_between_nodes "${backup_id}" "${source_node}" "${to_node}" "${force}" "${no_validate}" "${backup_entry}"
 }
 
 copy_backup_between_nodes() {
@@ -70,6 +75,7 @@ copy_backup_between_nodes() {
   local to_node="$3"
   local force="${4:-}"
   local no_validate="${5:-}"
+  local backup_entry_json="${6:-}"
   
   bt_log_info "Copying backup: backup_id=${backup_id} from=${from_node} to=${to_node}"
   
@@ -84,28 +90,43 @@ copy_backup_between_nodes() {
   
   # Vorprüfung: Backup existiert auf Quelle
   local source_path target_path
-  source_path="$(bt_get_backup_path_for_node "${from_node}" "${backup_id}")"
+  source_path="$(bt_get_backup_path_for_node "${from_node}" "${backup_id}" "${backup_entry_json}")"
   [[ -n "${source_path}" ]] || bt_die "Backup ${backup_id} not found on node ${from_node}"
   
   # Zielpath konstruieren
-  target_path="$(bt_get_target_backup_path_for_node "${to_node}" "${backup_id}")"
+  target_path="$(bt_get_target_backup_path_for_node "${to_node}" "${backup_id}" "${backup_entry_json}")"
+
+  # Zielverzeichnis auf dem Zielknoten sicherstellen (nicht lokal).
+  run_on_node "${to_node}" "mkdir -p $(bt_quote "$(dirname "${target_path}")")" >/dev/null 2>&1 || true
 
   # Wenn bereits ein gleichnamiges Backup existiert: Force oder bestaetigen.
-  if run_on_node "${to_node}" "[[ -e $(bt_quote "${target_path}") ]]" >/dev/null 2>&1; then
+  # Prüfe konkrete Artifact-Datei (db_dump), nicht das Verzeichnis – das Verzeichnis
+  # (z.B. .../private/backups) existiert auf Zielknoten generell, auch ohne Backups.
+  local check_artifact check_path
+  check_artifact="$(jq -r '.artifacts.db_dump // empty' <<<"${backup_entry_json}" 2>/dev/null || true)"
+  if [[ -n "${check_artifact}" ]]; then
+    check_path="${target_path}/${check_artifact}"
+  else
+    check_path="${target_path}"
+  fi
+  if run_on_node "${to_node}" "[[ -e $(bt_quote "${check_path}") ]]" >/dev/null 2>&1; then
     bt_confirm_or_force "${force}" "Backup ${backup_id} exists on target node ${to_node} and may be overwritten. Continue?"
   fi
   
   # Transferiere das Backup
   local transfer_cmd transfer_result
-  transfer_cmd="$(build_transfer_command "${from_node}" "${to_node}" "${source_path}" "${target_path}")"
-  
-  bt_log_info "Executing transfer: $(echo "${transfer_cmd}" | head -c 100)..."
-  
-  if eval "${transfer_cmd}"; then
+  if bt_transfer_same_ssh_docker_host "${from_node}" "${to_node}" "${source_path}" "${target_path}"; then
     bt_log_info "Transfer completed successfully"
   else
-    transfer_result=$?
-    bt_die "Transfer failed with exit code ${transfer_result}"
+    transfer_cmd="$(build_transfer_command "${from_node}" "${to_node}" "${source_path}" "${target_path}")"
+    bt_log_info "Executing transfer: $(echo "${transfer_cmd}" | head -c 100)..."
+
+    if eval "${transfer_cmd}"; then
+      bt_log_info "Transfer completed successfully"
+    else
+      transfer_result=$?
+      bt_die "Transfer failed with exit code ${transfer_result}"
+    fi
   fi
   
   # Validierung: Prüfe Dateianzahl und -größen nach Transfer (wenn nicht deaktiviert)
@@ -115,30 +136,66 @@ copy_backup_between_nodes() {
   fi
   
   # Cache aktualisieren
-  bt_cache_add_entry "$(bt_get_cached_backup_object "${to_node}" "${backup_id}")"
+  bt_cache_add_entry "$(bt_get_cached_backup_object "${to_node}" "${backup_id}" "${backup_entry_json}")"
   
   bt_log_info "Backup copy completed: ${backup_id} copied to ${to_node}"
+}
+
+bt_transfer_same_ssh_docker_host() {
+  local from_node="$1"
+  local to_node="$2"
+  local source_path="$3"
+  local target_path="$4"
+  local from_json to_json from_access to_access from_ssh to_ssh
+
+  from_json="$(bt_get_node_json "${from_node}")"
+  to_json="$(bt_get_node_json "${to_node}")"
+  from_access="$(jq -r '.access' <<<"${from_json}")"
+  to_access="$(jq -r '.access' <<<"${to_json}")"
+
+  [[ "${from_access}" == "ssh-docker" && "${to_access}" == "ssh-docker" ]] || return 1
+
+  from_ssh="$(jq -r '.ssh_config' <<<"${from_json}")"
+  to_ssh="$(jq -r '.ssh_config' <<<"${to_json}")"
+  [[ "${from_ssh}" == "${to_ssh}" ]] || return 1
+
+  local source_container target_container ssh_base host_cmd target_parent
+  source_container="$(jq -r '.container // empty' <<<"${from_json}")"
+  target_container="$(jq -r '.container // empty' <<<"${to_json}")"
+  [[ -n "${source_container}" && -n "${target_container}" ]] || return 1
+
+  target_parent="$(dirname "${target_path}")"
+  host_cmd="docker exec -i $(bt_quote "${source_container}") test -d $(bt_quote "${source_path}") && docker exec -i $(bt_quote "${target_container}") mkdir -p $(bt_quote "${target_parent}") && docker cp $(bt_quote "${source_container}:${source_path}") - | docker exec -i $(bt_quote "${target_container}") tar -C $(bt_quote "${target_parent}") -xf -"
+
+  bt_log_info "Executing transfer via shared ssh-docker host (${from_ssh})"
+  ssh_base="$(bt_build_ssh_base_cmd "${from_json}")"
+
+  eval "${ssh_base} $(bt_quote "${host_cmd}")"
 }
 
 bt_get_backup_path_for_node() {
   local node_id="$1"
   local backup_id="$2"
-  local node_json node_type site backup_root
+  local backup_entry_json="${3:-}"
+  local node_json node_type backup_root rel_dir
   
   node_json="$(bt_get_node_json "${node_id}")"
   node_type="$(jq -r '.node_type' <<<"${node_json}")"
-  
-  # Extrahiere Site aus backup_id (Format: node_site_timestamp)
-  site="$(echo "${backup_id}" | cut -d_ -f2)"
+
+  if [[ -n "${backup_entry_json}" && "${backup_entry_json}" != "null" ]]; then
+    backup_root="$(jq -r '.backup_path // empty' <<<"${backup_entry_json}")"
+    rel_dir="$(jq -r '.source_rel_dir // empty' <<<"${backup_entry_json}")"
+    if [[ -n "${backup_root}" ]]; then
+      bt_join_backup_root_rel_dir "${backup_root}" "${rel_dir}"
+      return
+    fi
+  fi
   
   case "${node_type}" in
-    frappe-node)
-      backup_root="$(jq -r '.backup_paths[0]' <<<"${node_json}" | xargs dirname)"
-      printf '%s/%s' "${backup_root}" "${backup_id}"
-      ;;
-    plain-dir)
-      backup_root="$(jq -r '.backup_paths[0]' <<<"${node_json}")"
-      printf '%s/%s' "${backup_root}" "${backup_id}"
+    frappe-node|plain-dir)
+      backup_root="$(jq -r '.backup_path // empty' <<<"${node_json}")"
+      [[ -n "${backup_root}" ]] || return 1
+      printf '%s/%s' "${backup_root%/}" "${backup_id}"
       ;;
     *)
       return 1
@@ -149,28 +206,39 @@ bt_get_backup_path_for_node() {
 bt_get_target_backup_path_for_node() {
   local node_id="$1"
   local backup_id="$2"
-  local node_json node_type site backup_root
+  local backup_entry_json="${3:-}"
+  local node_json node_type backup_root rel_dir
   
   node_json="$(bt_get_node_json "${node_id}")"
   node_type="$(jq -r '.node_type' <<<"${node_json}")"
-  
-  site="$(echo "${backup_id}" | cut -d_ -f2)"
+  backup_root="$(jq -r '.backup_path // empty' <<<"${node_json}")"
+  [[ -n "${backup_root}" ]] || return 1
+
+  if [[ -n "${backup_entry_json}" && "${backup_entry_json}" != "null" ]]; then
+    rel_dir="$(jq -r '.source_rel_dir // empty' <<<"${backup_entry_json}")"
+    bt_join_backup_root_rel_dir "${backup_root}" "${rel_dir}"
+    return
+  fi
   
   case "${node_type}" in
-    frappe-node)
-      backup_root="$(jq -r '.backup_paths[0]' <<<"${node_json}" | xargs dirname)"
-      mkdir -p "${backup_root}" || true
-      printf '%s/%s' "${backup_root}" "${backup_id}"
-      ;;
-    plain-dir)
-      backup_root="$(jq -r '.backup_paths[0]' <<<"${node_json}")"
-      mkdir -p "${backup_root}" || true
-      printf '%s/%s' "${backup_root}" "${backup_id}"
+    frappe-node|plain-dir)
+      printf '%s/%s' "${backup_root%/}" "${backup_id}"
       ;;
     *)
       return 1
       ;;
   esac
+}
+
+bt_join_backup_root_rel_dir() {
+  local backup_root="$1"
+  local rel_dir="${2:-}"
+
+  if [[ -n "${rel_dir}" && "${rel_dir}" != "." ]]; then
+    printf '%s/%s' "${backup_root%/}" "${rel_dir#/}"
+  else
+    printf '%s' "${backup_root%/}"
+  fi
 }
 
 bt_validate_backup_transfer() {
@@ -195,16 +263,48 @@ bt_validate_backup_transfer() {
 bt_get_cached_backup_object() {
   local node_id="$1"
   local backup_id="$2"
-  local backup_hash
+  local source_entry_json="${3:-}"
+  if [[ -n "${source_entry_json}" && "${source_entry_json}" != "null" ]]; then
+    local target_node_json target_backup_path target_node_type origin_backup_hash updated_entry backup_hash
+    target_node_json="$(bt_get_node_json "${node_id}")"
+    target_backup_path="$(jq -r '.backup_path // empty' <<<"${target_node_json}")"
+    target_node_type="$(jq -r '.node_type // empty' <<<"${target_node_json}")"
+    origin_backup_hash="$(jq -r '.backup_hash // empty' <<<"${source_entry_json}")"
+    updated_entry="$(jq -c \
+      --arg node_id "${node_id}" \
+      --arg node_type "${target_node_type}" \
+      --arg backup_path "${target_backup_path}" \
+      --arg origin_backup_hash "${origin_backup_hash}" \
+      --arg now "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+      'del(.backup_hash)
+      | . as $source
+      | . + {
+        source_node: $node_id,
+        node_type: $node_type,
+        backup_path: $backup_path,
+        origin_backup_hash: (if $origin_backup_hash == "" then (.origin_backup_hash // "") else $origin_backup_hash end),
+        copied_from_node: ($source.source_node // ""),
+        created_at: (.created_at // $now),
+        last_seen: $now,
+        complete: (.complete // true)
+      }
+      | if (.origin_backup_hash // "") == "" then del(.origin_backup_hash) else . end' <<<"${source_entry_json}")"
+    backup_hash="$(bt_backup_hash_from_object "${updated_entry}")"
+    jq -c --arg h "${backup_hash}" '. + {backup_hash: $h}' <<<"${updated_entry}"
+    return
+  fi
 
+  local backup_hash
   backup_hash="$(bt_backup_hash_from_id "${backup_id}")"
-  
-  # Konstruiere ein minimales Backup-Objekt für Cache
+
+  # Konstruiere ein minimales Backup-Objekt fuer Cache
   cat <<EOF
 {
   "backup_id": "${backup_id}",
   "backup_hash": "${backup_hash}",
   "source_node": "${node_id}",
+  "backup_path": "$(bt_get_node_json "${node_id}" | jq -r '.backup_path // empty')",
+  "source_rel_dir": "",
   "created_at": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
   "last_seen": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
   "complete": true

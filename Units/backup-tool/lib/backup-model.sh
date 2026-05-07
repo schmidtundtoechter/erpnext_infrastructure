@@ -7,6 +7,10 @@ Backup Object:
   source_node: string (node id from config)
   node_type: string (frappe-node | plain-dir)
   source_site: string (site name, e.g. erp.customer-a.de)
+  backup_path: string (configured node backup_path used during scan)
+  source_rel_dir: string (backup directory relative to backup_path)
+  backup_hash: string (short hash of backup_id plus concrete location)
+  origin_backup_hash: string (optional, source copy hash for copied backups)
   created_at: string (ISO 8601 timestamp)
   reason: string (fachlicher Grund des Backups)
   tags: array of strings (optional)
@@ -54,13 +58,37 @@ bt_backup_hash_from_id() {
   local backup_id="$1"
   local digest
 
+  digest="$(bt_sha256_short "${backup_id}")"
+  printf '%s\n' "${digest}"
+}
+
+bt_sha256_short() {
+  local value="$1"
+  local digest
+
   if command -v sha256sum >/dev/null 2>&1; then
-    digest="$(printf '%s' "${backup_id}" | sha256sum | awk '{print $1}')"
+    digest="$(printf '%s' "${value}" | sha256sum | awk '{print $1}')"
   else
-    digest="$(printf '%s' "${backup_id}" | shasum -a 256 | awk '{print $1}')"
+    digest="$(printf '%s' "${value}" | shasum -a 256 | awk '{print $1}')"
   fi
 
   printf '%s\n' "${digest}" | cut -c1-6
+}
+
+bt_backup_hash_from_object() {
+  local backup_obj_json="$1"
+  local hash_input
+
+  hash_input="$(jq -r '
+    [
+      (.backup_id // ""),
+      (.source_node // ""),
+      (.backup_path // ""),
+      (.source_rel_dir // "")
+    ] | @tsv
+  ' <<<"${backup_obj_json}")"
+
+  bt_sha256_short "${hash_input}"
 }
 
 bt_backup_with_hash() {
@@ -73,7 +101,7 @@ bt_backup_with_hash() {
     return
   fi
 
-  backup_hash="$(bt_backup_hash_from_id "${backup_id}")"
+  backup_hash="$(bt_backup_hash_from_object "${backup_obj_json}")"
   jq -c --arg h "${backup_hash}" '. + {backup_hash: $h}' <<<"${backup_obj_json}"
 }
 
@@ -132,6 +160,29 @@ bt_generate_manifest_json() {
       artifacts: $artifacts,
       complete: true
     }'
+}
+
+# Enriches a manifest/backup JSON with node-location metadata,
+# identical to what bt_scan_remote_manifests produces.
+# Args: manifest_json  node_id  node_type  backup_root  backup_dir
+bt_manifest_add_node_meta() {
+  local manifest_json="$1"
+  local node_id="$2"
+  local node_type="$3"
+  local backup_root="$4"
+  local backup_dir="$5"
+
+  local rel_dir
+  rel_dir="${backup_dir#"${backup_root%/}/"}"
+  [[ "${rel_dir}" == "${backup_dir}" ]] && rel_dir=""
+
+  jq -c \
+    --arg node "${node_id}" \
+    --arg nt "${node_type}" \
+    --arg bp "${backup_root}" \
+    --arg rd "${rel_dir}" \
+    '. + {source_node: $node, node_type: $nt, backup_path: $bp, source_rel_dir: $rd}' \
+    <<<"${manifest_json}"
 }
 
 bt_backup_is_complete() {

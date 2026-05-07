@@ -18,6 +18,17 @@ bt_quote() {
   printf '%q' "$1"
 }
 
+bt_node_bench_path() {
+  local node_id="$1"
+  local node_json bench_path
+
+  node_json="$(bt_get_node_json "${node_id}")"
+  bench_path="$(jq -r '.bench_path // empty' <<<"${node_json}")"
+
+  [[ -n "${bench_path}" ]] || bt_die "Node ${node_id} has no bench_path configured"
+  printf '%s\n' "${bench_path}"
+}
+
 bt_docker_local_context() {
   local node_json="$1"
   local node_context
@@ -81,7 +92,7 @@ bt_build_ssh_base_cmd() {
 
   ssh_config="$(jq -r '.ssh_config' <<<"${node_json}")"
 
-  printf 'ssh -o BatchMode=yes -o ConnectTimeout=10 %s' "$(bt_quote "${ssh_config}")"
+  printf 'ssh -n -o BatchMode=yes -o ConnectTimeout=10 %s' "$(bt_quote "${ssh_config}")"
 }
 
 bt_wrap_docker_exec_command() {

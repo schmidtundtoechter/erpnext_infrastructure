@@ -26,7 +26,8 @@ bt_normalize_node_json() {
     | $node
     | .node_type = (($node.node_type // $node.source_kind // empty) | normalize_node_type)
     | .access = (($node.access // $node.access_type // empty) | normalize_access)
-    | del(.source_kind, .access_type)
+    | .backup_path = ($node.backup_path // ($node.backup_paths[0] // empty))
+    | del(.source_kind, .access_type, .backup_paths)
   ' <<<"${node_json}"
 }
 
@@ -77,13 +78,14 @@ bt_validate_config() {
       . as $node
       | $node
       | .node_type = (($node.node_type // $node.source_kind // empty) | normalize_node_type)
-      | .access = (($node.access // $node.access_type // empty) | normalize_access);
+      | .access = (($node.access // $node.access_type // empty) | normalize_access)
+      | .backup_path = ($node.backup_path // ($node.backup_paths[0] // empty));
     .nodes
     | all(.[];
       (normalized_node | (.id | type == "string" and length > 0)
       and ((.node_type == "frappe-node") or (.node_type == "plain-dir"))
       and ((.access == "local") or (.access == "docker") or (.access == "ssh") or (.access == "ssh-docker"))
-      and (.backup_paths | type == "array" and length > 0 and all(.[]; type == "string" and length > 0)))
+      and (.backup_path | type == "string" and length > 0))
     )
   ' "${config_path}" >/dev/null || bt_die "Config validation failed: invalid required node fields"
 

@@ -86,21 +86,94 @@ bt_scan_remote_file_mtime_iso8601() {
   printf '%s\n' "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 }
 
+bt_scan_entry_with_location_hash() {
+  local backup_json="$1"
+
+  bt_backup_with_hash "${backup_json}"
+}
+
+bt_scan_update_local_manifest_hash() {
+  local manifest_path="$1"
+  local backup_json="$2"
+  local new_hash old_hash tmp_path
+
+  new_hash="$(jq -r '.backup_hash // empty' <<<"${backup_json}")"
+  [[ -n "${new_hash}" ]] || return 0
+
+  old_hash="$(jq -r '.backup_hash // empty' "${manifest_path}" 2>/dev/null || true)"
+  [[ "${old_hash}" == "${new_hash}" ]] && return 0
+
+  tmp_path="${manifest_path}.tmp.$$"
+  if jq --arg h "${new_hash}" '. + {backup_hash: $h}' "${manifest_path}" > "${tmp_path}"; then
+    mv "${tmp_path}" "${manifest_path}"
+    bt_log_info "Updated manifest backup_hash: ${manifest_path}"
+  else
+    rm -f "${tmp_path}" 2>/dev/null || true
+    bt_log_warn "Could not update manifest backup_hash: ${manifest_path}"
+  fi
+}
+
+bt_scan_update_remote_manifest_hash() {
+  local node_id="$1"
+  local manifest_path="$2"
+  local backup_json="$3"
+  local new_hash update_script update_cmd
+
+  new_hash="$(jq -r '.backup_hash // empty' <<<"${backup_json}")"
+  [[ -n "${new_hash}" ]] || return 0
+
+  update_script='import json, os, sys
+path, backup_hash = sys.argv[1], sys.argv[2]
+with open(path, "r", encoding="utf-8") as f:
+    data = json.load(f)
+if data.get("backup_hash") == backup_hash:
+    raise SystemExit(0)
+data["backup_hash"] = backup_hash
+tmp = path + ".tmp"
+with open(tmp, "w", encoding="utf-8") as f:
+    json.dump(data, f, indent=2, sort_keys=False)
+    f.write("\n")
+os.replace(tmp, path)'
+
+  update_cmd="python3 -c $(bt_quote "${update_script}") $(bt_quote "${manifest_path}") $(bt_quote "${new_hash}")"
+  if run_on_node "${node_id}" "${update_cmd}" >/dev/null 2>&1; then
+    bt_log_info "Updated remote manifest backup_hash: ${node_id}:${manifest_path}"
+  else
+    bt_log_warn "Could not update remote manifest backup_hash: ${node_id}:${manifest_path}"
+  fi
+}
+
+bt_scan_relative_dir() {
+  local root="$1"
+  local dir="$2"
+  local rel_dir
+
+  rel_dir="${dir#"${root%/}/"}"
+  if [[ "${rel_dir}" == "${dir}" ]]; then
+    # dir equals root: backup is directly at the root, no relative subdirectory
+    rel_dir=""
+  fi
+
+  printf '%s\n' "${rel_dir}"
+}
+
 bt_scan_frappe_backup_dir() {
   local node_id="$1"
   local backup_root="$2"
   
   [[ -d "${backup_root}" ]] || return 0
   
-  local site_backup_dir
-  for site_backup_dir in "${backup_root}"/*; do
-    [[ -d "${site_backup_dir}" ]] || continue
-    
-    local site
-    site="$(basename "${site_backup_dir}")"
-    
-    bt_scan_site_backups "${node_id}" "${site}" "${site_backup_dir}" "frappe-node"
-  done
+  local db_dump backup_dir site_dir site rel_dir
+  while IFS= read -r db_dump; do
+    [[ -n "${db_dump}" ]] || continue
+
+    backup_dir="$(dirname "${db_dump}")"
+    site_dir="$(dirname "$(dirname "${backup_dir}")")"
+    site="$(basename "${site_dir}")"
+    rel_dir="$(bt_scan_relative_dir "${backup_root}" "${backup_dir}")"
+
+    bt_scan_site_backups "${node_id}" "${site}" "${backup_dir}" "frappe-node" "${backup_root}" "${rel_dir}"
+  done < <(find "${backup_root}" -type f \( -name '*-database.sql.gz' -o -name '*-database.sql' \) 2>/dev/null)
 }
 
 bt_scan_site_backups() {
@@ -108,6 +181,8 @@ bt_scan_site_backups() {
   local site="$2"
   local backup_dir="$3"
   local node_type="$4"
+  local backup_root="${5:-}"
+  local rel_dir="${6:-}"
   
   [[ -d "${backup_dir}" ]] || return 0
   
@@ -118,7 +193,13 @@ bt_scan_site_backups() {
     
     if jq -e . "${manifest_file}" >/dev/null 2>&1; then
       backup_id="$(jq -r '.backup_id' "${manifest_file}")"
-      printf '%s\n' "$(jq -c '. + {"source_node": "'${node_id}'", "source_site": "'${site}'", "node_type": "'${node_type}'"}' "${manifest_file}")"
+      local backup_json
+      backup_json="$(jq -c --arg mf "$(basename "${manifest_file}")" --arg bp "${backup_root}" --arg rel_dir "${rel_dir}" '.
+        | .artifacts = ((.artifacts // {}) + (if ((.artifacts // {}) | has("manifest")) then {} else {manifest: $mf} end))
+        | . + {"source_node": "'${node_id}'", "source_site": "'${site}'", "node_type": "'${node_type}'", "backup_path": $bp, "source_rel_dir": $rel_dir}' "${manifest_file}")"
+      backup_json="$(bt_scan_entry_with_location_hash "${backup_json}")"
+      bt_scan_update_local_manifest_hash "${manifest_file}" "${backup_json}"
+      printf '%s\n' "${backup_json}"
       return
     fi
   done
@@ -138,12 +219,18 @@ bt_scan_site_backups() {
     local artifacts_obj
     artifacts_obj="{\"db_dump\": \"$(basename "${db_dump}")\"}"
     
-    if [[ -f "${backup_dir}"/*-files.tar ]]; then
-      artifacts_obj="$(jq -c '. + {"public_files": "'$(basename "${backup_dir}"/*-files.tar)'"}' <<<"${artifacts_obj}")"
-    fi
-    if [[ -f "${backup_dir}"/*-private-files.tar ]]; then
-      artifacts_obj="$(jq -c '. + {"private_files": "'$(basename "${backup_dir}"/*-private-files.tar)'"}' <<<"${artifacts_obj}")"
-    fi
+    local artifact_file
+    for artifact_file in "${backup_dir}"/*-files.tar; do
+      [[ -f "${artifact_file}" ]] || continue
+      [[ "$(basename "${artifact_file}")" == *-private-files.tar ]] && continue
+      artifacts_obj="$(jq -c --arg f "$(basename "${artifact_file}")" '. + {public_files: $f}' <<<"${artifacts_obj}")"
+      break
+    done
+    for artifact_file in "${backup_dir}"/*-private-files.tar; do
+      [[ -f "${artifact_file}" ]] || continue
+      artifacts_obj="$(jq -c --arg f "$(basename "${artifact_file}")" '. + {private_files: $f}' <<<"${artifacts_obj}")"
+      break
+    done
     if [[ -f "${backup_dir}"/site_config.json ]]; then
       artifacts_obj="$(jq -c '. + {"site_config": "site_config.json"}' <<<"${artifacts_obj}")"
     fi
@@ -151,7 +238,7 @@ bt_scan_site_backups() {
     created_at="$(bt_scan_local_file_mtime_iso8601 "${db_dump}")"
 
     bt_generate_manifest_json "${backup_id}" "${node_id}" "${site}" "standard frappe backup" "${artifacts_obj}" '[]' "${created_at}" | \
-      jq -c '. + {"source_node": "'${node_id}'", "source_site": "'${site}'", "node_type": "'${node_type}'"}'
+      jq -c --arg bp "${backup_root}" --arg rel_dir "${rel_dir}" '. + {"source_node": "'${node_id}'", "source_site": "'${site}'", "node_type": "'${node_type}'", "backup_path": $bp, "source_rel_dir": $rel_dir}'
   fi
 }
 
@@ -166,7 +253,17 @@ bt_scan_plain_backup_dir() {
     [[ -f "${manifest_file}" ]] || continue
     
     if jq -e . "${manifest_file}" >/dev/null 2>&1; then
-      printf '%s\n' "$(jq -c '. + {"source_node": "'${node_id}'", "node_type": "plain-dir"}' "${manifest_file}")"
+      local backup_dir rel_dir
+      backup_dir="$(dirname "${manifest_file}")"
+      rel_dir="$(bt_scan_relative_dir "${backup_root}" "${backup_dir}")"
+
+      local backup_json
+      backup_json="$(jq -c --arg mf "$(basename "${manifest_file}")" --arg bp "${backup_root}" --arg rel_dir "${rel_dir}" '.
+        | .artifacts = ((.artifacts // {}) + (if ((.artifacts // {}) | has("manifest")) then {} else {manifest: $mf} end))
+        | . + {"source_node": "'${node_id}'", "node_type": "plain-dir", "backup_path": $bp, "source_rel_dir": $rel_dir}' "${manifest_file}")"
+      backup_json="$(bt_scan_entry_with_location_hash "${backup_json}")"
+      bt_scan_update_local_manifest_hash "${manifest_file}" "${backup_json}"
+      printf '%s\n' "${backup_json}"
     fi
   done
 }
@@ -176,19 +273,31 @@ bt_scan_remote_manifests() {
   local node_type="$2"
   local backup_root="$3"
 
-  local remote_cmd manifest_paths manifest_path manifest_json
-  remote_cmd="if [[ -d $(bt_quote "${backup_root}") ]]; then find $(bt_quote "${backup_root}") -type f -name manifest.json; fi"
+  local remote_cmd manifest_paths manifest_path manifest_json manifest_file
+  remote_cmd="if [[ -d $(bt_quote "${backup_root}") ]]; then find $(bt_quote "${backup_root}") -type f \( -name 'manifest.json' -o -name '*-manifest.json' \); fi"
   manifest_paths="$(run_on_node "${node_id}" "${remote_cmd}" 2>/dev/null || true)"
 
   while IFS= read -r manifest_path; do
     [[ -n "${manifest_path}" ]] || continue
+    manifest_file="$(basename "${manifest_path}")"
 
     manifest_json="$(run_on_node "${node_id}" "cat $(bt_quote "${manifest_path}")" 2>/dev/null || true)"
     [[ -n "${manifest_json}" ]] || continue
 
     if jq -e . >/dev/null 2>&1 <<<"${manifest_json}"; then
-      jq -c --arg node "${node_id}" --arg nt "${node_type}" \
-        '. + {source_node: $node, node_type: $nt}' <<<"${manifest_json}"
+      local backup_dir rel_dir
+      backup_dir="$(dirname "${manifest_path}")"
+      rel_dir="${backup_dir#"${backup_root%/}/"}"
+      [[ "${rel_dir}" == "${backup_dir}" ]] && rel_dir=""
+
+      local backup_json
+      backup_json="$(jq -c --arg mf "${manifest_file}" \
+        '.artifacts = ((.artifacts // {}) + (if ((.artifacts // {}) | has("manifest")) then {} else {manifest: $mf} end))' \
+        <<<"${manifest_json}")"
+      backup_json="$(bt_manifest_add_node_meta "${backup_json}" "${node_id}" "${node_type}" "${backup_root}" "${backup_dir}")"
+      backup_json="$(bt_scan_entry_with_location_hash "${backup_json}")"
+      bt_scan_update_remote_manifest_hash "${node_id}" "${manifest_path}" "${backup_json}"
+      printf '%s\n' "${backup_json}"
     fi
   done <<<"${manifest_paths}"
 }
@@ -204,19 +313,24 @@ bt_scan_remote_frappe_without_manifest() {
   while IFS= read -r db_path; do
     [[ -n "${db_path}" ]] || continue
 
-    local backup_dir site_dir site manifest_in_dir
+    local backup_dir site_dir site db_file id_suffix manifest_in_dir rel_dir
     backup_dir="$(dirname "${db_path}")"
     site_dir="$(dirname "$(dirname "${backup_dir}")")"
     site="$(basename "${site_dir}")"
-    manifest_in_dir="${backup_dir}/manifest.json"
+    rel_dir="${backup_dir#"${backup_root%/}/"}"
+    [[ "${rel_dir}" == "${backup_dir}" ]] && rel_dir="$(basename "${backup_dir}")"
+    db_file="$(basename "${db_path}")"
+    id_suffix="${db_file%-database.sql.gz}"
+    id_suffix="${id_suffix%-database.sql}"
+    manifest_in_dir="${backup_dir}/${id_suffix}-manifest.json"
 
-    # If manifest exists, the manifest scan already indexes this backup.
+    # If a per-backup manifest exists, bt_scan_remote_manifests already indexes this backup.
     if run_on_node "${node_id}" "[[ -f $(bt_quote "${manifest_in_dir}") ]]" >/dev/null 2>&1; then
       continue
     fi
 
-    local db_file public_file private_file site_config_file artifacts_obj backup_id manifest_json created_at
-    db_file="$(basename "${db_path}")"
+    local public_file private_file site_config_file artifacts_obj backup_id manifest_json created_at
+    # db_file and id_suffix already derived above (before manifest skip check)
     public_file="${db_file/-database.sql.gz/-files.tar}"
     public_file="${public_file/-database.sql/-files.tar}"
     private_file="${db_file/-database.sql.gz/-private-files.tar}"
@@ -236,9 +350,6 @@ bt_scan_remote_frappe_without_manifest() {
     fi
 
     # Stable ID: node + site + db stem (without -database.sql(.gz) suffix)
-    local id_suffix
-    id_suffix="${db_file%-database.sql.gz}"
-    id_suffix="${id_suffix%-database.sql}"
     backup_id="${node_id}_${site}_${id_suffix}"
     created_at="$(bt_scan_remote_file_mtime_iso8601 "${node_id}" "${db_path}")"
     manifest_json="$(bt_generate_manifest_json "${backup_id}" "${node_id}" "${site}" "remote frappe backup (without manifest)" "${artifacts_obj}" '[]' "${created_at}")"
@@ -247,7 +358,7 @@ bt_scan_remote_frappe_without_manifest() {
       manifest_json="$(jq -c '.complete = false' <<<"${manifest_json}")"
     fi
 
-    printf '%s\n' "${manifest_json}" | jq -c '. + {source_node: .source_node, source_site: .source_site, node_type: "frappe-node"}'
+    printf '%s\n' "${manifest_json}" | jq -c --arg bp "${backup_root}" --arg rel_dir "${rel_dir}" '. + {source_node: .source_node, source_site: .source_site, node_type: "frappe-node", backup_path: $bp, source_rel_dir: $rel_dir}'
   done <<<"${db_paths}"
 }
 
@@ -256,7 +367,7 @@ bt_scan_remote_plain_without_manifest() {
   local backup_root="$2"
 
   # Discover backup groups in a single remote pass to avoid one SSH roundtrip per artifact probe.
-  local remote_cmd scan_rows scan_row
+  local remote_cmd scan_rows
   remote_cmd="if [[ -d $(bt_quote "${backup_root}") ]]; then
 find $(bt_quote "${backup_root}") -type f \\( -name '*site_config_backup.json' -o -name '*site_config.json' \\) -print0 |
 while IFS= read -r -d '' site_config_path; do
@@ -299,17 +410,21 @@ while IFS= read -r -d '' site_config_path; do
   [[ -f \"\${backup_dir}/\${public_file}\" ]] && public_present=\"\${public_file}\"
   [[ -f \"\${backup_dir}/\${private_file}\" ]] && private_present=\"\${private_file}\"
 
-  printf '%s\t%s\t%s\t%s\t%s\n' \
+  db_epoch=''
+  db_epoch=\"\$(python3 -c 'import os,sys; print(int(os.path.getmtime(sys.argv[1])))' \"\${db_path}\" 2>/dev/null || stat -c %Y \"\${db_path}\" 2>/dev/null || stat -f %m \"\${db_path}\" 2>/dev/null || true)\"
+
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
     \"\${rel_dir}\" \
     \"\${site_config_name}\" \
     \"\${db_file}\" \
     \"\${public_present}\" \
-    \"\${private_present}\"
+    \"\${private_present}\" \
+    \"\${db_epoch}\"
 done
 fi"
   scan_rows="$(run_on_node "${node_id}" "${remote_cmd}" 2>/dev/null || true)"
 
-  while IFS=$'\t' read -r rel_dir site_config_name db_file public_file private_file; do
+  while IFS=$'\t' read -r rel_dir site_config_name db_file public_file private_file db_epoch; do
     [[ -n "${db_file}" ]] || continue
 
     local artifacts_obj backup_id source_site logical_site manifest_json created_at
@@ -329,10 +444,14 @@ fi"
     source_site="${rel_dir}/${db_file}"
     logical_site="$(sed 's/[^a-zA-Z0-9._-]/_/g' <<<"${rel_dir}")"
     backup_id="${node_id}_${logical_site}_${id_suffix}"
-    created_at="$(bt_scan_remote_file_mtime_iso8601 "${node_id}" "${backup_root}/${rel_dir}/${db_file}")"
+    if [[ -n "${db_epoch}" ]]; then
+      created_at="$(bt_scan_epoch_to_iso8601 "${db_epoch}")"
+    else
+      created_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+    fi
     manifest_json="$(bt_generate_manifest_json "${backup_id}" "${node_id}" "${source_site}" "remote plain backup (without manifest; inferred from site_config+db)" "${artifacts_obj}" '[]' "${created_at}")"
 
-    printf '%s\n' "${manifest_json}" | jq -c --arg rel_dir "${rel_dir}" '. + {source_node: .source_node, source_site: .source_site, node_type: "plain-dir", source_rel_dir: $rel_dir}'
+    printf '%s\n' "${manifest_json}" | jq -c --arg bp "${backup_root}" --arg rel_dir "${rel_dir}" '. + {source_node: .source_node, source_site: .source_site, node_type: "plain-dir", backup_path: $bp, source_rel_dir: $rel_dir}'
   done <<<"${scan_rows}"
 }
 
@@ -392,15 +511,13 @@ bt_scan_check_node_availability() {
     return "${available}"
   fi
 
-  # 3. backup_paths existence
+  # 3. backup_path existence
   local bp
-  while IFS= read -r bp; do
-    [[ -z "${bp}" ]] && continue
-    if ! run_on_node "${node_id}" "[[ -d $(bt_quote "${bp}") ]]" >/dev/null 2>&1; then
-      bt_log_warn "Node ${node_id}: backup_path not accessible: ${bp}"
-      available=1
-    fi
-  done < <(jq -r '.backup_paths[]' <<<"${node_json}")
+  bp="$(jq -r '.backup_path // empty' <<<"${node_json}")"
+  if [[ -n "${bp}" ]] && ! run_on_node "${node_id}" "[[ -d $(bt_quote "${bp}") ]]" >/dev/null 2>&1; then
+    bt_log_warn "Node ${node_id}: backup_path not accessible: ${bp}"
+    available=1
+  fi
 
   # 4. bench_path existence (if configured)
   if [[ -n "${bench_path_val}" ]]; then
@@ -521,22 +638,22 @@ scan_main() {
 scan_node() {
   local node_id="$1"
   local node_json
-  local node_type access backup_paths
+  local node_type access backup_path
   
   node_json="$(bt_get_node_json "${node_id}")"
   node_type="$(jq -r '.node_type' <<<"${node_json}")"
   access="$(jq -r '.access' <<<"${node_json}")"
-  backup_paths="$(jq -r '.backup_paths[]' <<<"${node_json}")"
+  backup_path="$(jq -r '.backup_path // empty' <<<"${node_json}")"
   
   local path
-  while IFS= read -r path; do
-    [[ -z "${path}" ]] && continue
+  path="${backup_path}"
+  [[ -z "${path}" ]] && bt_die "Node ${node_id} has no backup_path configured"
 
-    local path_results=""
+  local path_results=""
     
     if [[ "${BT_RUNNER_MODE:-execute}" == "dry-run" ]]; then
       bt_log_info "Would scan: ${node_id} ${path} (${node_type})"
-      continue
+      return
     fi
 
     case "${access}" in
@@ -573,9 +690,8 @@ scan_node() {
 
     if [[ -z "${path_results}" ]]; then
       bt_log_info "Node ${node_id}: found backup dir ${path}, but it is empty"
-      continue
+      return
     fi
 
     printf '%s\n' "${path_results}"
-  done <<<"${backup_paths}"
 }

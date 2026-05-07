@@ -4,6 +4,8 @@
 . .env
 . deploy-tools.sh
 
+APP_UPGRADE_MARKER=".run-app-upgrade"
+
 # Set some variables
 function setEnvironment() {
   deploy-tools.setEnvironment
@@ -48,7 +50,6 @@ function up() {
   # deploy-tools.up re-runs deploy-tools.setEnvironment internally and would overwrite
   # the COMPOSE_FILE_ARGUMENTS extension (e.g. docker-compose.ports.yml) added here.
   setEnvironment
-  docker compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS build
   banner "Create and run container"
   docker compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS up -d
 }
@@ -125,6 +126,14 @@ function backup() {
   deploy-tools.backupVolume SCENARIO_DATA_VOLUME_6_PATH "redis-cache-data" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
   deploy-tools.backupVolume SCENARIO_DATA_VOLUME_7_PATH "db-data" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
   deploy-tools.backupVolume SCENARIO_DATA_VOLUME_8_PATH "assets" $SCENARIO_NAME $TIMESTAMP "$SCENARIO_DATA_BACKUPDIR"
+
+  # Bench backup (only if frontend container is running, otherwise we might end up with an incomplete backup and no way to recover)
+  local frontend_container="${SCENARIO_NAME}_erpnext_frontend_container"
+  if ! docker ps --format '{{.Names}}' | grep -qx "$frontend_container"; then
+    banner "Skip bench backup"
+    echo "Service $frontend_container is not running. Skipping internal bench backup."
+    return 0
+  fi
 
   # Run bench backup in create-site container
   banner "Run bench backup in create-site container"
@@ -321,6 +330,9 @@ PY
 }
 
 function update() {
+  # Check data volume so the update marker can be written to the persistent sites volume.
+  checkAndCreateDataVolume
+
   banner "Collect latest version suggestions"
 
   local apps_json
@@ -337,7 +349,22 @@ function update() {
   printCoreVersionSuggestion "FRAPPE_VERSION" "https://github.com/frappe/frappe.git" "$FRAPPE_VERSION"
   printCoreVersionSuggestion "ERPNEXT_VERSION" "https://github.com/frappe/erpnext.git" "$ERPNEXT_VERSION"
 
-  echo "No container changes were made. Review $updated_apps_json and update .env manually if desired."
+  # Open permissions to docker sock
+  deploy-tools.setDockerSockPermissions
+
+  # Pull/build is intentionally part of update, not normal up.
+  setEnvironment
+  banner "Pull Docker images"
+  # Only pull registry-based images; erpnext_image is built locally and cannot be pulled
+  docker compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS pull db redis-queue redis-cache || exit 1
+  banner "Build Docker images"
+  docker compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS build --pull || exit 1
+
+  banner "Mark app upgrade for next up"
+  docker compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS run --rm --no-deps --entrypoint bash frontend \
+    -lc "touch sites/$APP_UPGRADE_MARKER && ls -l sites/$APP_UPGRADE_MARKER" || exit 1
+  echo "Created app upgrade marker: sites/$APP_UPGRADE_MARKER"
+  echo "Run scenario.deploy <scenario> down,up to execute app upgrades and migrations."
 }
 
 # Scenario vars
