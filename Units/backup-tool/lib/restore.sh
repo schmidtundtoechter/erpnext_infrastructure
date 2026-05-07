@@ -341,13 +341,34 @@ bt_restore_files_to_site() {
   site_path="${bench_path}/sites/${site}"
   
   if [[ "${file_type}" == "public" ]]; then
-    extract_cmd="cd ${site_path} && tar -xf ${tar_file} -C public/"
+    extract_cmd="cd $(bt_quote "${site_path}") && tar -xf $(bt_quote "${tar_file}") -C public/"
   else
-    extract_cmd="cd ${site_path} && tar -xf ${tar_file} -C private/"
+    extract_cmd="cd $(bt_quote "${site_path}") && tar -xf $(bt_quote "${tar_file}") -C private/"
   fi
   
   bt_log_info "Extracting ${file_type} files for site ${site}..."
-  run_on_node "${node_id}" "${extract_cmd}" || bt_log_warn "File extraction for ${file_type} may have failed"
+  if run_on_node "${node_id}" "${extract_cmd}"; then
+    bt_normalize_restored_files_layout "${node_id}" "${site_path}" "${file_type}"
+  else
+    bt_log_warn "File extraction for ${file_type} may have failed"
+  fi
+}
+
+bt_normalize_restored_files_layout() {
+  local node_id="$1"
+  local site_path="$2"
+  local file_type="$3"
+
+  # Some backups include site-prefixed paths like public/<old-site>/public/files.
+  # Move these into <site>/<public|private>/files to keep Frappe's expected layout.
+  local normalize_cmd
+  normalize_cmd="site_path=$(bt_quote "${site_path}"); file_type=$(bt_quote "${file_type}"); target_dir=\"\${site_path}/\${file_type}/files\"; mkdir -p \"\${target_dir}\"; moved=0; for nested in \"\${site_path}/\${file_type}\"/*/\"\${file_type}\"/files; do [[ -d \"\${nested}\" ]] || continue; moved=1; find \"\${nested}\" -mindepth 1 -maxdepth 1 -exec mv -n {} \"\${target_dir}/\" \\; ; done; if [[ \"\${moved}\" -eq 1 ]]; then find \"\${site_path}/\${file_type}\" -mindepth 1 -maxdepth 3 -type d -empty -delete; fi"
+
+  if run_on_node "${node_id}" "${normalize_cmd}"; then
+    bt_log_info "Normalized restored ${file_type} files layout for site path ${site_path}"
+  else
+    bt_log_warn "Could not normalize restored ${file_type} files layout for site path ${site_path}"
+  fi
 }
 
 # TODO 14: Post-Restore Aufgaben
