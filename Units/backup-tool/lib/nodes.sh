@@ -130,12 +130,11 @@ bt_wrap_docker_exec_command() {
   bt_die "Docker access requires container or compose_service"
 }
 
-bt_build_run_command() {
-  local node_id="$1"
+_bt_build_run_command_from_json() {
+  local node_json="$1"
   local command="$2"
-  local node_json access ssh_base docker_wrapped
+  local access ssh_base docker_wrapped
 
-  node_json="$(bt_get_node_json "${node_id}")"
   access="$(jq -r '.access' <<<"${node_json}")"
 
   case "${access}" in
@@ -160,19 +159,26 @@ bt_build_run_command() {
   esac
 }
 
+bt_build_run_command() {
+  local node_id="$1"
+  local command="$2"
+
+  _bt_build_run_command_from_json "$(bt_get_node_json "${node_id}")" "${command}"
+}
+
 run_on_node() {
   local node_id="$1"
   local command="$2"
-  local runner_cmd node_json access
+  local node_json access runner_cmd
 
-  runner_cmd="$(bt_build_run_command "${node_id}" "${command}")"
+  node_json="$(bt_get_node_json "${node_id}")"
+  runner_cmd="$(_bt_build_run_command_from_json "${node_json}" "${command}")"
 
   if [[ "${BT_RUNNER_MODE:-execute}" == "dry-run" ]]; then
     printf '%s\n' "${runner_cmd}"
     return 0
   fi
 
-  node_json="$(bt_get_node_json "${node_id}")"
   access="$(jq -r '.access' <<<"${node_json}")"
   if [[ "${access}" == "docker" ]]; then
     bt_ensure_local_docker_context "${node_json}"

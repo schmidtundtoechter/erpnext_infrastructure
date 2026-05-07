@@ -143,19 +143,6 @@ os.replace(tmp, path)'
   fi
 }
 
-bt_scan_relative_dir() {
-  local root="$1"
-  local dir="$2"
-  local rel_dir
-
-  rel_dir="${dir#"${root%/}/"}"
-  if [[ "${rel_dir}" == "${dir}" ]]; then
-    # dir equals root: backup is directly at the root, no relative subdirectory
-    rel_dir=""
-  fi
-
-  printf '%s\n' "${rel_dir}"
-}
 
 bt_scan_frappe_backup_dir() {
   local node_id="$1"
@@ -296,8 +283,7 @@ bt_scan_remote_manifests() {
     if jq -e . >/dev/null 2>&1 <<<"${manifest_json}"; then
       local backup_dir rel_dir
       backup_dir="$(dirname "${manifest_path}")"
-      rel_dir="${backup_dir#"${backup_root%/}/"}"
-      [[ "${rel_dir}" == "${backup_dir}" ]] && rel_dir=""
+      rel_dir="$(bt_scan_relative_dir "${backup_root}" "${backup_dir}")"
 
       local backup_json
       backup_json="$(jq -c --arg mf "${manifest_file}" \

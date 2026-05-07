@@ -215,7 +215,7 @@ create_backup_on_node() {
     "$(jq -r '.backup_path // empty' <<<"${node_json_meta}")" \
     "${backups_dir}")"
 
-  if bt_cache_add_entry "${manifest_json}"; then
+  if bt_cache_upsert_entry "${manifest_json}"; then
     bt_log_info "Cache updated with new backup"
   fi
   

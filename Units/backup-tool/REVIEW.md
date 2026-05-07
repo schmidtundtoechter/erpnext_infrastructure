@@ -120,101 +120,66 @@ merged_cfg="$(jq -s '.[0] as $source | .[1] as $target
 
 ## WICHTIG – DRY-Verletzungen / Duplikation
 
-### D1 · `normalize_node_type` und `normalize_access` in 6+ jq-Aufrufen wiederholt
+### ~~D1 · `normalize_node_type` und `normalize_access` in 6+ jq-Aufrufen wiederholt~~ ✅ GEFIXT
 
-**Datei:** [`lib/config.sh`](lib/config.sh) (5×), [`lib/nodes.sh:239–256`](lib/nodes.sh) (1×)
+**Datei:** [`lib/config.sh`](lib/config.sh) (5×), [`lib/nodes.sh:239–256`](lib/nodes.sh) (1×)  
+**Gefixt am:** 2026-05-07
 
-Die jq-Funktionen werden in jedem einzelnen `jq`-Aufruf neu definiert:
-
-```jq
-def normalize_node_type:
-  if . == "frappe-backup-dir" then "frappe-node" ...
-```
-
-In `bt_validate_config` allein erscheinen sie 4-mal. `bt_normalize_node_json` tut das noch einmal separat. `nodes_list` ebenfalls.
-
-Die Normalisierung existiert bereits als Shell-Funktion `bt_normalize_node_json`. Die Validierung sollte entweder eine einzige jq-Datei/`--jsonargs`-Kette sein, oder die normalize-Definitionen werden in einen gemeinsamen jq-Include ausgelagert.
-
-**Minimaler Fix:** `bt_validate_config` auf einen einzigen kombinierten `jq`-Aufruf reduzieren, der alle 5 Prüfungen gleichzeitig ausführt.
+Die 5 separaten `jq -e`-Aufrufe in `bt_validate_config` wurden zu einem einzigen kombinierten Aufruf zusammengeführt. `normalize_node_type` und `normalize_access` werden nun nur noch einmal als jq-`def` im selben Ausdruck definiert. Alle vorherigen Prüfungen (required fields, bench_path, ssh_config, docker access, optional types) laufen in einem `jq`-Aufruf ab.
 
 ---
 
-### D2 · `bt_scan_relative_dir` existiert, wird aber an 2+ Stellen inline kopiert
+### ~~D2 · `bt_scan_relative_dir` existiert, wird aber an 2+ Stellen inline kopiert~~ ✅ GEFIXT
 
-**Funktion:** [`lib/scan.sh:146–158`](lib/scan.sh)  
-**Inline-Kopien:** [`lib/scan.sh:290–291`](lib/scan.sh), [`lib/scan.sh:321–322`](lib/scan.sh), [`lib/backup-model.sh:176–178`](lib/backup-model.sh)
+**Funktion:** [`lib/scan.sh:146–158`](lib/scan.sh) → verschoben nach [`lib/backup-model.sh`](lib/backup-model.sh)  
+**Gefixt am:** 2026-05-07
 
-```bash
-# Drei unterschiedliche Stellen mit identischer Logik:
-rel_dir="${backup_dir#"${backup_root%/}/"}"
-[[ "${rel_dir}" == "${backup_dir}" ]] && rel_dir=""
-```
-
-Die Funktion `bt_scan_relative_dir` sollte überall genutzt werden.
+`bt_scan_relative_dir` wurde nach `lib/backup-model.sh` verschoben (früher im Source-Order), sodass es auch von `bt_manifest_add_node_meta` genutzt werden kann. Die drei Inline-Kopien des Ausdrucks `rel_dir="${backup_dir#"${backup_root%/}/"}"` in `scan.sh:299–300` und `backup-model.sh:293–294` wurden durch Aufrufe von `bt_scan_relative_dir` ersetzt.
 
 ---
 
-### D3 · `bt_backup_display_name` und `bt_list_get_display_name` sind identisch
+### ~~D3 · `bt_backup_display_name` und `bt_list_get_display_name` sind identisch~~ ✅ GEFIXT
 
-**Dateien:** [`lib/backup-model.sh:194–197`](lib/backup-model.sh), [`lib/list.sh:172–176`](lib/list.sh)
+**Dateien:** [`lib/backup-model.sh`](lib/backup-model.sh), [`lib/list.sh`](lib/list.sh)  
+**Gefixt am:** 2026-05-07
 
-```bash
-jq -r '.display_name // .reason // .backup_id' <<<"${backup_obj_json}"
-```
-
-Exakt die gleiche Zeile in zwei verschiedenen Funktionen. Eine davon streichen.
+`bt_list_get_display_name` delegiert nun direkt an `bt_backup_display_name`. Die duplizierte jq-Zeile wurde entfernt.
 
 ---
 
-### D4 · `run_on_node` ruft `bt_get_node_json` zweimal auf
+### ~~D4 · `run_on_node` ruft `bt_get_node_json` zweimal auf~~ ✅ GEFIXT
 
-**Datei:** [`lib/nodes.sh:149–170`](lib/nodes.sh)
+**Datei:** [`lib/nodes.sh`](lib/nodes.sh)  
+**Gefixt am:** 2026-05-07
 
-```bash
-run_on_node() {
-  runner_cmd="$(bt_build_run_command "${node_id}" "${command}")"  # bt_get_node_json intern
-  # ...
-  node_json="$(bt_get_node_json "${node_id}")"  # nochmal
-  access="$(jq -r '.access' <<<"${node_json}")"
-```
-
-`bt_build_run_command` liest den Node schon komplett. Das Ergebnis sollte weitergereich werden, statt nochmal abzufragen.
+Eine interne Hilfsfunktion `_bt_build_run_command_from_json` wurde extrahiert, die `node_json` statt `node_id` als Parameter nimmt. `bt_build_run_command` ruft sie nach einmaligem `bt_get_node_json`-Call auf; `run_on_node` ruft `bt_get_node_json` einmal auf und übergibt das Ergebnis sowohl an `_bt_build_run_command_from_json` als auch für den anschließenden `access`-Check.
 
 ---
 
-### D5 · `bt_run_with_timeout` / `bt_eval_with_timeout`: nahezu identischer Python-Inlineblock
+### ~~D5 · `bt_run_with_timeout` / `bt_eval_with_timeout`: nahezu identischer Python-Inlineblock~~ ✅ GEFIXT
 
-**Datei:** [`lib/common.sh:41–89`](lib/common.sh)
+**Datei:** [`lib/common.sh`](lib/common.sh)  
+**Gefixt am:** 2026-05-07
 
-Beide Funktionen haben denselben Python-Code mit `subprocess.run` + Timeout + Exit-Code-Forwarding. Der einzige Unterschied: eine übergibt `cmd` direkt, die andere wrappt in `bash -lc`. Der Python-Block könnte eine gemeinsame Hilfsfunktion sein.
-
----
-
-### D6 · `bt_cache_replace_node_backups` dupliziert `bt_cache_build_entry`-Logik
-
-**Datei:** [`lib/cache.sh:199–208`](lib/cache.sh)
-
-```bash
-bt_cache_replace_node_backups() {
-  timestamp="$(date -u ...)"
-  cache_entries="$(jq --arg last_seen "${timestamp}" '[ .[] + {last_seen: $last_seen} ]' ...)"
-```
-
-`bt_cache_build_entry` (Zeile 233) macht genau das – `backup + {last_seen}`. `bt_cache_replace_node_backups` sollte diese Funktion nutzen oder auf den gemeinsamen jq-Ausdruck verweisen.
+`bt_eval_with_timeout` wurde auf einen einfachen Wrapper reduziert, der `bt_run_with_timeout` mit `bash -lc "${command_string}"` aufruft. Der duplizierte Python-Block wurde entfernt.
 
 ---
 
-### D7 · `bt_cache_add_entry` ist ein überflüssiger Alias
+### ~~D6 · `bt_cache_replace_node_backups` dupliziert `bt_cache_build_entry`-Logik~~ ✅ GEFIXT
 
-**Datei:** [`lib/cache.sh:243–247`](lib/cache.sh)
+**Datei:** [`lib/cache.sh`](lib/cache.sh)  
+**Gefixt am:** 2026-05-07
 
-```bash
-bt_cache_add_entry() {
-  bt_cache_upsert_entry "${backup_obj_json}"
-}
-```
+`bt_cache_replace_node_backups` nutzt nun `bt_cache_build_entry` für jeden Eintrag statt des inline-jq-Ausdrucks `[ .[] + {last_seen: $last_seen} ]`.
 
-Fügt keine Funktionalität hinzu. Entweder die Funktion entfernen und direkt `bt_cache_upsert_entry` aufrufen, oder dokumentieren warum sie als separater Einstiegspunkt existiert.
+---
+
+### ~~D7 · `bt_cache_add_entry` ist ein überflüssiger Alias~~ ✅ GEFIXT
+
+**Datei:** [`lib/cache.sh`](lib/cache.sh)  
+**Gefixt am:** 2026-05-07
+
+`bt_cache_add_entry` wurde entfernt. Alle Aufrufer (`lib/copy.sh`, `lib/backup.sh`) verwenden direkt `bt_cache_upsert_entry`. Der zugehörige Strukturtest in `tests/test_backupctl.sh` wurde aktualisiert.
 
 ---
 

@@ -247,7 +247,7 @@ test_backup_model_library_exists() {
 test_cache_library_exists() {
   assert_file_exists "${ROOT_DIR}/lib/cache.sh"
   assert_file_contains "${ROOT_DIR}/lib/cache.sh" "bt_cache_init"
-  assert_file_contains "${ROOT_DIR}/lib/cache.sh" "bt_cache_add_entry"
+  assert_file_contains "${ROOT_DIR}/lib/cache.sh" "bt_cache_upsert_entry"
   assert_file_contains "${ROOT_DIR}/lib/cache.sh" "bt_cache_filter"
   assert_file_contains "${ROOT_DIR}/lib/cache.sh" "bt_cache_rebuild"
 }

@@ -199,12 +199,15 @@ bt_cache_replace_node_entries() {
 bt_cache_replace_node_backups() {
   local node_id="$1"
   local backups_json="$2"
-  local timestamp cache_entries
+  local timestamp built_entries
 
   timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-  cache_entries="$(jq --arg last_seen "${timestamp}" '[ .[] + {last_seen: $last_seen} ]' <<<"${backups_json}")"
-
-  bt_cache_replace_node_entries "${node_id}" "${cache_entries}"
+  built_entries="$(
+    jq -c '.[]' <<<"${backups_json}" \
+      | while IFS= read -r entry; do bt_cache_build_entry "${entry}" "${timestamp}"; done \
+      | jq -sc '.'
+  )"
+  bt_cache_replace_node_entries "${node_id}" "${built_entries}"
 }
 
 bt_cache_entry_schema() {
@@ -238,12 +241,6 @@ bt_cache_build_entry() {
     --argjson backup "${backup_obj_json}" \
     --arg last_seen "${timestamp}" \
     '$backup + {last_seen: $last_seen}'
-}
-
-bt_cache_add_entry() {
-  local backup_obj_json="$1"
-
-  bt_cache_upsert_entry "${backup_obj_json}"
 }
 
 bt_cache_get_by_backup_id() {

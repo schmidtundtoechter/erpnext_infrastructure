@@ -138,7 +138,7 @@ copy_backup_between_nodes() {
   fi
   
   # Cache aktualisieren
-  bt_cache_add_entry "$(bt_get_cached_backup_object "${to_node}" "${backup_id}" "${backup_entry_json}")"
+  bt_cache_upsert_entry "$(bt_get_cached_backup_object "${to_node}" "${backup_id}" "${backup_entry_json}")"
   
   bt_log_info "Backup copy completed: ${backup_id} copied to ${to_node}"
 }

@@ -170,7 +170,5 @@ bt_list_count() {
 }
 
 bt_list_get_display_name() {
-  local backup_obj="$1"
-  
-  jq -r '.display_name // .reason // .backup_id' <<<"${backup_obj}"
+  bt_backup_display_name "$1"
 }

@@ -279,6 +279,20 @@ PY
   printf '%s\n' "${apps_json}"
 }
 
+bt_scan_relative_dir() {
+  local root="$1"
+  local dir="$2"
+  local rel_dir
+
+  rel_dir="${dir#"${root%/}/"}"
+  if [[ "${rel_dir}" == "${dir}" ]]; then
+    # dir equals root: backup is directly at the root, no relative subdirectory
+    rel_dir=""
+  fi
+
+  printf '%s\n' "${rel_dir}"
+}
+
 # Enriches a manifest/backup JSON with node-location metadata,
 # identical to what bt_scan_remote_manifests produces.
 # Args: manifest_json  node_id  node_type  backup_root  backup_dir
@@ -290,8 +304,7 @@ bt_manifest_add_node_meta() {
   local backup_dir="$5"
 
   local rel_dir
-  rel_dir="${backup_dir#"${backup_root%/}/"}"
-  [[ "${rel_dir}" == "${backup_dir}" ]] && rel_dir=""
+  rel_dir="$(bt_scan_relative_dir "${backup_root}" "${backup_dir}")"
 
   jq -c \
     --arg node "${node_id}" \
