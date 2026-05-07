@@ -53,10 +53,11 @@ backup_copy_main() {
   
   bt_require_loaded_config
 
-  backup_id="$(bt_resolve_backup_ref_to_id "${backup_ref}")"
   local backup_entry
-  backup_entry="$(bt_cache_get_by_backup_id "${backup_id}" 2>/dev/null || true)"
+  backup_entry="$(bt_resolve_backup_ref_to_entry "${backup_ref}")"
   [[ "${backup_entry}" == "null" ]] && backup_entry=""
+  backup_id="$(jq -r '.backup_id // empty' <<<"${backup_entry}")"
+  [[ -n "${backup_id}" ]] || bt_die "copy: backup reference could not be resolved: ${backup_ref}"
 
   if [[ -n "${backup_entry}" ]]; then
     source_node="$(jq -r '.source_node // empty' <<<"${backup_entry}")"
@@ -254,30 +255,38 @@ bt_get_cached_backup_object() {
   local node_id="$1"
   local backup_id="$2"
   local source_entry_json="${3:-}"
-  local backup_hash
-
-  backup_hash="$(bt_backup_hash_from_id "${backup_id}")"
-
   if [[ -n "${source_entry_json}" && "${source_entry_json}" != "null" ]]; then
-    local target_node_json target_backup_path target_node_type
+    local target_node_json target_backup_path target_node_type origin_backup_hash updated_entry backup_hash
     target_node_json="$(bt_get_node_json "${node_id}")"
     target_backup_path="$(jq -r '.backup_path // empty' <<<"${target_node_json}")"
     target_node_type="$(jq -r '.node_type // empty' <<<"${target_node_json}")"
-    jq -c \
+    origin_backup_hash="$(jq -r '.backup_hash // empty' <<<"${source_entry_json}")"
+    updated_entry="$(jq -c \
       --arg node_id "${node_id}" \
       --arg node_type "${target_node_type}" \
       --arg backup_path "${target_backup_path}" \
+      --arg origin_backup_hash "${origin_backup_hash}" \
       --arg now "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-      '. + {
+      'del(.backup_hash)
+      | . as $source
+      | . + {
         source_node: $node_id,
         node_type: $node_type,
         backup_path: $backup_path,
+        origin_backup_hash: (if $origin_backup_hash == "" then (.origin_backup_hash // "") else $origin_backup_hash end),
+        copied_from_node: ($source.source_node // ""),
         created_at: (.created_at // $now),
         last_seen: $now,
         complete: (.complete // true)
-      }' <<<"${source_entry_json}"
+      }
+      | if (.origin_backup_hash // "") == "" then del(.origin_backup_hash) else . end' <<<"${source_entry_json}")"
+    backup_hash="$(bt_backup_hash_from_object "${updated_entry}")"
+    jq -c --arg h "${backup_hash}" '. + {backup_hash: $h}' <<<"${updated_entry}"
     return
   fi
+
+  local backup_hash
+  backup_hash="$(bt_backup_hash_from_id "${backup_id}")"
 
   # Konstruiere ein minimales Backup-Objekt fuer Cache
   cat <<EOF

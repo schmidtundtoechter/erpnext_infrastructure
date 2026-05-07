@@ -42,9 +42,12 @@ backup_remove_main() {
   [[ -n "${backup_ref}" ]] || bt_die "remove: --backup is required"
 
   bt_require_loaded_config
-  backup_id="$(bt_resolve_backup_ref_to_id "${backup_ref}")"
+  local backup_entry
+  backup_entry="$(bt_resolve_backup_ref_to_entry "${backup_ref}")"
+  backup_id="$(jq -r '.backup_id // empty' <<<"${backup_entry}")"
+  [[ -n "${backup_id}" ]] || bt_die "remove: backup reference could not be resolved: ${backup_ref}"
 
-  remove_backup_by_id "${backup_id}" "${force}" "${cache_only}"
+  remove_backup_entry "${backup_entry}" "${force}" "${cache_only}"
 }
 
 bt_backup_remote_base_dir() {
@@ -120,11 +123,21 @@ remove_backup_by_id() {
   local backup_id="$1"
   local force="${2:-}"
   local cache_only="${3:-}"
-  local entry_json node_id base_dir file_list file
+  local entry_json
 
   entry_json="$(bt_cache_get_by_backup_id "${backup_id}" 2>/dev/null || true)"
   [[ -n "${entry_json}" && "${entry_json}" != "null" ]] || bt_die "remove: backup not found in cache: ${backup_id}"
 
+  remove_backup_entry "${entry_json}" "${force}" "${cache_only}"
+}
+
+remove_backup_entry() {
+  local entry_json="$1"
+  local force="${2:-}"
+  local cache_only="${3:-}"
+  local backup_id node_id base_dir file_list file
+
+  backup_id="$(jq -r '.backup_id // empty' <<<"${entry_json}")"
   node_id="$(jq -r '.source_node' <<<"${entry_json}")"
   bt_confirm_or_force "${force}" "Remove backup ${backup_id} on node ${node_id}?"
 

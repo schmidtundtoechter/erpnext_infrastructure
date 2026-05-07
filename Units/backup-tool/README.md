@@ -15,10 +15,11 @@ Das Tool verwaltet ERPNext/Frappe-Backups ueber mehrere Systeme (lokal, SSH, Doc
 	- ssh-docker: Ausfuehrung via SSH im Remote-Container.
 - Cache: Lokaler, regenerierbarer Index fuer schnelle Suche und Filterung. Liegt unter `~/.cache/backupctl/nodes/<node-id>.json` (eine JSON-Array-Datei pro Knoten). Der Cache ist nie die Wahrheit.
 - backup_id: Eindeutige technische Kennung eines logischen Backups. Format: `<node>_<site>_<timestamp>`.
-- backup_hash: Kurzform der backup_id (6 Zeichen SHA256). Wird in der Scan-Ausgabe als `[abc123]` angezeigt.
+- backup_hash: Kurzform der konkreten Backup-Location (6 Zeichen SHA256 aus backup_id, Node und Pfad). Wird in der Scan-Ausgabe als `[abc123]` angezeigt.
 - display_name: Nutzerfreundliche Anzeige. Fallback-Reihenfolge: display_name -> reason -> backup_id.
 - backup_path: Konfigurierter Such- und Ablagepfad eines Nodes. Fuer frappe-node ist das typischerweise der `sites`-Root.
 - source_rel_dir: Relativer Pfad des gefundenen Backup-Verzeichnisses unterhalb von backup_path. Copy verwendet denselben relativen Pfad auf dem Zielnode.
+- origin_backup_hash: Bei kopierten Backups der Hash der Kopie, von der aus kopiert wurde.
 
 ## Verzeichnisstruktur
 

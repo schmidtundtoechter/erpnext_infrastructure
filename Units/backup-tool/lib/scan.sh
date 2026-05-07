@@ -85,6 +85,64 @@ bt_scan_remote_file_mtime_iso8601() {
 
   printf '%s\n' "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 }
+
+bt_scan_entry_with_location_hash() {
+  local backup_json="$1"
+
+  bt_backup_with_hash "${backup_json}"
+}
+
+bt_scan_update_local_manifest_hash() {
+  local manifest_path="$1"
+  local backup_json="$2"
+  local new_hash old_hash tmp_path
+
+  new_hash="$(jq -r '.backup_hash // empty' <<<"${backup_json}")"
+  [[ -n "${new_hash}" ]] || return 0
+
+  old_hash="$(jq -r '.backup_hash // empty' "${manifest_path}" 2>/dev/null || true)"
+  [[ "${old_hash}" == "${new_hash}" ]] && return 0
+
+  tmp_path="${manifest_path}.tmp.$$"
+  if jq --arg h "${new_hash}" '. + {backup_hash: $h}' "${manifest_path}" > "${tmp_path}"; then
+    mv "${tmp_path}" "${manifest_path}"
+    bt_log_info "Updated manifest backup_hash: ${manifest_path}"
+  else
+    rm -f "${tmp_path}" 2>/dev/null || true
+    bt_log_warn "Could not update manifest backup_hash: ${manifest_path}"
+  fi
+}
+
+bt_scan_update_remote_manifest_hash() {
+  local node_id="$1"
+  local manifest_path="$2"
+  local backup_json="$3"
+  local new_hash update_script update_cmd
+
+  new_hash="$(jq -r '.backup_hash // empty' <<<"${backup_json}")"
+  [[ -n "${new_hash}" ]] || return 0
+
+  update_script='import json, os, sys
+path, backup_hash = sys.argv[1], sys.argv[2]
+with open(path, "r", encoding="utf-8") as f:
+    data = json.load(f)
+if data.get("backup_hash") == backup_hash:
+    raise SystemExit(0)
+data["backup_hash"] = backup_hash
+tmp = path + ".tmp"
+with open(tmp, "w", encoding="utf-8") as f:
+    json.dump(data, f, indent=2, sort_keys=False)
+    f.write("\n")
+os.replace(tmp, path)'
+
+  update_cmd="python3 -c $(bt_quote "${update_script}") $(bt_quote "${manifest_path}") $(bt_quote "${new_hash}")"
+  if run_on_node "${node_id}" "${update_cmd}" >/dev/null 2>&1; then
+    bt_log_info "Updated remote manifest backup_hash: ${node_id}:${manifest_path}"
+  else
+    bt_log_warn "Could not update remote manifest backup_hash: ${node_id}:${manifest_path}"
+  fi
+}
+
 bt_scan_relative_dir() {
   local root="$1"
   local dir="$2"
@@ -135,9 +193,13 @@ bt_scan_site_backups() {
     
     if jq -e . "${manifest_file}" >/dev/null 2>&1; then
       backup_id="$(jq -r '.backup_id' "${manifest_file}")"
-      printf '%s\n' "$(jq -c --arg mf "$(basename "${manifest_file}")" --arg bp "${backup_root}" --arg rel_dir "${rel_dir}" '.
+      local backup_json
+      backup_json="$(jq -c --arg mf "$(basename "${manifest_file}")" --arg bp "${backup_root}" --arg rel_dir "${rel_dir}" '.
         | .artifacts = ((.artifacts // {}) + (if ((.artifacts // {}) | has("manifest")) then {} else {manifest: $mf} end))
         | . + {"source_node": "'${node_id}'", "source_site": "'${site}'", "node_type": "'${node_type}'", "backup_path": $bp, "source_rel_dir": $rel_dir}' "${manifest_file}")"
+      backup_json="$(bt_scan_entry_with_location_hash "${backup_json}")"
+      bt_scan_update_local_manifest_hash "${manifest_file}" "${backup_json}"
+      printf '%s\n' "${backup_json}"
       return
     fi
   done
@@ -195,9 +257,13 @@ bt_scan_plain_backup_dir() {
       backup_dir="$(dirname "${manifest_file}")"
       rel_dir="$(bt_scan_relative_dir "${backup_root}" "${backup_dir}")"
 
-      printf '%s\n' "$(jq -c --arg mf "$(basename "${manifest_file}")" --arg bp "${backup_root}" --arg rel_dir "${rel_dir}" '.
+      local backup_json
+      backup_json="$(jq -c --arg mf "$(basename "${manifest_file}")" --arg bp "${backup_root}" --arg rel_dir "${rel_dir}" '.
         | .artifacts = ((.artifacts // {}) + (if ((.artifacts // {}) | has("manifest")) then {} else {manifest: $mf} end))
         | . + {"source_node": "'${node_id}'", "node_type": "plain-dir", "backup_path": $bp, "source_rel_dir": $rel_dir}' "${manifest_file}")"
+      backup_json="$(bt_scan_entry_with_location_hash "${backup_json}")"
+      bt_scan_update_local_manifest_hash "${manifest_file}" "${backup_json}"
+      printf '%s\n' "${backup_json}"
     fi
   done
 }
@@ -224,10 +290,14 @@ bt_scan_remote_manifests() {
       rel_dir="${backup_dir#"${backup_root%/}/"}"
       [[ "${rel_dir}" == "${backup_dir}" ]] && rel_dir=""
 
-      jq -c --arg node "${node_id}" --arg nt "${node_type}" --arg mf "${manifest_file}" --arg bp "${backup_root}" --arg rel_dir "${rel_dir}" \
+      local backup_json
+      backup_json="$(jq -c --arg node "${node_id}" --arg nt "${node_type}" --arg mf "${manifest_file}" --arg bp "${backup_root}" --arg rel_dir "${rel_dir}" \
         '.
         | .artifacts = ((.artifacts // {}) + (if ((.artifacts // {}) | has("manifest")) then {} else {manifest: $mf} end))
-        | . + {source_node: $node, node_type: $nt, backup_path: $bp, source_rel_dir: $rel_dir}' <<<"${manifest_json}"
+        | . + {source_node: $node, node_type: $nt, backup_path: $bp, source_rel_dir: $rel_dir}' <<<"${manifest_json}")"
+      backup_json="$(bt_scan_entry_with_location_hash "${backup_json}")"
+      bt_scan_update_remote_manifest_hash "${node_id}" "${manifest_path}" "${backup_json}"
+      printf '%s\n' "${backup_json}"
     fi
   done <<<"${manifest_paths}"
 }

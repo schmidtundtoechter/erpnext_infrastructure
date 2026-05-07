@@ -9,6 +9,8 @@ Backup Object:
   source_site: string (site name, e.g. erp.customer-a.de)
   backup_path: string (configured node backup_path used during scan)
   source_rel_dir: string (backup directory relative to backup_path)
+  backup_hash: string (short hash of backup_id plus concrete location)
+  origin_backup_hash: string (optional, source copy hash for copied backups)
   created_at: string (ISO 8601 timestamp)
   reason: string (fachlicher Grund des Backups)
   tags: array of strings (optional)
@@ -56,13 +58,37 @@ bt_backup_hash_from_id() {
   local backup_id="$1"
   local digest
 
+  digest="$(bt_sha256_short "${backup_id}")"
+  printf '%s\n' "${digest}"
+}
+
+bt_sha256_short() {
+  local value="$1"
+  local digest
+
   if command -v sha256sum >/dev/null 2>&1; then
-    digest="$(printf '%s' "${backup_id}" | sha256sum | awk '{print $1}')"
+    digest="$(printf '%s' "${value}" | sha256sum | awk '{print $1}')"
   else
-    digest="$(printf '%s' "${backup_id}" | shasum -a 256 | awk '{print $1}')"
+    digest="$(printf '%s' "${value}" | shasum -a 256 | awk '{print $1}')"
   fi
 
   printf '%s\n' "${digest}" | cut -c1-6
+}
+
+bt_backup_hash_from_object() {
+  local backup_obj_json="$1"
+  local hash_input
+
+  hash_input="$(jq -r '
+    [
+      (.backup_id // ""),
+      (.source_node // ""),
+      (.backup_path // ""),
+      (.source_rel_dir // "")
+    ] | @tsv
+  ' <<<"${backup_obj_json}")"
+
+  bt_sha256_short "${hash_input}"
 }
 
 bt_backup_with_hash() {
@@ -75,7 +101,7 @@ bt_backup_with_hash() {
     return
   fi
 
-  backup_hash="$(bt_backup_hash_from_id "${backup_id}")"
+  backup_hash="$(bt_backup_hash_from_object "${backup_obj_json}")"
   jq -c --arg h "${backup_hash}" '. + {backup_hash: $h}' <<<"${backup_obj_json}"
 }
 
