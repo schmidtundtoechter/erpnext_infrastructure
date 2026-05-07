@@ -522,14 +522,36 @@ bt_scan_check_node_availability() {
   # 3. backup_path existence
   local bp
   bp="$(jq -r '.backup_path // empty' <<<"${node_json}")"
-  if [[ -n "${bp}" ]] && ! run_on_node "${node_id}" "[[ -d $(bt_quote "${bp}") ]]" >/dev/null 2>&1; then
-    bt_log_warn "Node ${node_id}: backup_path not accessible: ${bp}"
-    available=1
+  if [[ -n "${bp}" ]]; then
+    local bp_rc=0 bp_runner_cmd
+    bp_runner_cmd="$(bt_build_run_command "${node_id}" "[[ -d $(bt_quote "${bp}") ]]")"
+    set +e
+    if [[ "${access}" == "docker" ]]; then
+      bt_eval_with_timeout "${BT_DOCKER_TIMEOUT_SEC:-10}" "${bp_runner_cmd}" >/dev/null 2>&1
+    else
+      eval "${bp_runner_cmd}" >/dev/null 2>&1
+    fi
+    bp_rc=$?
+    set -e
+    if [[ ${bp_rc} -ne 0 ]]; then
+      bt_log_warn "Node ${node_id}: backup_path not accessible: ${bp}"
+      available=1
+    fi
   fi
 
   # 4. bench_path existence (if configured)
   if [[ -n "${bench_path_val}" ]]; then
-    if ! run_on_node "${node_id}" "[[ -d $(bt_quote "${bench_path_val}") ]]" >/dev/null 2>&1; then
+    local bench_rc=0 bench_runner_cmd
+    bench_runner_cmd="$(bt_build_run_command "${node_id}" "[[ -d $(bt_quote "${bench_path_val}") ]]")"
+    set +e
+    if [[ "${access}" == "docker" ]]; then
+      bt_eval_with_timeout "${BT_DOCKER_TIMEOUT_SEC:-10}" "${bench_runner_cmd}" >/dev/null 2>&1
+    else
+      eval "${bench_runner_cmd}" >/dev/null 2>&1
+    fi
+    bench_rc=$?
+    set -e
+    if [[ ${bench_rc} -ne 0 ]]; then
       bt_log_warn "Node ${node_id}: bench_path not accessible: ${bench_path_val}"
       available=1
     fi
@@ -555,6 +577,7 @@ bt_scan_collect_node_backups() {
 scan_main() {
   local node_id=""
   local live_check=0
+  local scan_errors=0
   
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -600,12 +623,29 @@ scan_main() {
       fi
     fi
 
-    collected_backups="$(bt_scan_collect_node_backups "${nid}")"
+    if ! collected_backups="$(bt_scan_collect_node_backups "${nid}")"; then
+      reachable="no"
+      cache_status="error"
+      found=0
+      collected_backups='[]'
+      scan_errors=$((scan_errors + 1))
+      bt_log_warn "Node ${nid}: scan failed, continuing"
+      printf 'WARN  [------] node=%s scan-error\n' "${nid}"
+      if [[ "${BT_RUNNER_MODE:-execute}" != "dry-run" ]]; then
+        bt_cache_upsert_scan_state "${nid}" "${reachable}" "0" "${cache_status}"
+      fi
+      return 0
+    fi
     found="$(jq 'length' <<<"${collected_backups}")"
 
     if [[ "${BT_RUNNER_MODE:-execute}" != "dry-run" ]]; then
-      bt_cache_replace_node_backups "${nid}" "${collected_backups}"
-      cache_status="updated"
+      if bt_cache_replace_node_backups "${nid}" "${collected_backups}"; then
+        cache_status="updated"
+      else
+        cache_status="error"
+        scan_errors=$((scan_errors + 1))
+        bt_log_warn "Node ${nid}: cache update failed, continuing"
+      fi
     else
       cache_status="dry-run"
     fi
@@ -634,6 +674,13 @@ scan_main() {
   fi
 
   bt_scan_print_reports
+
+  if [[ ${scan_errors} -gt 0 ]]; then
+    bt_log_warn "Scan completed with ${scan_errors} node error(s)"
+    if [[ -n "${node_id}" ]]; then
+      return 1
+    fi
+  fi
 }
 
 scan_node() {
