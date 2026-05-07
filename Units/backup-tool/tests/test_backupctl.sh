@@ -305,18 +305,29 @@ test_remove_library_exists() {
 
 test_copy_requires_parameters() {
   # Should die when --backup is missing
-  if run_libs "bt_load_config '${CONFIG_PATH}'; backup_copy_main --from local-dev --to own-prod-01" >/dev/null 2>&1; then
+  if run_libs "bt_load_config '${CONFIG_PATH}'; backup_copy_main --to own-prod-01" >/dev/null 2>&1; then
     fail "copy should require --backup parameter"
   fi
   
-  # Should die when --from is missing
-  if run_libs "bt_load_config '${CONFIG_PATH}'; backup_copy_main --backup test --to own-prod-01" >/dev/null 2>&1; then
-    fail "copy should require --from parameter"
-  fi
-  
   # Should die when --to is missing
-  if run_libs "bt_load_config '${CONFIG_PATH}'; backup_copy_main --backup test --from local-dev" >/dev/null 2>&1; then
+  if run_libs "bt_load_config '${CONFIG_PATH}'; backup_copy_main --backup test" >/dev/null 2>&1; then
     fail "copy should require --to parameter"
+  fi
+}
+
+test_copy_can_infer_from_node_from_cache() {
+  local tmp_cache_dir out
+
+  tmp_cache_dir="$(mktemp -d)"
+  out="$(run_libs "BT_CACHE_DIR='${tmp_cache_dir}'; BT_CACHE_NODES_DIR='${tmp_cache_dir}/nodes'; BT_CACHE_LEGACY_PATH='${tmp_cache_dir}/cache.jsonl'; bt_load_config '${CONFIG_PATH}'; bt_cache_upsert_entry '{\"backup_id\":\"demo_copy_1\",\"source_node\":\"local-dev\",\"source_site\":\"demo.local\",\"reason\":\"demo\",\"created_at\":\"2026-01-01T00:00:00Z\",\"complete\":true,\"artifacts\":{\"db_dump\":\"a.sql.gz\",\"site_config\":\"site_config.json\"}}'; BT_RUNNER_MODE=dry-run backup_copy_main --backup demo_copy_1 --to own-prod-01 2>&1")"
+
+  assert_contains "${out}" "Resolved source node from cache: local-dev"
+  assert_contains "${out}" "Would copy backup demo_copy_1 from local-dev to own-prod-01"
+}
+
+test_copy_rejects_removed_from_option() {
+  if run_libs "bt_load_config '${CONFIG_PATH}'; backup_copy_main --backup demo_copy_1 --from local-dev --to own-prod-01" >/dev/null 2>&1; then
+    fail "copy should reject removed --from option"
   fi
 }
 

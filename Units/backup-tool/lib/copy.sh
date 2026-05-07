@@ -6,11 +6,10 @@
 
 backup_copy_usage() {
   cat <<'EOF'
-Usage: backupctl backup copy --backup <id> --from <node> --to <node> [options]
+Usage: backupctl backup copy --backup <id> --to <node> [options]
 
 Options:
   --backup <ref>    Backup reference: backup_id or backup_hash (required)
-  --from <node>     Source node id (required)
   --to <node>       Target node id (required)
   -f, --force       Skip overwrite confirmation if target backup exists
   --no-validate     Skip transfer validation step
@@ -19,7 +18,7 @@ EOF
 }
 
 backup_copy_main() {
-  local backup_ref="" backup_id="" from_node="" to_node="" force="" no_validate=""
+  local backup_ref="" backup_id="" source_node="" to_node="" force="" no_validate=""
   
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -29,10 +28,6 @@ backup_copy_main() {
         ;;
       --backup)
         backup_ref="$2"
-        shift 2
-        ;;
-      --from)
-        from_node="$2"
         shift 2
         ;;
       --to)
@@ -54,14 +49,23 @@ backup_copy_main() {
   done
   
   [[ -n "${backup_ref}" ]] || bt_die "copy: --backup is required"
-  [[ -n "${from_node}" ]] || bt_die "copy: --from is required"
   [[ -n "${to_node}" ]] || bt_die "copy: --to is required"
   
   bt_require_loaded_config
 
   backup_id="$(bt_resolve_backup_ref_to_id "${backup_ref}")"
-  
-  copy_backup_between_nodes "${backup_id}" "${from_node}" "${to_node}" "${force}" "${no_validate}"
+  local backup_entry
+  backup_entry="$(bt_cache_get_by_backup_id "${backup_id}" 2>/dev/null || true)"
+  [[ "${backup_entry}" == "null" ]] && backup_entry=""
+
+  if [[ -n "${backup_entry}" ]]; then
+    source_node="$(jq -r '.source_node // empty' <<<"${backup_entry}")"
+  fi
+
+  [[ -n "${source_node}" ]] || bt_die "copy: source node could not be inferred from cache for backup '${backup_ref}'. Run 'backupctl node scan' first."
+  bt_log_info "Resolved source node from cache: ${source_node}"
+
+  copy_backup_between_nodes "${backup_id}" "${source_node}" "${to_node}" "${force}" "${no_validate}"
 }
 
 copy_backup_between_nodes() {
@@ -90,6 +94,9 @@ copy_backup_between_nodes() {
   # Zielpath konstruieren
   target_path="$(bt_get_target_backup_path_for_node "${to_node}" "${backup_id}")"
 
+  # Zielverzeichnis auf dem Zielknoten sicherstellen (nicht lokal).
+  run_on_node "${to_node}" "mkdir -p $(bt_quote "$(dirname "${target_path}")")" >/dev/null 2>&1 || true
+
   # Wenn bereits ein gleichnamiges Backup existiert: Force oder bestaetigen.
   if run_on_node "${to_node}" "[[ -e $(bt_quote "${target_path}") ]]" >/dev/null 2>&1; then
     bt_confirm_or_force "${force}" "Backup ${backup_id} exists on target node ${to_node} and may be overwritten. Continue?"
@@ -97,15 +104,18 @@ copy_backup_between_nodes() {
   
   # Transferiere das Backup
   local transfer_cmd transfer_result
-  transfer_cmd="$(build_transfer_command "${from_node}" "${to_node}" "${source_path}" "${target_path}")"
-  
-  bt_log_info "Executing transfer: $(echo "${transfer_cmd}" | head -c 100)..."
-  
-  if eval "${transfer_cmd}"; then
+  if bt_transfer_same_ssh_docker_host "${from_node}" "${to_node}" "${source_path}" "${target_path}"; then
     bt_log_info "Transfer completed successfully"
   else
-    transfer_result=$?
-    bt_die "Transfer failed with exit code ${transfer_result}"
+    transfer_cmd="$(build_transfer_command "${from_node}" "${to_node}" "${source_path}" "${target_path}")"
+    bt_log_info "Executing transfer: $(echo "${transfer_cmd}" | head -c 100)..."
+
+    if eval "${transfer_cmd}"; then
+      bt_log_info "Transfer completed successfully"
+    else
+      transfer_result=$?
+      bt_die "Transfer failed with exit code ${transfer_result}"
+    fi
   fi
   
   # Validierung: Prüfe Dateianzahl und -größen nach Transfer (wenn nicht deaktiviert)
@@ -118,6 +128,38 @@ copy_backup_between_nodes() {
   bt_cache_add_entry "$(bt_get_cached_backup_object "${to_node}" "${backup_id}")"
   
   bt_log_info "Backup copy completed: ${backup_id} copied to ${to_node}"
+}
+
+bt_transfer_same_ssh_docker_host() {
+  local from_node="$1"
+  local to_node="$2"
+  local source_path="$3"
+  local target_path="$4"
+  local from_json to_json from_access to_access from_ssh to_ssh
+
+  from_json="$(bt_get_node_json "${from_node}")"
+  to_json="$(bt_get_node_json "${to_node}")"
+  from_access="$(jq -r '.access' <<<"${from_json}")"
+  to_access="$(jq -r '.access' <<<"${to_json}")"
+
+  [[ "${from_access}" == "ssh-docker" && "${to_access}" == "ssh-docker" ]] || return 1
+
+  from_ssh="$(jq -r '.ssh_config' <<<"${from_json}")"
+  to_ssh="$(jq -r '.ssh_config' <<<"${to_json}")"
+  [[ "${from_ssh}" == "${to_ssh}" ]] || return 1
+
+  local source_container target_container ssh_base host_cmd target_parent
+  source_container="$(jq -r '.container // empty' <<<"${from_json}")"
+  target_container="$(jq -r '.container // empty' <<<"${to_json}")"
+  [[ -n "${source_container}" && -n "${target_container}" ]] || return 1
+
+  target_parent="$(dirname "${target_path}")"
+  host_cmd="docker exec -i $(bt_quote "${source_container}") test -d $(bt_quote "${source_path}") && docker exec -i $(bt_quote "${target_container}") mkdir -p $(bt_quote "${target_parent}") && docker cp $(bt_quote "${source_container}:${source_path}") - | docker exec -i $(bt_quote "${target_container}") tar -C $(bt_quote "${target_parent}") -xf -"
+
+  bt_log_info "Executing transfer via shared ssh-docker host (${from_ssh})"
+  ssh_base="$(bt_build_ssh_base_cmd "${from_json}")"
+
+  eval "${ssh_base} $(bt_quote "${host_cmd}")"
 }
 
 bt_get_backup_path_for_node() {
@@ -159,12 +201,10 @@ bt_get_target_backup_path_for_node() {
   case "${node_type}" in
     frappe-node)
       backup_root="$(jq -r '.backup_paths[0]' <<<"${node_json}" | xargs dirname)"
-      mkdir -p "${backup_root}" || true
       printf '%s/%s' "${backup_root}" "${backup_id}"
       ;;
     plain-dir)
       backup_root="$(jq -r '.backup_paths[0]' <<<"${node_json}")"
-      mkdir -p "${backup_root}" || true
       printf '%s/%s' "${backup_root}" "${backup_id}"
       ;;
     *)

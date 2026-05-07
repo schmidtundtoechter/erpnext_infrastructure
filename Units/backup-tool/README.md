@@ -112,7 +112,7 @@ Hilfe aufrufen:
 	- Listet Cache-Eintraege mit optionalen Filtern.
 - backupctl create --node <id> --site <site> --reason <text> [--tag <tag>] [--backup-type <type>]
 	- Erzeugt auf frappe-node ein neues Backup inkl. Manifest (nur frappe-node).
-- backupctl copy --backup <id> --from <source-node> --to <target-node> [--no-validate]
+- backupctl copy --backup <id> --to <target-node> [--no-validate]
 	- Uebertraegt ein Backup zwischen Knoten (rsync, mit optionaler Validierung).
 - backupctl restore --backup <id> --to <target-node> --site <target-site>
                [--config-mode use-source-config|merge-config|keep-target-config]

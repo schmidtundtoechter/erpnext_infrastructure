@@ -66,7 +66,7 @@ Examples:
   backupctl node scan --node own-prod-01
   backupctl backup list --format json --node own-prod-01 --complete true
   backupctl backup create --node own-prod-01 --site mysite.example.net --reason "before update"
-  backupctl backup copy --backup <id> --from own-prod-01 --to archive-share
+  backupctl backup copy --backup <id> --to archive-share
   backupctl --dry-run backup restore --backup <id> --to own-prod-01 --site mysite.example.net
   backupctl help backup
 EOF
