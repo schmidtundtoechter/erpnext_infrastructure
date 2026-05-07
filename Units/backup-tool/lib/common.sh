@@ -96,22 +96,4 @@ bt_confirm_or_force() {
   esac
 }
 
-bt_json_get() {
-  local json_file="$1"
-  local jq_filter="$2"
-  bt_require_command jq
-  jq -r "${jq_filter}" "${json_file}"
-}
-
-bt_json_set() {
-  local json_file="$1"
-  local jq_filter="$2"
-  local temp_file
-
-  bt_require_command jq
-  temp_file="$(mktemp)"
-  jq "${jq_filter}" "${json_file}" >"${temp_file}"
-  mv "${temp_file}" "${json_file}"
-}
-
 bt_setup_cleanup_trap

@@ -215,7 +215,7 @@ fi
 
 ---
 
-### I3 · `nodes_list` in `nodes.sh` statt in `config.sh`
+### I3 · `nodes_list` in `nodes.sh` statt in `config.sh` ✅ GEFIXT
 
 **Datei:** [`lib/nodes.sh:235–257`](lib/nodes.sh)
 
@@ -225,7 +225,7 @@ fi
 
 ## MITTLERE PROBLEME – Komplexität / Sauberkeit
 
-### M1 · `scan_main` definiert Funktionen zur Laufzeit (keine echten lokalen Funktionen)
+### M1 · `scan_main` definiert Funktionen zur Laufzeit (keine echten lokalen Funktionen) ✅ GEFIXT
 
 **Datei:** [`lib/scan.sh:573–624`](lib/scan.sh)
 
@@ -239,7 +239,7 @@ In Bash gibt es keine function-scoped Funktionen. Diese Definitionen überschrei
 
 ---
 
-### M2 · `bt_scan_collect_node_backups` und `bt_cache_scan_state_rows_json`: O(n²) JSON-Akkumulation
+### M2 · `bt_scan_collect_node_backups` und `bt_cache_scan_state_rows_json`: O(n²) JSON-Akkumulation ✅ GEFIXT
 
 **Dateien:** [`lib/scan.sh:533–545`](lib/scan.sh), [`lib/cache.sh:82–119`](lib/cache.sh)
 
@@ -258,7 +258,7 @@ collected_backups="$(scan_node "${node_id}" | jq -s '.')"
 
 ---
 
-### M3 · `bt_validate_config` lädt die Config-Datei 5-mal von Disk
+### M3 · `bt_validate_config` lädt die Config-Datei 5-mal von Disk ✅ GEFIXT
 
 **Datei:** [`lib/config.sh:55–160`](lib/config.sh)
 
@@ -266,7 +266,7 @@ Fünf separate `jq`-Aufrufe mit `"${config_path}"` als Argument. Alle könnten i
 
 ---
 
-### M4 · `remove_backup_by_id` ist totes Code
+### M4 · `remove_backup_by_id` ist totes Code ✅ GEFIXT
 
 **Datei:** [`lib/remove.sh:122–132`](lib/remove.sh)
 
@@ -274,7 +274,7 @@ Fünf separate `jq`-Aufrufe mit `"${config_path}"` als Argument. Alle könnten i
 
 ---
 
-### M5 · `bt_json_get` / `bt_json_set` in `common.sh` sind totes Code
+### M5 · `bt_json_get` / `bt_json_set` in `common.sh` sind totes Code ✅ GEFIXT
 
 **Datei:** [`lib/common.sh:117–133`](lib/common.sh)
 
@@ -282,7 +282,7 @@ Generische Wrapper-Funktionen, die nirgendwo im Tool aufgerufen werden.
 
 ---
 
-### M6 · `bt_scan_update_local_manifest_hash` und `bt_scan_update_remote_manifest_hash`: viel Parallellogik
+### M6 · `bt_scan_update_local_manifest_hash` und `bt_scan_update_remote_manifest_hash`: viel Parallellogik ✅ GEFIXT
 
 **Datei:** [`lib/scan.sh:95–144`](lib/scan.sh)
 

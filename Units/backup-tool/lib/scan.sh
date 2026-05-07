@@ -92,12 +92,17 @@ bt_scan_entry_with_location_hash() {
   bt_backup_with_hash "${backup_json}"
 }
 
+_bt_scan_extract_backup_hash() {
+  local backup_json="$1"
+  jq -r '.backup_hash // empty' <<<"${backup_json}"
+}
+
 bt_scan_update_local_manifest_hash() {
   local manifest_path="$1"
   local backup_json="$2"
   local new_hash old_hash tmp_path
 
-  new_hash="$(jq -r '.backup_hash // empty' <<<"${backup_json}")"
+  new_hash="$(_bt_scan_extract_backup_hash "${backup_json}")"
   [[ -n "${new_hash}" ]] || return 0
 
   old_hash="$(jq -r '.backup_hash // empty' "${manifest_path}" 2>/dev/null || true)"
@@ -119,7 +124,7 @@ bt_scan_update_remote_manifest_hash() {
   local backup_json="$3"
   local new_hash update_script update_cmd
 
-  new_hash="$(jq -r '.backup_hash // empty' <<<"${backup_json}")"
+  new_hash="$(_bt_scan_extract_backup_hash "${backup_json}")"
   [[ -n "${new_hash}" ]] || return 0
 
   update_script='import json, os, sys
@@ -548,16 +553,76 @@ bt_scan_check_node_availability() {
 
 bt_scan_collect_node_backups() {
   local node_id="$1"
-  local collected_backups='[]'
   local backup_json
+
+  {
+    while IFS= read -r backup_json; do
+      [[ -z "${backup_json}" ]] && continue
+      bt_backup_with_hash "${backup_json}"
+    done < <(scan_node "${node_id}")
+  } | jq -sc '.'
+}
+
+bt_scan_print_reports() {
+  bt_print_node_overview_table "Scan overview"
+}
+
+_scan_and_cache() {
+  local nid="$1"
+  local found=0
+  local collected_backups backup_json
+  local reachable="yes"
+  local cache_status="unchanged"
+
+  if [[ "${BT_RUNNER_MODE:-execute}" != "dry-run" ]]; then
+    if ! bt_scan_check_node_availability "${nid}"; then
+      reachable="no"
+      bt_log_warn "Node ${nid}: scan skipped (cache not updated)"
+      printf 'WARN  [------] node=%s unavailable\n' "${nid}"
+      bt_cache_upsert_scan_state "${nid}" "${reachable}" "0" "${cache_status}"
+      return 0
+    fi
+  fi
+
+  if ! collected_backups="$(bt_scan_collect_node_backups "${nid}")"; then
+    reachable="no"
+    cache_status="error"
+    found=0
+    collected_backups='[]'
+    scan_errors=$((scan_errors + 1))
+    bt_log_warn "Node ${nid}: scan failed, continuing"
+    printf 'WARN  [------] node=%s scan-error\n' "${nid}"
+    if [[ "${BT_RUNNER_MODE:-execute}" != "dry-run" ]]; then
+      bt_cache_upsert_scan_state "${nid}" "${reachable}" "0" "${cache_status}"
+    fi
+    return 0
+  fi
+  found="$(jq 'length' <<<"${collected_backups}")"
+
+  if [[ "${BT_RUNNER_MODE:-execute}" != "dry-run" ]]; then
+    if bt_cache_replace_node_backups "${nid}" "${collected_backups}"; then
+      cache_status="updated"
+    else
+      cache_status="error"
+      scan_errors=$((scan_errors + 1))
+      bt_log_warn "Node ${nid}: cache update failed, continuing"
+    fi
+  else
+    cache_status="dry-run"
+  fi
 
   while IFS= read -r backup_json; do
     [[ -z "${backup_json}" ]] && continue
-    backup_json="$(bt_backup_with_hash "${backup_json}")"
-    collected_backups="$(jq --argjson entry "${backup_json}" '. + [$entry]' <<<"${collected_backups}")"
-  done < <(scan_node "${node_id}")
+    bt_scan_print_human "${backup_json}"
+  done < <(jq -c '.[]' <<<"${collected_backups}")
 
-  printf '%s\n' "${collected_backups}"
+  if [[ "${BT_RUNNER_MODE:-execute}" != "dry-run" && ${found} -eq 0 ]]; then
+    printf 'FOUND [------] node=%s none\n' "${nid}"
+  fi
+
+  if [[ "${BT_RUNNER_MODE:-execute}" != "dry-run" ]]; then
+    bt_cache_upsert_scan_state "${nid}" "${reachable}" "${found}" "${cache_status}"
+  fi
 }
 
 scan_main() {
@@ -586,69 +651,6 @@ scan_main() {
   done
   
   bt_require_loaded_config
-
-  bt_scan_print_reports() {
-    bt_print_node_overview_table "Scan overview"
-  }
-
-  local _scan_and_cache
-  _scan_and_cache() {
-    local nid="$1"
-    local found=0
-    local collected_backups backup_json
-    local reachable="yes"
-    local cache_status="unchanged"
-
-    if [[ "${BT_RUNNER_MODE:-execute}" != "dry-run" ]]; then
-      if ! bt_scan_check_node_availability "${nid}"; then
-        reachable="no"
-        bt_log_warn "Node ${nid}: scan skipped (cache not updated)"
-        printf 'WARN  [------] node=%s unavailable\n' "${nid}"
-        bt_cache_upsert_scan_state "${nid}" "${reachable}" "0" "${cache_status}"
-        return 0
-      fi
-    fi
-
-    if ! collected_backups="$(bt_scan_collect_node_backups "${nid}")"; then
-      reachable="no"
-      cache_status="error"
-      found=0
-      collected_backups='[]'
-      scan_errors=$((scan_errors + 1))
-      bt_log_warn "Node ${nid}: scan failed, continuing"
-      printf 'WARN  [------] node=%s scan-error\n' "${nid}"
-      if [[ "${BT_RUNNER_MODE:-execute}" != "dry-run" ]]; then
-        bt_cache_upsert_scan_state "${nid}" "${reachable}" "0" "${cache_status}"
-      fi
-      return 0
-    fi
-    found="$(jq 'length' <<<"${collected_backups}")"
-
-    if [[ "${BT_RUNNER_MODE:-execute}" != "dry-run" ]]; then
-      if bt_cache_replace_node_backups "${nid}" "${collected_backups}"; then
-        cache_status="updated"
-      else
-        cache_status="error"
-        scan_errors=$((scan_errors + 1))
-        bt_log_warn "Node ${nid}: cache update failed, continuing"
-      fi
-    else
-      cache_status="dry-run"
-    fi
-
-    while IFS= read -r backup_json; do
-      [[ -z "${backup_json}" ]] && continue
-      bt_scan_print_human "${backup_json}"
-    done < <(jq -c '.[]' <<<"${collected_backups}")
-
-    if [[ "${BT_RUNNER_MODE:-execute}" != "dry-run" && ${found} -eq 0 ]]; then
-      printf 'FOUND [------] node=%s none\n' "${nid}"
-    fi
-
-    if [[ "${BT_RUNNER_MODE:-execute}" != "dry-run" ]]; then
-      bt_cache_upsert_scan_state "${nid}" "${reachable}" "${found}" "${cache_status}"
-    fi
-  }
 
   if [[ -z "${node_id}" ]]; then
     local nid

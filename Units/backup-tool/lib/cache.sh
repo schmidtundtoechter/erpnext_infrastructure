@@ -82,41 +82,42 @@ bt_cache_upsert_scan_state() {
 bt_cache_scan_state_rows_json() {
   bt_require_loaded_config
 
-  local states_json rows_json node_id backup_count state_json last_scan_at reachable cache_status
-  rows_json='[]'
+  local states_json
   states_json="$(bt_cache_scan_state_all)"
 
-  while IFS= read -r node_id; do
-    [[ -n "${node_id}" ]] || continue
+  {
+    while IFS= read -r node_id; do
+      [[ -n "${node_id}" ]] || continue
 
-    backup_count="$(bt_cache_node_backup_count "${node_id}")"
-    state_json="$(jq -c --arg node_id "${node_id}" '.[$node_id] // {}' <<<"${states_json}")"
-    last_scan_at="$(jq -r '.last_scan_at // empty' <<<"${state_json}")"
-    if [[ -z "${last_scan_at}" ]]; then
-      last_scan_at="$(bt_cache_node_last_seen "${node_id}")"
-    fi
-    [[ -n "${last_scan_at}" ]] || last_scan_at='-'
+      local backup_count state_json last_scan_at reachable cache_status
 
-    reachable="$(jq -r '.reachable // "-"' <<<"${state_json}")"
-    cache_status="$(jq -r '.cache_status // empty' <<<"${state_json}")"
-    if [[ -z "${cache_status}" ]]; then
-      if [[ "${backup_count}" -gt 0 ]]; then
-        cache_status='cached'
-      else
-        cache_status='not-scanned'
+      backup_count="$(bt_cache_node_backup_count "${node_id}")"
+      state_json="$(jq -c --arg node_id "${node_id}" '.[$node_id] // {}' <<<"${states_json}")"
+      last_scan_at="$(jq -r '.last_scan_at // empty' <<<"${state_json}")"
+      if [[ -z "${last_scan_at}" ]]; then
+        last_scan_at="$(bt_cache_node_last_seen "${node_id}")"
       fi
-    fi
+      [[ -n "${last_scan_at}" ]] || last_scan_at='-'
 
-    rows_json="$(jq -c \
-      --arg node "${node_id}" \
-      --arg reachable "${reachable}" \
-      --arg last_scan_at "${last_scan_at}" \
-      --arg cache_status "${cache_status}" \
-      --argjson backups "${backup_count}" \
-      '. + [{node: $node, reachable: $reachable, backups: $backups, last_scan_at: $last_scan_at, cache_status: $cache_status}]' <<<"${rows_json}")"
-  done < <(bt_list_node_ids)
+      reachable="$(jq -r '.reachable // "-"' <<<"${state_json}")"
+      cache_status="$(jq -r '.cache_status // empty' <<<"${state_json}")"
+      if [[ -z "${cache_status}" ]]; then
+        if [[ "${backup_count}" -gt 0 ]]; then
+          cache_status='cached'
+        else
+          cache_status='not-scanned'
+        fi
+      fi
 
-  printf '%s\n' "${rows_json}"
+      jq -cn \
+        --arg node "${node_id}" \
+        --arg reachable "${reachable}" \
+        --arg last_scan_at "${last_scan_at}" \
+        --arg cache_status "${cache_status}" \
+        --argjson backups "${backup_count}" \
+        '{node: $node, reachable: $reachable, backups: $backups, last_scan_at: $last_scan_at, cache_status: $cache_status}'
+    done < <(bt_list_node_ids)
+  } | jq -sc '.'
 }
 
 bt_cache_entries_with_scan_state() {

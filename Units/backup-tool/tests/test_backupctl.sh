@@ -333,7 +333,7 @@ test_restore_library_exists() {
 test_remove_library_exists() {
   assert_file_exists "${ROOT_DIR}/lib/remove.sh"
   assert_file_contains "${ROOT_DIR}/lib/remove.sh" "backup_remove_main"
-  assert_file_contains "${ROOT_DIR}/lib/remove.sh" "remove_backup_by_id"
+  assert_file_contains "${ROOT_DIR}/lib/remove.sh" "remove_backup_entry"
 }
 
 test_copy_requires_parameters() {

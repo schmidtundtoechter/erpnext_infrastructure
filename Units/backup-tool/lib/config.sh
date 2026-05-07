@@ -146,3 +146,92 @@ bt_get_node_field() {
 
   bt_get_node_json "${node_id}" | jq -r --arg field "${field}" '.[$field] // empty'
 }
+
+nodes_list() {
+  bt_print_node_overview_table "Node overview"
+}
+
+bt_node_overview_rows_json() {
+  local node_filter="${1:-}"
+  local node_rows scan_states
+
+  bt_require_loaded_config
+
+  node_rows="$(jq -c '
+    def normalize_node_type:
+      if . == "frappe-backup-dir" then "frappe-node"
+      elif . == "plain-backup-dir" then "plain-dir"
+      else .
+      end;
+    def normalize_access:
+      if . == "local-docker" then "docker"
+      elif . == "ssh-host" then "ssh"
+      else .
+      end;
+    def host_value:
+      (.ssh_config // .host // "-");
+    [
+      .nodes[]
+      | {
+          node: (.id | tostring),
+          host: (host_value | tostring),
+          node_type: ((.node_type // .source_kind // "?") | normalize_node_type | tostring),
+          access: ((.access // .access_type // "?") | normalize_access | tostring),
+          enabled: ((.enabled // true) | tostring)
+        }
+    ]
+  ' "${BT_CONFIG_PATH}")"
+
+  scan_states="$(bt_cache_scan_state_all)"
+
+  jq -cn \
+    --argjson nodes "${node_rows}" \
+    --argjson states "${scan_states}" \
+    --arg filter "${node_filter}" '
+    $states as $scan_map
+    | $nodes
+    | (if ($filter | length) > 0 then map(select(.node == $filter)) else . end)
+    | map(
+        . as $node
+        | ($scan_map[$node.node] // {}) as $state
+        | $node
+        + {
+            reachable: ($state.reachable // "unknown"),
+            backups: (($state.backups // 0) | tostring),
+            last_scan_at: ($state.last_scan_at // "-"),
+            cache_status: ($state.cache_status // "not-scanned")
+          }
+      )
+  '
+}
+
+bt_print_node_overview_table() {
+  local title="${1:-Node overview}"
+  local node_filter="${2:-}"
+  local overview_rows
+
+  overview_rows="$(bt_node_overview_rows_json "${node_filter}")"
+
+  printf '%s:\n' "${title}"
+  printf '%-14s %-10s %-6s %-8s %-2s %-2s %-4s %-10s %s\n' \
+    'NODE' 'HOST' 'TYPE' 'ACCESS' 'EN' 'UP' 'BKP' 'LAST_SCAN' 'CACHE'
+  printf '%s\n' "$(printf '=%.0s' {1..74})"
+
+  jq -r '
+    def trunc($n): if (length > $n) then .[0:($n-3)] + "..." else . end;
+    .[]
+    | [
+        (.node | tostring | trunc(14)),
+        (.host | tostring | trunc(10)),
+        (.node_type | tostring | trunc(6)),
+        (.access | tostring | trunc(8)),
+        (if ((.enabled | tostring) | test("^(true|yes|1)$"; "i")) then "Y" else "N" end),
+        (if ((.reachable | tostring) | test("^(yes|true|1)$"; "i")) then "Y" else "N" end),
+        (.backups | tostring | trunc(4)),
+        (.last_scan_at // "-" | tostring | if length > 10 then .[0:10] else . end),
+        (.cache_status | tostring)
+      ]
+    | @tsv
+  ' <<<"${overview_rows}" \
+    | awk -F'\t' '{ printf "%-14s %-10s %-6s %-8s %-2s %-2s %-4s %-10s %s\n", $1, $2, $3, $4, $5, $6, $7, $8, $9 }'
+}

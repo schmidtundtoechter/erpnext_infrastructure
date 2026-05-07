@@ -119,18 +119,6 @@ bt_cache_remove_backup_id() {
   bt_cache_replace_node_entries "${node_id}" "${updated_entries}"
 }
 
-remove_backup_by_id() {
-  local backup_id="$1"
-  local force="${2:-}"
-  local cache_only="${3:-}"
-  local entry_json
-
-  entry_json="$(bt_cache_get_by_backup_id "${backup_id}" 2>/dev/null || true)"
-  [[ -n "${entry_json}" && "${entry_json}" != "null" ]] || bt_die "remove: backup not found in cache: ${backup_id}"
-
-  remove_backup_entry "${entry_json}" "${force}" "${cache_only}"
-}
-
 remove_backup_entry() {
   local entry_json="$1"
   local force="${2:-}"
