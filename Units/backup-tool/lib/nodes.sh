@@ -42,6 +42,20 @@ bt_docker_local_context() {
   printf '%s' "${BT_DOCKER_LOCAL_CONTEXT:-default}"
 }
 
+bt_docker_context_is_compatible() {
+  local expected="$1"
+  local current="$2"
+
+  [[ "${current}" == "${expected}" ]] && return 0
+
+  # Docker Desktop often reports "desktop-linux" while local setups use "default".
+  if [[ ("${expected}" == "default" && "${current}" == "desktop-linux") || ("${expected}" == "desktop-linux" && "${current}" == "default") ]]; then
+    return 0
+  fi
+
+  return 1
+}
+
 bt_ensure_local_docker_context() {
   local node_json="$1"
   local expected current
@@ -53,7 +67,7 @@ bt_ensure_local_docker_context() {
 
   [[ -n "${current}" ]] || bt_die "Could not detect current docker context within ${BT_DOCKER_TIMEOUT_SEC:-10}s"
 
-  if [[ "${current}" != "${expected}" ]]; then
+  if ! bt_docker_context_is_compatible "${expected}" "${current}"; then
     bt_die "Docker context mismatch: expected '${expected}', current '${current}'. Set correct context or configure node.docker_context."
   fi
 }
