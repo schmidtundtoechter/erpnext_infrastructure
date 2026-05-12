@@ -9,6 +9,6 @@
     "name": "print_designer",
     "url": "https://github.com/frappe/print_designer.git",
     "version": "develop",
-    "active": true
+    "active": false
   }
 ]
