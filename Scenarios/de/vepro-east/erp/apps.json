@@ -1,19 +1,26 @@
 [
   {
-    "name": "hrms",
-    "url": "https://github.com/frappe/hrms.git",
-    "version": "version-15",
-    "active": false
-  },
-  {
     "name": "print_designer",
     "url": "https://github.com/frappe/print_designer.git",
     "version": "develop",
     "active": false
-  }
+  },
   {
     "name": "vepro_app",
     "url": "https://github.com/schmidtundtoechter/vepro_app.git",
     "version": "staging",
-    "active": false}
+    "active": false
+  },
+  {
+    "name": "eu_invoice",
+    "url": "https://github.com/alyf-de/eu_einvoice",
+    "version": "version-15",
+    "active": true
+  },
+  {
+    "name": "pdf_a_3",
+    "url": "https://github.com/schmidtundtoechter/pdf_a_3",
+    "version": "main",
+    "active": true
+  }
 ]
