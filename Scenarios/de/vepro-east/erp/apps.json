@@ -11,4 +11,9 @@
     "version": "develop",
     "active": false
   }
+  {
+    "name": "vepro_app",
+    "url": "https://github.com/schmidtundtoechter/vepro_app.git",
+    "version": "staging",
+    "active": false}
 ]
