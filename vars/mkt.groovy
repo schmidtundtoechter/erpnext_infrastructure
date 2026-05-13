@@ -84,28 +84,6 @@ def setupSSHConfigMultiHost() {
 def setupSSHConfigAllHosts() {
     sh """
         cat > "\${WORKSPACE}/.ssh_config" << EOF
-Host adlx.netcup
-    User root
-    Port 22
-    #HostName v2202506282116352544.bestsrv.de
-    #HostName 152.53.155.178
-    HostName ki.adlx.de
-    IdentityFile \${SSH_KEY}
-    ServerAliveInterval 60
-    ServerAliveCountMax 30
-    ConnectTimeout 30
-
-Host adlx-old.netcup
-    User root
-    Port 22
-    #HostName v2202506282116352544.bestsrv.de
-    HostName 152.53.183.103
-    #HostName ki.adlx.de
-    IdentityFile \${SSH_KEY}
-    ServerAliveInterval 60
-    ServerAliveCountMax 30
-    ConnectTimeout 30
-
 Host sut.netcup
     User root
     Port 22
@@ -116,25 +94,25 @@ Host sut.netcup
     ServerAliveCountMax 30
     ConnectTimeout 30
 
-Host kittner.netcup
-    User root
+Host aztest
+    User frappe-user
     Port 22
-    HostName automate.matthiaskittner.de
-    #HostName v2202502142396311804.happysrv.de
+    HostName erptest.az-it.systems
     IdentityFile \${SSH_KEY}
-    ServerAliveInterval 60
-    ServerAliveCountMax 30
-    ConnectTimeout 30
 
-Host ki.netcup
-    User root
+Host az
+    User frappe-user
     Port 22
-    HostName ki.matthiaskittner.de
-    #HostName v2202509142396380734.megasrv.de
+    HostName erp.az-it.systems
     IdentityFile \${SSH_KEY}
-    ServerAliveInterval 60
-    ServerAliveCountMax 30
-    ConnectTimeout 30
+
+Host vepro
+    User vepro
+    Port 2222
+    # vepro@VPRDH01
+    HostName 88.198.99.206
+    IdentityFile \${SSH_KEY}
+
 EOF
         chmod 600 "\${WORKSPACE}/.ssh_config"
         printf '#!/bin/sh\nexec /usr/bin/ssh -F "%s/.ssh_config" "\$@"\n' "\${WORKSPACE}" > "\${WORKSPACE}/ssh"
