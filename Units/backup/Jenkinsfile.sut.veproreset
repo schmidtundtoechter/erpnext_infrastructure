@@ -44,10 +44,10 @@ pipeline {
             }
         }
 
-        stage('Test traefik') {
+        stage('Test vepro') {
             steps {
                 script {
-                    testConnection('traefik')
+                    testConnection('erp')
                 }
             }
         }
