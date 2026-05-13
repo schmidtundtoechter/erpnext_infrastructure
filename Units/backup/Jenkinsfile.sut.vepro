@@ -47,6 +47,14 @@ pipeline {
             }
         }
 
+        stage('Test vepro') {
+            steps {
+                script {
+                    testConnection('erp')
+                }
+            }
+        }
+
         stage('Backup erp') {
             steps {
                 script {
