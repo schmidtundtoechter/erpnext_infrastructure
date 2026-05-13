@@ -14,12 +14,12 @@ pipeline {
         
         TARGET_HOST = "vepro"
         TARGET_HOSTNAME = "88.198.99.206"
-        TARGET_USER = "root"
+        TARGET_USER = "vepro"
         TARGET_PORT = "2222"
         
         SOURCE_HOST = "vepro"
         SOURCE_HOSTNAME = "88.198.99.206"
-        SOURCE_USER = "root"
+        SOURCE_USER = "vepro"
         SOURCE_PORT = "2222"
 
         TARGET_BASE_PATH = "de/vepro-east"
