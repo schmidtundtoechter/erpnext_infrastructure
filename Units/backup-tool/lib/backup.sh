@@ -127,7 +127,8 @@ create_backup_on_node() {
   # backup_id will be derived from the actual filename after bench runs; use a placeholder for now
   backup_id="${node_id}_${site}_$(date -u +%s)"
 
-  tags_array="$(printf '[%s]\n' "$(printf '"%s",' ${tags_list} | sed 's/,$//g')")"
+  read -ra _tags <<< "${tags_list}"
+  tags_array="$(jq -cn '$ARGS.positional' --args "${_tags[@]}")"
   
   bench_path="$(bt_node_bench_path "${node_id}")"
 
@@ -174,7 +175,13 @@ create_backup_on_node() {
     artifacts_obj="$(jq -c '. + {"private_files":"latest-private-files.tar"}' <<<"${artifacts_obj}")"
   fi
 
-  artifacts_obj="$(jq -c '. + {"site_config":"site_config.json"}' <<<"${artifacts_obj}")"
+  # site_config wird von Frappe als *-site_config_backup.json gespeichert, nicht als site_config.json
+  local site_config_file="${id_suffix}-site_config_backup.json"
+  if run_on_node "${node_id}" "[[ -f $(bt_quote "${backups_dir}/${site_config_file}") ]]" >/dev/null 2>&1; then
+    artifacts_obj="$(jq -c --arg f "${site_config_file}" '. + {site_config: $f}' <<<"${artifacts_obj}")"
+  elif run_on_node "${node_id}" "[[ -f $(bt_quote "${backups_dir}/site_config_backup.json") ]]" >/dev/null 2>&1; then
+    artifacts_obj="$(jq -c '. + {"site_config":"site_config_backup.json"}' <<<"${artifacts_obj}")"
+  fi
 
   local manifest_file
   if [[ -n "${id_suffix}" ]]; then
@@ -184,8 +191,9 @@ create_backup_on_node() {
   fi
   artifacts_obj="$(jq -c --arg f "${manifest_file}" '. + {manifest: $f}' <<<"${artifacts_obj}")"
 
-  local manifest_json
-  manifest_json="$(bt_generate_manifest_json "${backup_id}" "${node_id}" "${site}" "${reason}" "${artifacts_obj}" "${tags_array}")"
+  local apps_json manifest_json
+  apps_json="$(bt_collect_site_apps_json "${node_id}" "${site}" "${bench_path}")"
+  manifest_json="$(bt_generate_manifest_json "${backup_id}" "${node_id}" "${site}" "${reason}" "${artifacts_obj}" "${tags_array}" "" "${apps_json}")"
 
   # Write manifest to the remote backup directory so the scan reads it back.
   # This makes reason/tags/artifacts persistent independent of the local cache.
@@ -208,7 +216,7 @@ create_backup_on_node() {
     "$(jq -r '.backup_path // empty' <<<"${node_json_meta}")" \
     "${backups_dir}")"
 
-  if bt_cache_add_entry "${manifest_json}"; then
+  if bt_cache_upsert_entry "${manifest_json}"; then
     bt_log_info "Cache updated with new backup"
   fi
   

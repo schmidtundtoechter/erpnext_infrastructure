@@ -110,26 +110,14 @@ list_main() {
 
 bt_list_print_scan_overview() {
   local node_filter="${1:-}"
-  local overview_rows
-
-  overview_rows="$(bt_cache_scan_state_rows_json)"
-  if [[ -n "${node_filter}" ]]; then
-    overview_rows="$(jq -c --arg node "${node_filter}" 'map(select(.node == $node))' <<<"${overview_rows}")"
-  fi
-
-  printf 'Cache overview:\n'
-  printf '%-25s %-10s %-10s %-20s %s\n' 'NODE' 'REACHABLE' 'BACKUPS' 'LAST_SCAN' 'CACHE'
-  printf '%s\n' "$(printf '=%.0s' {1..86})"
-
-  jq -r '.[] | [.node, .reachable, (.backups | tostring), .last_scan_at, .cache_status] | @tsv' <<<"${overview_rows}" \
-    | awk -F'\t' '{ printf "%-25s %-10s %-10s %-20s %s\n", $1, $2, $3, $4, $5 }'
+  bt_print_node_overview_table "Scan overview" "${node_filter}"
 }
 
 bt_list_format_text() {
   local entries="$1"
   
   printf '%-8s %-40s %-20s %-30s %-20s %-20s %s\n' "HASH" "BACKUP_ID" "NODE" "REASON" "CREATED_AT" "LAST_SCAN" "ART"
-  printf '%s\n' "$(printf '=%.0s' {1..198})"
+  printf '%s\n' "$(printf '=%.0s' {1..151})"
 
   if [[ -z "${entries//[[:space:]]/}" ]]; then
     return 0
@@ -170,7 +158,5 @@ bt_list_count() {
 }
 
 bt_list_get_display_name() {
-  local backup_obj="$1"
-  
-  jq -r '.display_name // .reason // .backup_id' <<<"${backup_obj}"
+  bt_backup_display_name "$1"
 }

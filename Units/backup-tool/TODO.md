@@ -373,10 +373,13 @@ Diese Nacharbeiten stellen sicher, dass alle abhaengigen Befehle korrekt mit den
   Migration nur beim Startup, falls alte Datei existiert und neue nicht.
   
 - [ ] `cache.sh`: Cleanup-Logik erweitern: Alte `cache.jsonl` nach erfolgreicher Migration automatisch loeschen.
-  Option `cache clear` soll alle Dateien unter `nodes/` loeschen, nicht nur eine.
+
+- [x] `cache.sh`: Option `cache clear` loescht alle Dateien unter `nodes/`, nicht nur eine.
   
 - [ ] `copy.sh`: Nach erfolgreichem Transfer, beide Node-Cache-Dateien aktualisieren:
   Quell-Node: Backup als neu kopiert kennzeichnen (`last_seen` aktualisieren).
+
+- [x] `copy.sh`: Nach erfolgreichem Transfer Ziel-Node-Cache-Datei aktualisieren:
   Ziel-Node: Neuen Backup-Eintrag hinzufuegen.
   
 - [ ] `restore.sh`: Nach erfolgreichem Restore Quell-Node-Cache konsultieren (nicht Ziel-Node, der normalerweise kein Backup hat).

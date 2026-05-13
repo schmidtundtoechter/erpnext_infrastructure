@@ -67,25 +67,7 @@ bt_eval_with_timeout() {
   local timeout_seconds="$1"
   local command_string="$2"
 
-  if ! command -v python3 >/dev/null 2>&1; then
-    bash -lc "${command_string}"
-    return
-  fi
-
-  python3 - "$timeout_seconds" "$command_string" <<'PY'
-import subprocess
-import sys
-
-timeout_seconds = float(sys.argv[1])
-command_string = sys.argv[2]
-
-try:
-    result = subprocess.run(["bash", "-lc", command_string], timeout=timeout_seconds)
-    sys.exit(result.returncode)
-except subprocess.TimeoutExpired:
-    print(f"ERROR: command timed out after {timeout_seconds:g}s", file=sys.stderr)
-    sys.exit(124)
-PY
+  bt_run_with_timeout "${timeout_seconds}" bash -lc "${command_string}"
 }
 
 bt_confirm_or_force() {
@@ -112,24 +94,6 @@ bt_confirm_or_force() {
       bt_die "Operation aborted by user"
       ;;
   esac
-}
-
-bt_json_get() {
-  local json_file="$1"
-  local jq_filter="$2"
-  bt_require_command jq
-  jq -r "${jq_filter}" "${json_file}"
-}
-
-bt_json_set() {
-  local json_file="$1"
-  local jq_filter="$2"
-  local temp_file
-
-  bt_require_command jq
-  temp_file="$(mktemp)"
-  jq "${jq_filter}" "${json_file}" >"${temp_file}"
-  mv "${temp_file}" "${json_file}"
 }
 
 bt_setup_cleanup_trap

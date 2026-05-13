@@ -88,6 +88,7 @@ Optionale Felder:
 - container: Containername fuer docker exec.
 - compose_service: Service fuer docker compose exec.
 - docker_context: Erwarteter lokaler Docker-Context (Default: default) fuer docker.
+	Die lokalen Kontexte `default` und `desktop-linux` werden als kompatibel behandelt.
 
 ## CLI-Kommandos und Bedeutung
 

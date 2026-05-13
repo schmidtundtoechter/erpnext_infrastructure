@@ -716,6 +716,76 @@ Backup wird als neue Site eingespielt.
 
 Quelle und Ziel haben unterschiedliche Site-Namen oder andere Zielparameter.
 
+Das ist der Normalfall, wenn ein Backup nach dem Kopieren auf einem anderen Knoten in eine anders benannte Site eingespielt wird, zum Beispiel von `erp.customer-a.de` nach `staging.customer-a.example`.
+
+Dabei darf das kopierte Backup selbst fachlich unverändert bleiben. Es beschreibt weiterhin seine Herkunft: Quellknoten, Quell-Site, Backup-Zeitpunkt, Manifest, Dateinamen und Checksummen. Die Anpassung passiert im Restore-Kontext des Zielsystems.
+
+Beim Restore mit Umbenennung müssen mindestens folgende Punkte bewusst behandelt werden:
+
+* Ziel-Site-Name: `bench --site <target-site> restore ...` muss immer mit der Ziel-Site laufen, nicht mit der Quell-Site aus dem Backup.
+* Webserver-/Routing-Konfiguration: Hostname, Traefik-Rule, `FRAPPE_SITE_NAME_HEADER`, `default_site` und ggf. DNS müssen zum Zielnamen passen.
+* `sites/<site>`-Verzeichnis: Dateien werden in die Ziel-Site eingespielt. Pfade oder Symlinks aus dem Quellsystem dürfen nicht blind übernommen werden.
+* `site_config.json`: Datenbankname, Datenbankpasswort, `encryption_key`, Ports, Hostangaben und lokale Secrets müssen aus der Zielumgebung erhalten bleiben oder kontrolliert gemerged werden.
+* Datenbankinhalt mit Quell-URLs: System Settings, Website Settings, E-Mail-Domains, OAuth-Redirects, Webhook-URLs, Druck-/Asset-URLs und externe Callback-URLs können weiterhin auf die Quell-Site zeigen und müssen nach dem Restore geprüft werden.
+* Dateibestände: public und private files gehören zur Ziel-Site, können aber fachlich Inhalte, Links oder eingebettete absolute URLs aus der Quelle enthalten.
+* Apps und Schema: Die Ziel-Bench muss vor dem Restore die benötigten Apps in kompatiblen Versionen installiert haben. Danach ist `bench migrate` Pflicht.
+* Hintergrundjobs und Scheduler: Jobs aus der Quelle dürfen auf dem Ziel nicht unbeabsichtigt produktive Aktionen ausführen.
+
+Die CLI sollte diese Unterscheidung deutlich machen:
+
+```bash
+backupctl copy --backup <id> --to <target-node>
+backupctl restore --backup <id> --to <target-node> --site <target-site> --config-mode merge-config
+```
+
+`copy` kopiert nur die Backup-Einheit. `restore` entscheidet anhand von `--site`, in welche Ziel-Site eingespielt wird.
+
+### D. Restore Live nach Staging
+
+Ein Restore eines Live-Systems in ein Staging-System ist kein neutraler Restore, sondern ein Environment-Wechsel. Ziel ist eine fachlich realistische Kopie ohne produktive Nebenwirkungen.
+
+Empfohlener Ablauf:
+
+1. Ziel-Staging-Bench vorbereiten.
+2. App-Liste und Versionen der Quelle ermitteln.
+3. Ziel-Apps auf kompatible Versionen bringen.
+4. Backup auf den Staging-Knoten kopieren.
+5. Restore mit Ziel-Site und `merge-config` oder `keep-target-config` ausführen.
+6. Migrationen ausführen.
+7. Staging-spezifische Nacharbeiten ausführen.
+8. Erst danach Scheduler, Worker und externe Integrationen kontrolliert aktivieren.
+
+Für App-Versionen gilt:
+
+* Vor dem Restore sollte die Quelle eine App-Inventur liefern, zum Beispiel über `bench version`, `bench --site <site> list-apps` und, wenn vorhanden, `apps.json`.
+* Das Staging-System sollte die gleichen Apps in gleichen oder bewusst kompatiblen Branches/Commits installiert haben.
+* Ein Restore in eine Ziel-Bench mit fehlenden Apps ist nicht zulässig.
+* Ein Restore in neuere App-Versionen ist nur kontrolliert zulässig und muss direkt von `bench migrate` begleitet werden.
+* Ein Restore in ältere App-Versionen ist grundsätzlich riskant und sollte ohne explizite Freigabe blockiert werden.
+
+Staging-spezifisch müssen nach dem Restore mindestens folgende Dinge angepasst oder deaktiviert werden:
+
+* Ausgehende E-Mail: SMTP nicht auf echte Mailserver zeigen lassen. Staging sollte an Mailpit, MailHog oder ein vergleichbares Fake-Mail-System senden.
+* E-Mail-Konten und Auto-Reply/Inbox-Jobs: Abruf produktiver Postfächer deaktivieren oder auf Testkonten umstellen.
+* Scheduler und Background Jobs: zunächst deaktiviert oder eingeschränkt starten, dann Jobs prüfen und gezielt aktivieren.
+* Integrationen: Zahlungsanbieter, Versand, DATEV/Banking, Webhooks, REST-Clients, OAuth/OIDC, LDAP, SSO und API-Keys auf Sandbox/Testsysteme umstellen oder deaktivieren.
+* Webhooks und Benachrichtigungen: externe Ziel-URLs prüfen, damit Staging keine produktiven Systeme triggert.
+* Domains und URLs: System Settings, Website Settings, Hostname, `host_name`, OAuth-Redirect-URLs und Callback-URLs auf Staging setzen.
+* Benutzer und Zugänge: produktive Benutzer können für realistische Tests nötig sein, Passwörter, API-Keys und Tokens sollten aber rotiert, deaktiviert oder auf definierte Testnutzer reduziert werden.
+* Sichtbarkeit: Staging muss optisch eindeutig erkennbar sein, zum Beispiel über Site-Titel, Navbar-Farbe, Custom CSS oder ein dauerhaftes Staging-Banner.
+* Datenschutz: falls echte Kundendaten nicht erforderlich sind, sollten personenbezogene Daten anonymisiert oder minimiert werden.
+* Backups und Monitoring: Staging braucht eigene Backup- und Monitoring-Regeln und darf nicht unter produktiven Alarmierungs- oder Aufbewahrungsannahmen laufen.
+
+Das Backup-Tool sollte dafür perspektivisch ein Restore-Profil unterstützen, zum Beispiel `--target-profile staging`. Ein solches Profil kann nach dem technischen Restore standardisierte Checks und Anpassungen ausführen:
+
+* Mailserver auf Fake-Mail-Ziel setzen
+* Scheduler zunächst deaktivieren
+* Staging-Banner oder eindeutige Theme-Markierung setzen
+* bekannte Integrations-Endpunkte als Review-Liste ausgeben
+* App-Versionen gegen Manifest oder Quellinventur vergleichen
+
+Bis diese Automatisierung existiert, muss der Restore-Report diese Punkte als verpflichtende manuelle Checkliste ausgeben.
+
 ---
 
 ## 16. Behandlung von `site_config.json`
@@ -760,6 +830,36 @@ Typische Nacharbeiten:
 * Erreichbarkeit testen
 * Dateipfade prüfen
 * Scheduler/Jobs prüfen
+* Ziel-Site-Name und Routing prüfen
+* App-Versionen und installierte Apps prüfen
+* Quell-URLs und externe Endpunkte im Datenbestand prüfen
+* Mail- und Integrationskonfiguration prüfen
+
+### 17.1 Nacharbeiten bei anderem Ziel-Site-Namen
+
+Wenn Quelle und Ziel unterschiedliche Site-Namen haben, sind zusätzlich zu prüfen:
+
+* `common_site_config.json`: `default_site` und globale Host-/Portwerte passen zum Ziel.
+* `site_config.json`: zielspezifische Werte wurden nicht durch Quellwerte überschrieben.
+* Webserver/Proxy: Zielhostname, TLS, Traefik Labels und Site-Header zeigen auf die Ziel-Site.
+* ERPNext/Frappe-Einstellungen: `host_name`, Website Settings, System Settings und E-Mail-Domains enthalten keine produktiven Quell-URLs mehr.
+* Integrationsdaten: OAuth Redirect URIs, Webhook-Ziele, API-Basis-URLs und Callback-Adressen wurden auf Zielsysteme umgestellt.
+* Dateien: public/private files sind vorhanden und gehören der richtigen Site.
+
+### 17.2 Nacharbeiten bei Live nach Staging
+
+Bei einer Kopie von Live nach Staging ist nach dem technischen Restore eine Umgebungshärtung gegen produktive Nebenwirkungen nötig:
+
+* SMTP auf Fake-Mail-System umstellen oder ausgehende E-Mail vollständig deaktivieren.
+* Eingehende E-Mail-Jobs deaktivieren, falls sie produktive Postfächer abrufen würden.
+* Scheduler zunächst deaktiviert lassen, Jobs prüfen und nur bewusst wieder aktivieren.
+* Alle externen Integrationen auf Sandbox/Testendpunkte umstellen oder deaktivieren.
+* API-Keys, Webhook-Secrets, OAuth-Client-Secrets und Zugriffstokens rotieren, entfernen oder durch Staging-Secrets ersetzen.
+* Zahlungs-, Versand-, Banking- und Buchhaltungsintegrationen explizit gegen echte Transaktionen absichern.
+* Staging optisch eindeutig markieren, damit Benutzer es nicht mit Live verwechseln.
+* Benutzerzugänge prüfen und bei Bedarf auf Testnutzer reduzieren.
+* Datenschutzanforderungen prüfen und Daten anonymisieren, wenn echte personenbezogene Daten nicht erforderlich sind.
+* Staging-eigene Backup-, Monitoring- und Alerting-Regeln prüfen.
 
 Das Skript sollte diese Schritte zumindest teilweise standardisieren.
 

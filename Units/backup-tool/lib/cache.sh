@@ -82,41 +82,42 @@ bt_cache_upsert_scan_state() {
 bt_cache_scan_state_rows_json() {
   bt_require_loaded_config
 
-  local states_json rows_json node_id backup_count state_json last_scan_at reachable cache_status
-  rows_json='[]'
+  local states_json
   states_json="$(bt_cache_scan_state_all)"
 
-  while IFS= read -r node_id; do
-    [[ -n "${node_id}" ]] || continue
+  {
+    while IFS= read -r node_id; do
+      [[ -n "${node_id}" ]] || continue
 
-    backup_count="$(bt_cache_node_backup_count "${node_id}")"
-    state_json="$(jq -c --arg node_id "${node_id}" '.[$node_id] // {}' <<<"${states_json}")"
-    last_scan_at="$(jq -r '.last_scan_at // empty' <<<"${state_json}")"
-    if [[ -z "${last_scan_at}" ]]; then
-      last_scan_at="$(bt_cache_node_last_seen "${node_id}")"
-    fi
-    [[ -n "${last_scan_at}" ]] || last_scan_at='-'
+      local backup_count state_json last_scan_at reachable cache_status
 
-    reachable="$(jq -r '.reachable // "-"' <<<"${state_json}")"
-    cache_status="$(jq -r '.cache_status // empty' <<<"${state_json}")"
-    if [[ -z "${cache_status}" ]]; then
-      if [[ "${backup_count}" -gt 0 ]]; then
-        cache_status='cached'
-      else
-        cache_status='not-scanned'
+      backup_count="$(bt_cache_node_backup_count "${node_id}")"
+      state_json="$(jq -c --arg node_id "${node_id}" '.[$node_id] // {}' <<<"${states_json}")"
+      last_scan_at="$(jq -r '.last_scan_at // empty' <<<"${state_json}")"
+      if [[ -z "${last_scan_at}" ]]; then
+        last_scan_at="$(bt_cache_node_last_seen "${node_id}")"
       fi
-    fi
+      [[ -n "${last_scan_at}" ]] || last_scan_at='-'
 
-    rows_json="$(jq -c \
-      --arg node "${node_id}" \
-      --arg reachable "${reachable}" \
-      --arg last_scan_at "${last_scan_at}" \
-      --arg cache_status "${cache_status}" \
-      --argjson backups "${backup_count}" \
-      '. + [{node: $node, reachable: $reachable, backups: $backups, last_scan_at: $last_scan_at, cache_status: $cache_status}]' <<<"${rows_json}")"
-  done < <(bt_list_node_ids)
+      reachable="$(jq -r '.reachable // "-"' <<<"${state_json}")"
+      cache_status="$(jq -r '.cache_status // empty' <<<"${state_json}")"
+      if [[ -z "${cache_status}" ]]; then
+        if [[ "${backup_count}" -gt 0 ]]; then
+          cache_status='cached'
+        else
+          cache_status='not-scanned'
+        fi
+      fi
 
-  printf '%s\n' "${rows_json}"
+      jq -cn \
+        --arg node "${node_id}" \
+        --arg reachable "${reachable}" \
+        --arg last_scan_at "${last_scan_at}" \
+        --arg cache_status "${cache_status}" \
+        --argjson backups "${backup_count}" \
+        '{node: $node, reachable: $reachable, backups: $backups, last_scan_at: $last_scan_at, cache_status: $cache_status}'
+    done < <(bt_list_node_ids)
+  } | jq -sc '.'
 }
 
 bt_cache_entries_with_scan_state() {
@@ -199,12 +200,15 @@ bt_cache_replace_node_entries() {
 bt_cache_replace_node_backups() {
   local node_id="$1"
   local backups_json="$2"
-  local timestamp cache_entries
+  local timestamp built_entries
 
   timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-  cache_entries="$(jq --arg last_seen "${timestamp}" '[ .[] + {last_seen: $last_seen} ]' <<<"${backups_json}")"
-
-  bt_cache_replace_node_entries "${node_id}" "${cache_entries}"
+  built_entries="$(
+    jq -c '.[]' <<<"${backups_json}" \
+      | while IFS= read -r entry; do bt_cache_build_entry "${entry}" "${timestamp}"; done \
+      | jq -sc '.'
+  )"
+  bt_cache_replace_node_entries "${node_id}" "${built_entries}"
 }
 
 bt_cache_entry_schema() {
@@ -238,12 +242,6 @@ bt_cache_build_entry() {
     --argjson backup "${backup_obj_json}" \
     --arg last_seen "${timestamp}" \
     '$backup + {last_seen: $last_seen}'
-}
-
-bt_cache_add_entry() {
-  local backup_obj_json="$1"
-
-  bt_cache_upsert_entry "${backup_obj_json}"
 }
 
 bt_cache_get_by_backup_id() {
@@ -327,18 +325,23 @@ bt_cache_filter() {
   local complete_filter="${6:-}"
   local from_date="${7:-}"
   local to_date="${8:-}"
-  
-  local filter_expr='.'
-  
-  [[ -n "${node_filter}" ]] && filter_expr="${filter_expr} | select(.source_node == \"${node_filter}\")"
-  [[ -n "${site_filter}" ]] && filter_expr="${filter_expr} | select(.source_site == \"${site_filter}\")"
-  [[ -n "${tag_filter}" ]] && filter_expr="${filter_expr} | select(.tags | map(select(. == \"${tag_filter}\")) | length > 0)"
-  [[ -n "${reason_contains}" ]] && filter_expr="${filter_expr} | select(.reason | contains(\"${reason_contains}\"))"
-  [[ -n "${complete_filter}" ]] && filter_expr="${filter_expr} | select(.complete == ${complete_filter})"
-  [[ -n "${from_date}" ]] && filter_expr="${filter_expr} | select(.created_at >= \"${from_date}\")"
-  [[ -n "${to_date}" ]] && filter_expr="${filter_expr} | select(.created_at <= \"${to_date}\")"
-  
-  jq -c ".[] | ${filter_expr}" <<<"${json_lines}"
+
+  jq -c \
+    --arg node      "${node_filter}" \
+    --arg site      "${site_filter}" \
+    --arg tag       "${tag_filter}" \
+    --arg reason    "${reason_contains}" \
+    --arg complete  "${complete_filter}" \
+    --arg from_date "${from_date}" \
+    --arg to_date   "${to_date}" \
+    '.[]
+    | select($node      == "" or .source_node == $node)
+    | select($site      == "" or .source_site == $site)
+    | select($tag       == "" or (.tags // [] | map(select(. == $tag)) | length > 0))
+    | select($reason    == "" or (.reason // "" | contains($reason)))
+    | select($complete  == "" or (.complete == ($complete == "true")))
+    | select($from_date == "" or .created_at >= $from_date)
+    | select($to_date   == "" or .created_at <= $to_date)' <<<"${json_lines}"
 }
 
 bt_cache_rebuild() {

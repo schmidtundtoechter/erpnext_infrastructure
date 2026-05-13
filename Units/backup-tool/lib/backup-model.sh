@@ -132,6 +132,7 @@ bt_generate_manifest_json() {
   local artifacts_json="$5"
   local tags_json="${6:-}"
   local created_at_override="${7:-}"
+  local apps_json="${8:-[]}"
   local created_at
   local backup_hash
   
@@ -147,6 +148,7 @@ bt_generate_manifest_json() {
     --arg ts "${created_at}" \
     --argjson artifacts "${artifacts_json}" \
     --argjson tags "${tags_json:-[]}" \
+    --argjson apps "${apps_json:-[]}" \
     '{
       backup_id: $bid,
       backup_hash: $bh,
@@ -158,8 +160,137 @@ bt_generate_manifest_json() {
       display_name: $reason,
       tags: $tags,
       artifacts: $artifacts,
+      apps: $apps,
       complete: true
     }'
+}
+
+bt_collect_site_apps_json() {
+  local node_id="$1"
+  local site="$2"
+  local bench_path="$3"
+  local py_script cmd apps_json
+
+  py_script="$(cat <<'PY'
+import json
+import os
+import re
+import subprocess
+import sys
+
+bench_path = sys.argv[1]
+site = sys.argv[2]
+apps_file = os.path.join(bench_path, "sites", site, "apps.txt")
+apps_root = os.path.join(bench_path, "apps")
+
+def run(cmd, cwd=None):
+    try:
+        return subprocess.check_output(cmd, cwd=cwd, stderr=subprocess.DEVNULL, text=True).strip()
+    except Exception:
+        return ""
+
+def parse_version(app_dir, app_name):
+    pyproject = os.path.join(app_dir, "pyproject.toml")
+    if os.path.isfile(pyproject):
+        try:
+            import tomllib
+            with open(pyproject, "rb") as f:
+                data = tomllib.load(f)
+            version = ((data.get("project") or {}).get("version") or "").strip()
+            if version:
+                return version
+        except Exception:
+            pass
+
+    hooks_py = os.path.join(app_dir, app_name, "hooks.py")
+    if os.path.isfile(hooks_py):
+        try:
+            txt = open(hooks_py, "r", encoding="utf-8").read()
+            m = re.search(r"app_version\\s*=\\s*['\"]([^'\"]+)['\"]", txt)
+            if m:
+                return m.group(1).strip()
+        except Exception:
+            pass
+
+    init_py = os.path.join(app_dir, app_name, "__init__.py")
+    if os.path.isfile(init_py):
+        try:
+            txt = open(init_py, "r", encoding="utf-8").read()
+            m = re.search(r"__version__\\s*=\\s*['\"]([^'\"]+)['\"]", txt)
+            if m:
+                return m.group(1).strip()
+        except Exception:
+            pass
+
+    return ""
+
+apps = []
+if os.path.isfile(apps_file):
+  with open(apps_file, "r", encoding="utf-8") as f:
+    for line in f:
+      app = line.strip()
+      if not app or app.startswith("#"):
+        continue
+      apps.append(app)
+elif os.path.isdir(apps_root):
+  for app in os.listdir(apps_root):
+    app_dir = os.path.join(apps_root, app)
+    if not os.path.isdir(app_dir):
+      continue
+    if app.startswith("."):
+      continue
+    apps.append(app)
+
+if not apps:
+  print("[]")
+  raise SystemExit(0)
+
+result = []
+for app in apps:
+    app_dir = os.path.join(bench_path, "apps", app)
+    entry = {"app": app}
+
+    version = parse_version(app_dir, app)
+    if version:
+        entry["version"] = version
+
+    branch = run(["git", "-C", app_dir, "rev-parse", "--abbrev-ref", "HEAD"])
+    if branch and branch != "HEAD":
+        entry["branch"] = branch
+
+    commit = run(["git", "-C", app_dir, "rev-parse", "--short", "HEAD"])
+    if commit:
+        entry["commit"] = commit
+
+    result.append(entry)
+
+result.sort(key=lambda x: x.get("app", ""))
+print(json.dumps(result, separators=(",", ":")))
+PY
+)"
+
+  cmd="python3 -c $(bt_quote "${py_script}") $(bt_quote "${bench_path}") $(bt_quote "${site}")"
+  apps_json="$(run_on_node "${node_id}" "${cmd}" 2>/dev/null || true)"
+
+  if [[ -z "${apps_json}" ]] || ! jq -e 'type == "array"' <<<"${apps_json}" >/dev/null 2>&1; then
+    apps_json='[]'
+  fi
+
+  printf '%s\n' "${apps_json}"
+}
+
+bt_scan_relative_dir() {
+  local root="$1"
+  local dir="$2"
+  local rel_dir
+
+  rel_dir="${dir#"${root%/}/"}"
+  if [[ "${rel_dir}" == "${dir}" ]]; then
+    # dir equals root: backup is directly at the root, no relative subdirectory
+    rel_dir=""
+  fi
+
+  printf '%s\n' "${rel_dir}"
 }
 
 # Enriches a manifest/backup JSON with node-location metadata,
@@ -173,8 +304,7 @@ bt_manifest_add_node_meta() {
   local backup_dir="$5"
 
   local rel_dir
-  rel_dir="${backup_dir#"${backup_root%/}/"}"
-  [[ "${rel_dir}" == "${backup_dir}" ]] && rel_dir=""
+  rel_dir="$(bt_scan_relative_dir "${backup_root}" "${backup_dir}")"
 
   jq -c \
     --arg node "${node_id}" \

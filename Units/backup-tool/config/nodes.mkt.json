@@ -1,12 +1,12 @@
 {
   "nodes": [
     {
-      "id": "my-docker",
+      "id": "my-d-code.localhost",
       "node_type": "frappe-node",
       "access": "docker",
       "bench_path": "/workspace/development/frappe-bench",
       "backup_path": "/workspace/development/frappe-bench/sites/d-code.localhost/private/backups",
-      "container": "mkt_sage_import_devcontainer-frappe-1",
+      "container": "erpnext_development_devcontainer-frappe-1",
       "tags": ["local", "dev"],
       "description": "Lokales Entwicklungs-Bench in Docker",
       "enabled": true
