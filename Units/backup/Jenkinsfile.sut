@@ -47,20 +47,6 @@ pipeline {
             }
         }
 
-        stage('Link SUT') {
-            steps {
-                script {
-                    sh '''
-                        cd Components/de
-                        rm sut
-                        ln -sfn ../../erpnext_infrastructure/Components/de/sut sut
-                        ls -la sut/
-                        echo "Symbolischer Link 'sut' gesetzt."
-                    '''
-                }
-            }
-        }
-
         stage('Test sut.netcup') {
             steps {
                 script {
