@@ -13,12 +13,12 @@ pipeline {
         SCENARIO_DEPLOY = "${WORKSPACE}/MIMS/scenario.deploy"
         
         TARGET_HOST = "vepro"
-        TARGET_HOSTNAME = "vepro-east.de"
+        TARGET_HOSTNAME = "88.198.99.206"
         TARGET_USER = "root"
         TARGET_PORT = "22"
         
         SOURCE_HOST = "vepro"
-        SOURCE_HOSTNAME = "vepro-east.de"
+        SOURCE_HOSTNAME = "88.198.99.206"
         SOURCE_USER = "root"
         SOURCE_PORT = "22"
 
