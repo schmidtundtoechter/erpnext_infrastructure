@@ -1,0 +1,75 @@
+library identifier: 'mkt-lib@main', retriever: legacySCM(scm)
+
+// ── Delegate wrappers — thin shims to jenkins-lib/vars/mkt.groovy ─────────────
+def setupSSHConfig()                                    { mkt.setupSSHConfigMultiHost() }
+def testConnection(String s)                            { mkt.testConnection(s) }
+def resetStageScenario(String svc, String tgt)          { mkt.resetStageScenario(svc, tgt) }
+// ─────────────────────────────────────────────────────────────────────────────
+
+pipeline {
+    agent any
+
+    environment {
+        SCENARIO_DEPLOY = "${WORKSPACE}/MIMS/scenario.deploy"
+        
+        TARGET_HOST = "vepro"
+        TARGET_HOSTNAME = "vepro-east.de"
+        TARGET_USER = "root"
+        TARGET_PORT = "22"
+        
+        SOURCE_HOST = "vepro"
+        SOURCE_HOSTNAME = "vepro-east.de"
+        SOURCE_USER = "root"
+        SOURCE_PORT = "22"
+
+        TARGET_BASE_PATH = "de/vepro-east"
+        BACKUP_DIR = "/home/vepro/MIMS-Scenarios/_backups/"
+        // ssh/scp wrappers in WORKSPACE shadow real binaries, force -F for all callers — no race condition
+        PATH = "${env.WORKSPACE}:${env.PATH}"
+    }
+
+    stages {
+        stage('Checkout Main Repo') {
+            steps {
+                // Das aktuelle Repository wird automatisch geclont
+                echo 'Hauptprojekt wird aus dem SCM ausgecheckt.'
+            }
+        }
+
+        stage('Checkout Dependencies') {
+            steps {
+                dir('MIMS') {
+                    git url: 'https://github.com/Cerulean-Circle-GmbH/MIMS.git', branch: 'mims2'
+                }
+            }
+        }
+
+        stage('Test traefik') {
+            steps {
+                script {
+                    testConnection('traefik')
+                }
+            }
+        }
+
+        stage('Reset VEPRO erptest') {
+            steps {
+                script {
+                    resetStageScenario('erp','erptest')
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo 'Pipeline abgeschlossen.'
+        }
+        failure {
+            echo '⚠️  Pipeline fehlgeschlagen! Bitte Logs prüfen.'
+        }
+        success {
+            echo '✅ Pipeline erfolgreich abgeschlossen.'
+        }
+    }
+}
