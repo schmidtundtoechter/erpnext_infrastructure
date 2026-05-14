@@ -56,7 +56,7 @@ pipeline {
             steps {
                 script {
                     withCredentials([sshUserPrivateKey(credentialsId: 'host-ssh-key', keyFileVariable: 'SSH_KEY')]) {
-                        setupSSHConfigMultiHost()
+                        setupSSHConfig()
                         sh """
                             # Führe Backup durch für erp
                             \${SCENARIO_DEPLOY} \${TARGET_BASE_PATH}/erp backup -v
