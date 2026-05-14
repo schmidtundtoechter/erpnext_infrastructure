@@ -55,7 +55,24 @@ pipeline {
         stage('Reset VEPRO erptest') {
             steps {
                 script {
-                    resetStageScenario('erp','erptest')
+                    withCredentials([sshUserPrivateKey(credentialsId: 'host-ssh-key', keyFileVariable: 'SSH_KEY')]) {
+                        setupSSHConfigMultiHost()
+                        sh """
+                            # Führe Backup durch für erp
+                            \${SCENARIO_DEPLOY} \${TARGET_BASE_PATH}/erp backup -v
+
+                            # Erzeuge links zu den neuesten Backups
+                            ./Units/backup/link-backup-files.sh --remote \${TARGET_HOST} \\
+                                --source erp \\
+                                --dest erptest \\
+                                --backup-dir \${BACKUP_DIR} \\
+                                --latest \\
+                                --force
+
+                            # Führe Restore durch
+                            \${SCENARIO_DEPLOY} \${TARGET_BASE_PATH}/erptest down,restore,up -v
+                        """
+                    }
                 }
             }
         }
