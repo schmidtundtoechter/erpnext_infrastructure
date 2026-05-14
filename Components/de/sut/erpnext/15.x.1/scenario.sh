@@ -155,7 +155,7 @@ function restore() {
 
   # Show available timestamps from example: $SCENARIO_DATA_BACKUPDIR/$SCENARIO_NAME_$TIMESTAMP_env.tar.gz
   echo "Available backups in $SCENARIO_DATA_BACKUPDIR:"
-  ls -1 $SCENARIO_DATA_BACKUPDIR | grep "$SCENARIO_NAME" | grep db-data | sed "s;${SCENARIO_NAME}_;;" | sed "s;_db-data.*;;" | sort -u
+  ls -1 $SCENARIO_DATA_BACKUPDIR | grep "${SCENARIO_NAME}_" | grep db-data | sed "s;${SCENARIO_NAME}_;;" | sed "s;_db-data.*;;" | sort -u
 
   TIMESTAMP="$SCENARIO_DATA_BACKUPTIMESTAMP"
   echo "Configured timestamp: $TIMESTAMP"
