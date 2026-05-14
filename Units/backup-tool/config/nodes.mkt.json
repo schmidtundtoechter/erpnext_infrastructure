@@ -122,7 +122,7 @@
       "access": "ssh-docker",
       "ssh_config": "vepro",
       "bench_path": "/home/frappe/frappe-bench",
-      "backup_path": "/home/frappe/frappe-bench/sites/erptest.vepro-east.de/private/backups",
+      "backup_path": "/home/frappe/frappe-bench/sites/erp.vepro-east.de/private/backups",
       "container": "erptest_erpnext_frontend_container",
       "tags": ["sut", "prod"],
       "vpn_required": false,

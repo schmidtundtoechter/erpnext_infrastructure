@@ -71,6 +71,9 @@ pipeline {
 
                             # Führe Restore durch
                             \${SCENARIO_DEPLOY} \${TARGET_BASE_PATH}/erptest down,restore,up -v
+                            
+                            # Führe Update durch (um auf die richtigen branches zu gehen)
+                            \${SCENARIO_DEPLOY} \${TARGET_BASE_PATH}/erptest update,down,up -v
                         """
                     }
                 }

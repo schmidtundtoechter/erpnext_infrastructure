@@ -44,6 +44,11 @@ scenario:
     # What is the timestamp of the backup to restore (format: YYYYMMDDHHMMSS) in non-interactive mode?
     backuptimestamp: latest
 
+  ## Site configuration setup
+  site:
+    # What is the name of the site to create (e.g. 'mysite.local')?
+    name: erpnext.test.schmidtundtoechter.de
+  
   ## ERPNext frontend setup
   erpnext:
     # Which frontend port should ERPNext use internally (nginx listen port)?
