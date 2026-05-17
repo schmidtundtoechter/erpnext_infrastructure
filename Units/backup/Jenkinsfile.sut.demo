@@ -42,7 +42,7 @@ pipeline {
                     git url: 'https://github.com/Cerulean-Circle-GmbH/MIMS.git', branch: 'mims2'
                 }
                 dir('erpnext_infrastructure') {
-                    git url: 'https://github.com/schmidtundtoechter/erpnext_infrastructure.git', branch: env.BRANCH_NAME
+                    git url: 'https://github.com/schmidtundtoechter/erpnext_infrastructure.git', branch: 'feature/mkt-backuptool'
                 }
             }
         }
