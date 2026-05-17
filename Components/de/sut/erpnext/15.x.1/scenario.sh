@@ -137,11 +137,20 @@ function backup() {
 
   # Run bench backup in create-site container
   banner "Run bench backup in create-site container"
-  docker compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS run --rm create-site "bash -c \"cd /home/frappe/frappe-bench && \
-     bench --site ${SCENARIO_TRAEFIK_URL} backup --with-files && \
+  local site_name="${SCENARIO_SITE_NAME:-$SCENARIO_TRAEFIK_URL}"
+  if ! docker compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS run --rm create-site "bash -lc \"set -e; cd /home/frappe/frappe-bench && \
+     bench --site ${site_name} backup --with-files && \
      mkdir -p backups/${SCENARIO_NAME} && \
-     mv sites/${SCENARIO_TRAEFIK_URL}/private/backups/* backups/${SCENARIO_NAME}/ && \
-     ls -l sites/${SCENARIO_TRAEFIK_URL}/private/backups backups/${SCENARIO_NAME}/\""
+     if ls sites/${site_name}/private/backups/* >/dev/null 2>&1; then \
+       mv sites/${site_name}/private/backups/* backups/${SCENARIO_NAME}/; \
+     else \
+       echo 'No bench backup files found to move'; \
+     fi && \
+     ls -l sites/${site_name}/private/backups backups/${SCENARIO_NAME}/ || true\""; then
+    logError "Bench backup failed for scenario '$SCENARIO_NAME' and site '$site_name'."
+    logError "Retry manually with: docker compose -p $SCENARIO_NAME $COMPOSE_FILE_ARGUMENTS run --rm create-site bash -lc 'cd /home/frappe/frappe-bench && bench --site ${site_name} backup --with-files'"
+    return 1
+  fi
 }
 
 function restore() {
