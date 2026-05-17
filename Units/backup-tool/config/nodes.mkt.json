@@ -105,6 +105,18 @@
       "enabled": true
     },
     {
+      "id": "demo-erpnext-demo",
+      "node_type": "frappe-node",
+      "access": "ssh-docker",
+      "ssh_config": "sut.demo",
+      "bench_path": "/home/frappe/frappe-bench",
+      "backup_path": "/home/frappe/frappe-bench/sites/demo.schmidtundtoechter.com/private/backups",
+      "container": "erpnext-demo_erpnext_frontend_container",
+      "tags": ["sut", "prod"],
+      "vpn_required": false,
+      "enabled": true
+    },
+    {
       "id": "vepro-erp",
       "node_type": "frappe-node",
       "access": "ssh-docker",
@@ -122,8 +134,20 @@
       "access": "ssh-docker",
       "ssh_config": "vepro",
       "bench_path": "/home/frappe/frappe-bench",
-      "backup_path": "/home/frappe/frappe-bench/sites/erptest.vepro-east.de/private/backups",
+      "backup_path": "/home/frappe/frappe-bench/sites/erp.vepro-east.de/private/backups",
       "container": "erptest_erpnext_frontend_container",
+      "tags": ["sut", "prod"],
+      "vpn_required": false,
+      "enabled": true
+    },
+    {
+      "id": "vepro-development",
+      "node_type": "frappe-node",
+      "access": "ssh-docker",
+      "ssh_config": "sut.demo",
+      "bench_path": "/home/frappe/frappe-bench",
+      "backup_path": "/home/frappe/frappe-bench/sites/erpnext-vepro.demo.schmidtundtoechter.com/private/backups",
+      "container": "erpnext-vepro_erpnext_frontend_container",
       "tags": ["sut", "prod"],
       "vpn_required": false,
       "enabled": true

@@ -278,8 +278,19 @@ test_cache_prunes_removed_node_files() {
   mkdir -p "${tmp_cache_dir}/nodes"
   printf '[]\n' > "${tmp_cache_dir}/nodes/obsolete-node.json"
 
-  run_libs "BT_CACHE_DIR='${tmp_cache_dir}'; BT_CACHE_NODES_DIR='${tmp_cache_dir}/nodes'; BT_CACHE_LEGACY_PATH='${tmp_cache_dir}/cache.jsonl'; bt_load_config '${CONFIG_PATH}'; bt_cache_list_all >/dev/null; [[ ! -e '${tmp_cache_dir}/nodes/obsolete-node.json' ]]" \
-    || fail "expected obsolete node cache file to be pruned"
+  run_libs "BT_CACHE_DIR='${tmp_cache_dir}'; BT_CACHE_NODES_DIR='${tmp_cache_dir}/nodes'; BT_CACHE_LEGACY_PATH='${tmp_cache_dir}/cache.jsonl'; bt_load_config '${CONFIG_PATH}'; bt_cache_prune_removed_node_files; [[ ! -e '${tmp_cache_dir}/nodes/obsolete-node.json' ]]" \
+    || fail "expected obsolete node cache file to be pruned by bt_cache_prune_removed_node_files"
+}
+
+test_cache_list_all_does_not_prune_unknown_nodes() {
+  local tmp_cache_dir out
+
+  tmp_cache_dir="$(mktemp -d)"
+  mkdir -p "${tmp_cache_dir}/nodes"
+  printf '[]\n' > "${tmp_cache_dir}/nodes/obsolete-node.json"
+
+  run_libs "BT_CACHE_DIR='${tmp_cache_dir}'; BT_CACHE_NODES_DIR='${tmp_cache_dir}/nodes'; BT_CACHE_LEGACY_PATH='${tmp_cache_dir}/cache.jsonl'; bt_load_config '${CONFIG_PATH}'; bt_cache_list_all >/dev/null; [[ -e '${tmp_cache_dir}/nodes/obsolete-node.json' ]]" \
+    || fail "expected bt_cache_list_all NOT to prune obsolete node cache files (pruning must be explicit)"
 }
 
 test_backup_library_exists() {
@@ -584,6 +595,7 @@ run_all_tests() {
   test_cache_entry_schema_exists
   test_cache_uses_per_node_files_and_aggregates_centrally
   test_cache_prunes_removed_node_files
+  test_cache_list_all_does_not_prune_unknown_nodes
   test_backup_library_exists
   test_backup_create_can_infer_single_site_from_cache_and_default_reason
   test_backup_create_requires_site_when_multiple_sites_are_known

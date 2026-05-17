@@ -1,0 +1,33 @@
+# SUT
+Host sut.netcup
+    User root
+    Port 22
+    #HostName v2202502256155316063.goodsrv.de
+    HostName test.schmidtundtoechter.com
+    IdentityFile ~/.ssh/id_rsa
+
+Host sut.demo
+    User root
+    Port 22
+    #HostName v2202605256155457322.goodsrv.de
+    HostName demo.schmidtundtoechter.com
+    IdentityFile ~/.ssh/id_rsa
+
+Host aztest
+    User frappe-user
+    Port 22
+    HostName erptest.az-it.systems
+    IdentityFile ~/.ssh/id_rsa
+
+Host az
+    User frappe-user
+    Port 22
+    HostName erp.az-it.systems
+    IdentityFile ~/.ssh/id_rsa
+
+Host vepro
+    User vepro
+    Port 2222
+    # vepro@VPRDH01
+    HostName 88.198.99.206
+    IdentityFile ~/.ssh/id_rsa

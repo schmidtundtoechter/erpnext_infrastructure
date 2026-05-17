@@ -1,0 +1,38 @@
+[
+  {
+    "name": "hrms",
+    "url": "https://github.com/frappe/hrms.git",
+    "version": "version-15",
+    "active": true
+  },
+  {
+    "name": "sut_app_datev_export",
+    "url": "https://github.com/schmidtundtoechter/sut_app_datev_export.git",
+    "version": "main",
+    "active": true
+  },
+  {
+    "name": "print_designer",
+    "url": "https://github.com/frappe/print_designer.git",
+    "version": "develop",
+    "active": true
+  },
+  {
+    "name": "red_background",
+    "url": "https://github.com/alyf-de/red_background.git",
+    "version": "version-15",
+    "active": true
+  },
+  {
+    "name": "csv_import_wortmann",
+    "url": "https://github.com/schmidtundtoechter/csv_import_wortmann.git",
+    "version": "main",
+    "active": true
+  },
+  {
+    "name": "csv_import_hornetsecurity",
+    "url": "https://github.com/schmidtundtoechter/csv_import_hornetsecurity.git",
+    "version": "main",
+    "active": true
+  }
+]

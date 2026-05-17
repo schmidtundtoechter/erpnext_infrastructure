@@ -306,7 +306,6 @@ bt_resolve_backup_ref_to_id() {
 
 bt_cache_list_all() {
   bt_cache_init
-  bt_cache_prune_removed_node_files
 
   if ! bt_cache_has_node_files; then
     printf '[]\n'

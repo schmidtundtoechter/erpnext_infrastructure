@@ -123,50 +123,118 @@ restore_backup_to_node() {
       bt_log_warn "Could not verify target site exists (may be new site)"
   fi
   
-  # Prüfe ob Backup bereits auf Zielknoten existiert
-  target_backup_entry="$(bt_cache_list_all | jq -c --arg bid "${backup_id}" --arg node "${target_node}" 'map(select(.backup_id == $bid and .source_node == $node))[0] // empty')"
-  
-  if [[ -z "${target_backup_entry}" || "${target_backup_entry}" == "null" ]]; then
-    # Backup muss kopiert werden
-    if [[ "${source_node}" != "${target_node}" ]]; then
-      bt_log_info "Backup not yet on target node; copying from ${source_node} to ${target_node}..."
-      copy_backup_between_nodes "${backup_id}" "${source_node}" "${target_node}" "${force}" "1" "${backup_entry}" || \
-        bt_die "Failed to copy backup to target node"
-      
-      # Neu laden nach Copy
-      target_backup_entry="$(bt_cache_list_all | jq -c --arg bid "${backup_id}" --arg node "${target_node}" 'map(select(.backup_id == $bid and .source_node == $node))[0] // empty')"
-    else
-      target_backup_entry="${backup_entry}"
-    fi
-  fi
-  
-  backup_path="$(bt_get_backup_path_for_node "${target_node}" "${backup_id}" "${target_backup_entry}")" || \
-    bt_die "Backup ${backup_id} not found on target node"
+  # ============================================================================
+  # Restore-Ablauf: Quelle pruefen -> Ziel pruefen/kopieren -> einspielen
+  # Cache ist initiale Quelle, Node-Dateisystem ist maßgeblich.
+  # ============================================================================
+  local source_backup_path source_artifacts source_db_dump_name source_db_dump
+  local source_public_name source_private_name source_site_config_name source_rel_dir
+  local target_backup_path db_dump public_files private_files config_file
 
-  # Extrahiere Dateien aus Backup – verwende die Artifact-Namen aus dem Cache
-  local db_dump public_files private_files config_file artifacts_obj
-  artifacts_obj="$(jq -r '.artifacts // {}' <<<"${target_backup_entry}")"
-  
-  db_dump="${backup_path}/$(jq -r '.db_dump // empty' <<<"${artifacts_obj}")"
-  public_files="${backup_path}/$(jq -r '.public_files // empty' <<<"${artifacts_obj}")"
-  private_files="${backup_path}/$(jq -r '.private_files // empty' <<<"${artifacts_obj}")"
-  config_file="${backup_path}/$(jq -r '.site_config // empty' <<<"${artifacts_obj}")"
-  
-  [[ -n "${db_dump}" && "${db_dump}" != "${backup_path}/" ]] || \
+  source_artifacts="$(jq -c '.artifacts // {}' <<<"${backup_entry}")"
+  source_db_dump_name="$(jq -r '.db_dump // empty' <<<"${source_artifacts}")"
+  source_public_name="$(jq -r '.public_files // empty' <<<"${source_artifacts}")"
+  source_private_name="$(jq -r '.private_files // empty' <<<"${source_artifacts}")"
+  source_site_config_name="$(jq -r '.site_config // empty' <<<"${source_artifacts}")"
+  source_rel_dir="$(jq -r '.source_rel_dir // empty' <<<"${backup_entry}")"
+
+  [[ -n "${source_db_dump_name}" ]] || \
     bt_die "Restore: no db_dump artifact found for backup ${backup_id}"
+
+  # 1) Quelle pruefen: liegt das Backup dort wirklich?
+  source_backup_path="$(bt_get_backup_path_for_node "${source_node}" "${backup_id}" "${backup_entry}")" || \
+    bt_die "Restore: could not determine source backup path for node ${source_node}"
+  source_db_dump="${source_backup_path%/}/${source_db_dump_name}"
+  if ! run_on_node "${source_node}" "[[ -f $(bt_quote "${source_db_dump}") ]]" >/dev/null 2>&1; then
+    bt_die "Restore: source backup not found on node ${source_node}: ${source_db_dump}"
+  fi
+
+  # 2) Ziel pruefen, falls noetig kopieren
+  target_backup_path="$(bt_get_target_backup_path_for_node "${target_node}" "${backup_id}" "${backup_entry}")" || \
+    bt_die "Restore: could not determine target backup path for node ${target_node}"
+  db_dump="${target_backup_path%/}/${source_db_dump_name}"
+
+  if ! run_on_node "${target_node}" "[[ -f $(bt_quote "${db_dump}") ]]" >/dev/null 2>&1; then
+    if [[ "${source_node}" == "${target_node}" ]]; then
+      bt_die "Restore: backup expected on target/source node ${target_node} but not found at ${db_dump}"
+    fi
+
+    bt_log_info "Backup not present on target node; copying from ${source_node} to ${target_node}..."
+    copy_backup_between_nodes "${backup_id}" "${source_node}" "${target_node}" "${force}" "1" "${backup_entry}" || \
+      bt_die "Failed to copy backup to target node"
+
+    # Nach Copy muss Datei am erwarteten Ort liegen; sonst harter Fehler.
+    if ! run_on_node "${target_node}" "[[ -f $(bt_quote "${db_dump}") ]]" >/dev/null 2>&1; then
+      bt_die "Restore: backup was copied but db_dump is not at expected target path: ${db_dump}"
+    fi
+
+    # Cache nach erfolgreicher Verfuegbarkeit auf Ziel aktualisieren.
+    bt_cache_upsert_entry "$(bt_get_cached_backup_object "${target_node}" "${backup_id}" "${backup_entry}")"
+  fi
+
+  # 3) Einspielen vom Zielpfad
+  bt_log_info "Restore preparation verified: backup available on target at ${db_dump}"
+
+  public_files="${target_backup_path%/}/${source_public_name}"
+  private_files="${target_backup_path%/}/${source_private_name}"
+  config_file="${target_backup_path%/}/${source_site_config_name}"
   
   # Handle site_config.json gemäß config_mode (nur wenn Datei vorhanden ist)
-  if [[ -n "${config_file}" && "${config_file}" != "${backup_path}/" ]]; then
+  if [[ -n "${source_site_config_name}" && -n "${config_file}" && "${config_file}" != "${target_backup_path}/" ]]; then
     if [[ "${config_mode}" != "use-source-config" ]]; then
       bt_handle_site_config_merge "${backup_id}" "${target_node}" "${target_site}" \
         "${config_file}" "${config_mode}" "${bench_path}"
     fi
   fi
   
-  # Passwort für bench restore ermitteln (aus Node-Config oder interaktiv abfragen)
-  local db_root_password node_json_for_pw
+  # DB-Root-Zugang fuer bench restore ermitteln:
+  # 1) Node-Config (db_root_user/db_root_password)
+  # 2) common_site_config.json (root_login/root_password)
+  # 3) MariaDB-Container-Env via docker inspect (fuer ssh-docker Knoten)
+  # 4) Interaktive Passwortabfrage als Fallback
+  local db_root_password db_root_user node_json_for_pw common_site_config_path common_cfg_raw
   node_json_for_pw="$(bt_get_node_json "${target_node}")"
+  db_root_user="$(jq -r '.db_root_user // empty' <<<"${node_json_for_pw}")"
   db_root_password="$(jq -r '.db_root_password // empty' <<<"${node_json_for_pw}")"
+
+  if [[ -z "${db_root_password}" ]]; then
+    common_site_config_path="${bench_path}/sites/common_site_config.json"
+    common_cfg_raw="$(run_on_node "${target_node}" "cat $(bt_quote "${common_site_config_path}")" 2>/dev/null || true)"
+
+    if [[ -n "${common_cfg_raw}" ]] && jq -e . >/dev/null 2>&1 <<<"${common_cfg_raw}"; then
+      if [[ -z "${db_root_user}" ]]; then
+        db_root_user="$(jq -r '.root_login // .db_root_user // empty' <<<"${common_cfg_raw}")"
+      fi
+      db_root_password="$(jq -r '.root_password // .db_root_password // .mariadb_root_password // empty' <<<"${common_cfg_raw}")"
+      [[ -n "${db_root_password}" ]] && bt_log_info "Using db_root_password from common_site_config.json"
+    else
+      bt_log_warn "Could not read common_site_config.json from node '${target_node}' (SSH/container issue or file missing)"
+    fi
+  fi
+
+  # Fallback fuer ssh-docker: MariaDB-Root-Passwort direkt aus Container-Env lesen.
+  # Die DB-Container-Env enthaelt typischerweise MYSQL_ROOT_PASSWORD / MARIADB_ROOT_PASSWORD.
+  # DB-Container-Name wird aus dem Frontend-Container-Namen abgeleitet (_frontend_ -> _db_).
+  if [[ -z "${db_root_password}" ]]; then
+    local _node_access _frontend_container
+    _node_access="$(jq -r '.access // empty' <<<"${node_json_for_pw}")"
+    _frontend_container="$(jq -r '.container // empty' <<<"${node_json_for_pw}")"
+    if [[ "${_node_access}" == "ssh-docker" && "${_frontend_container}" == *"_frontend_container" ]]; then
+      local _db_container _ssh_base _env_pw _inspect_cmd
+      _db_container="${_frontend_container/_frontend_container/_db_container}"
+      _ssh_base="$(bt_build_ssh_base_cmd "${node_json_for_pw}")"
+      _inspect_cmd="${_ssh_base} \"docker inspect ${_db_container} --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep -E '^(MYSQL_ROOT_PASSWORD|MARIADB_ROOT_PASSWORD)=' | head -1 | cut -d= -f2-\""
+      _env_pw="$(eval "${_inspect_cmd}" 2>/dev/null || true)"
+      if [[ -n "${_env_pw}" ]]; then
+        db_root_password="${_env_pw}"
+        bt_log_info "Using db_root_password from MariaDB container '${_db_container}' environment"
+      else
+        bt_log_warn "Could not read db_root_password from MariaDB container '${_db_container}'"
+      fi
+    fi
+  fi
+
+  [[ -n "${db_root_user}" ]] || db_root_user="root"
 
   if [[ -z "${db_root_password}" ]]; then
     bt_log_info "No db_root_password configured for node '${target_node}'."
@@ -178,13 +246,21 @@ restore_backup_to_node() {
   # Führe bench restore aus
   local bench_cmd
   if [[ -n "${db_root_password}" ]]; then
-    bench_cmd="cd $(bt_quote "${bench_path}") && bench --site ${target_site} restore ${db_dump} --db-root-password $(bt_quote "${db_root_password}")"
+    bench_cmd="cd $(bt_quote "${bench_path}") && bench --site $(bt_quote "${target_site}") restore $(bt_quote "${db_dump}") --db-root-username $(bt_quote "${db_root_user}") --db-root-password $(bt_quote "${db_root_password}")"
   else
-    bench_cmd="cd $(bt_quote "${bench_path}") && bench --site ${target_site} restore ${db_dump}"
+    bench_cmd="cd $(bt_quote "${bench_path}") && bench --site $(bt_quote "${target_site}") restore $(bt_quote "${db_dump}")"
   fi
 
   bt_log_info "Executing bench restore for site ${target_site}..."
-  run_on_node "${target_node}" "${bench_cmd}" || bt_die "Bench restore failed"
+  local restore_output
+  if ! restore_output="$(run_on_node "${target_node}" "${bench_cmd}" 2>&1)"; then
+    printf '%s\n' "${restore_output}" >&2
+    if grep -Eiq "Access denied for user '.*'@'" <<<"${restore_output}"; then
+      bt_die "Bench restore failed due to DB host permissions. User '${db_root_user}' may not be allowed from app-container host/IP. Check mysql.user grants for '${db_root_user}' (host='%') or configure a dedicated db_root_user/db_root_password for this node."
+    fi
+    bt_die "Bench restore failed"
+  fi
+  printf '%s\n' "${restore_output}"
   
   # Restore Files wenn vorhanden
   if run_on_node "${target_node}" "[[ -f ${public_files} ]]" >/dev/null 2>&1; then

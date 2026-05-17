@@ -1,0 +1,95 @@
+library identifier: 'mkt-lib@main', retriever: legacySCM(scm)
+
+// ── Delegate wrappers — thin shims to jenkins-lib/vars/mkt.groovy ─────────────
+def setupSSHConfig()                                    { mkt.setupSSHConfigMultiHost() }
+def testConnection(String s)                            { mkt.testConnection(s) }
+def resetStageScenario(String svc, String tgt)          { mkt.resetStageScenario(svc, tgt) }
+// ─────────────────────────────────────────────────────────────────────────────
+
+pipeline {
+    agent any
+
+    environment {
+        SCENARIO_DEPLOY = "${WORKSPACE}/MIMS/scenario.deploy"
+        
+        TARGET_HOST = "vepro"
+        TARGET_HOSTNAME = "88.198.99.206"
+        TARGET_USER = "vepro"
+        TARGET_PORT = "2222"
+        
+        SOURCE_HOST = "vepro"
+        SOURCE_HOSTNAME = "88.198.99.206"
+        SOURCE_USER = "vepro"
+        SOURCE_PORT = "2222"
+
+        TARGET_BASE_PATH = "de/vepro-east"
+        BACKUP_DIR = "/home/vepro/MIMS-Scenarios/_backups/"
+        // ssh/scp wrappers in WORKSPACE shadow real binaries, force -F for all callers — no race condition
+        PATH = "${env.WORKSPACE}:${env.PATH}"
+    }
+
+    stages {
+        stage('Checkout Main Repo') {
+            steps {
+                // Das aktuelle Repository wird automatisch geclont
+                echo 'Hauptprojekt wird aus dem SCM ausgecheckt.'
+            }
+        }
+
+        stage('Checkout Dependencies') {
+            steps {
+                dir('MIMS') {
+                    git url: 'https://github.com/Cerulean-Circle-GmbH/MIMS.git', branch: 'mims2'
+                }
+            }
+        }
+
+        stage('Test vepro') {
+            steps {
+                script {
+                    testConnection('erp')
+                }
+            }
+        }
+
+        stage('Reset VEPRO erptest') {
+            steps {
+                script {
+                    withCredentials([sshUserPrivateKey(credentialsId: 'host-ssh-key', keyFileVariable: 'SSH_KEY')]) {
+                        setupSSHConfig()
+                        sh """
+                            # Führe Backup durch für erp
+                            \${SCENARIO_DEPLOY} \${TARGET_BASE_PATH}/erp backup -v
+
+                            # Erzeuge links zu den neuesten Backups
+                            ./Units/backup/link-backup-files.sh --remote \${TARGET_HOST} \\
+                                --source erp \\
+                                --dest erptest \\
+                                --backup-dir \${BACKUP_DIR} \\
+                                --latest \\
+                                --force
+
+                            # Führe Restore durch
+                            \${SCENARIO_DEPLOY} \${TARGET_BASE_PATH}/erptest down,restore,up -v
+                            
+                            # Führe Update durch (um auf die richtigen branches zu gehen)
+                            \${SCENARIO_DEPLOY} \${TARGET_BASE_PATH}/erptest update,down,up -v
+                        """
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo 'Pipeline abgeschlossen.'
+        }
+        failure {
+            echo '⚠️  Pipeline fehlgeschlagen! Bitte Logs prüfen.'
+        }
+        success {
+            echo '✅ Pipeline erfolgreich abgeschlossen.'
+        }
+    }
+}
